@@ -239,13 +239,12 @@ r.post('/reorder', h((req) => {
   const ids = body.ids || []
   if (!ids.length) return { ok: true, moved: 0 }
 
+  // These three are properties of the GROUP being reordered: every id in the
+  // list shares the day, the section and the parent, so writing one value to
+  // all of them is the point.
   const extra = []
   const extraArgs = []
-  // col_index belongs here as much as section_id does. Without it, a task
-  // dropped onto a row in a *different* column of a three-column section was
-  // reordered into the section but kept pointing at the column it came from, so
-  // it sprang back and the drop looked like it had simply failed.
-  for (const field of ['scheduled_date', 'section_id', 'parent_id', 'col_index']) {
+  for (const field of ['scheduled_date', 'section_id', 'parent_id']) {
     if (body[field] !== undefined) {
       extra.push(`${field} = ?`)
       extraArgs.push(body[field])
@@ -256,6 +255,14 @@ r.post('/reorder', h((req) => {
     `UPDATE tasks SET sort = ?${extra.length ? `, ${extra.join(', ')}` : ''} WHERE id = ?`
   )
   db.transaction(() => ids.forEach((id, i) => stmt.run(i, ...extraArgs, id)))()
+
+  // col_index is emphatically NOT a group property — it is which of the three
+  // columns one task sits in. It was in the loop above, which meant dragging a
+  // single task rewrote the column of every one of its siblings and collapsed
+  // the whole section into one column. It applies to the moved row alone.
+  if (body.col_index !== undefined && body.moved_id) {
+    db.prepare('UPDATE tasks SET col_index = ? WHERE id = ?').run(body.col_index, body.moved_id)
+  }
 
   // Children follow a moved parent's day, matching PATCH's cascade.
   if (body.scheduled_date !== undefined) {

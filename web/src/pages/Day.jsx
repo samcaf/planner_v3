@@ -159,9 +159,48 @@ export default function Day() {
    * One gesture, two outcomes: a drop across the middle of a row nests, a drop
    * near either edge reorders within that row's own sibling group.
    */
+  /**
+   * Everything a move can disturb, captured so it can be put back. A drag
+   * rewrites `sort` across a whole sibling group and may change the parent,
+   * section and column of the row that moved — none of which a PATCH-based
+   * snapshot would cover, which is why moves used to be absent from the undo
+   * stack entirely and Ctrl-Z after a drag reversed some earlier, unrelated
+   * edit instead.
+   */
+  function snapshot(ids) {
+    return ids
+      .map((id) => d.tasks.find((t) => t.id === id))
+      .filter(Boolean)
+      .map((t) => ({
+        id: t.id,
+        sort: t.sort,
+        parent_id: t.parent_id ?? null,
+        section_id: t.section_id ?? null,
+        col_index: t.col_index ?? null,
+        scheduled_date: t.scheduled_date ?? null,
+      }))
+  }
+
+  const restoreAll = (rows) => async () => {
+    for (const r of rows) {
+      // parent_id is rejected by PATCH — re-parenting is /nest's job, because
+      // that is the only path that checks for cycles.
+      await api.post(`/tasks/${r.id}/nest`, { parent_id: r.parent_id })
+      await api.patch(`/tasks/${r.id}`, {
+        sort: r.sort,
+        section_id: r.section_id,
+        col_index: r.col_index,
+        scheduled_date: r.scheduled_date,
+      })
+    }
+  }
+
   async function onDropTask(draggedId, target, zone) {
     if (zone === 'nest') {
-      await api.post(`/tasks/${draggedId}/nest`, { parent_id: target.id })
+      const before = snapshot([draggedId])
+      const nest = async () => { await api.post(`/tasks/${draggedId}/nest`, { parent_id: target.id }) }
+      await nest()
+      undo?.record?.({ label: 'nest', undo: restoreAll(before), redo: nest })
       refresh()
       return
     }
@@ -184,13 +223,20 @@ export default function Day() {
     const section = d.sections.find((s) => s.id === target.section_id)
     const intoColumns = section?.layout === 'columns'
 
-    await api.post('/tasks/reorder', {
-      ids: siblings,
-      scheduled_date: date,
-      section_id: target.section_id ?? null,
-      parent_id: target.parent_id ?? null,
-      ...(intoColumns ? { col_index: columnFor(target) } : {}),
-    })
+    const before = snapshot([draggedId, ...siblings])
+    const move = async () => {
+      await api.post('/tasks/reorder', {
+        ids: siblings,
+        scheduled_date: date,
+        section_id: target.section_id ?? null,
+        parent_id: target.parent_id ?? null,
+        // Named, so the server applies the column to this one row rather than
+        // to every sibling in the list.
+        ...(intoColumns ? { col_index: columnFor(target), moved_id: draggedId } : {}),
+      })
+    }
+    await move()
+    undo?.record?.({ label: 'move', undo: restoreAll(before), redo: move })
     refresh()
   }
 
@@ -213,7 +259,14 @@ export default function Day() {
     if (at < 0) return
     ids.splice(side === 'after' ? at + 1 : at, 0, movedId)
 
-    await api.post('/sections/reorder', { ids })
+    const wasOrder = d.sections.map((sec) => sec.id)
+    const apply = async () => { await api.post('/sections/reorder', { ids }) }
+    await apply()
+    undo?.record?.({
+      label: 'move section',
+      undo: async () => { await api.post('/sections/reorder', { ids: wasOrder }) },
+      redo: apply,
+    })
     refresh()
   }
 
