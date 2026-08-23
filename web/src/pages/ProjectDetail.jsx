@@ -18,6 +18,10 @@ import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { useUndo } from '../lib/undo.jsx'
 import { relative, shortDate } from '../lib/dates.js'
 import '../styles/projects.css'
+// The Light/Deep control below is the one the Routines page already uses for the
+// same setting — same markup, same classes. Imported rather than copied so the
+// two cannot drift into two slightly different looks for one idea.
+import '../styles/routines.css'
 
 const STATUSES = ['active', 'planned', 'done', 'archived']
 
@@ -76,6 +80,7 @@ export default function ProjectDetail() {
   // colour, so the type list is what turns the id into something to show.
   const typeList = types.data || []
   const type = typeList.find((t) => t.id === p.type_id) || null
+  const isDeep = p.default_intensity === 'deep'
 
   // Notes are prose filed against the project — no status to close, no time to
   // estimate, nothing to tick off — so they belong on the Notes tab rather than
@@ -383,6 +388,47 @@ export default function ProjectDetail() {
                     </button>
                   )}
                 </div>
+              </Field>
+              {/*
+                * What a new task in this project costs in attention, set once
+                * here instead of on every task — tagging each one by hand is what
+                * kills these systems. POST /api/tasks reads it whenever a task is
+                * created with a project and no intensity of its own.
+                *
+                * Changing it deliberately does NOT rewrite the tasks that already
+                * exist. A created task is an independent instance from the moment
+                * it is written — the same rule that stops renaming a routine item
+                * from renaming yesterday's chore — and the dashboard totals deep
+                * minutes over the last fourteen days. Restating this default
+                * would silently rewrite that history, so the record of how much
+                * deep work was actually done would change to match a decision
+                * made today. Existing tasks keep their own chip, which is still
+                * one click each on the row.
+                */}
+              <Field label="New tasks">
+                <div className="rt-seg" role="group" aria-label="Default intensity">
+                  <button
+                    className={`btn ghost sm ${isDeep ? '' : 'is-on'}`}
+                    aria-pressed={!isDeep}
+                    title="Light — chores and admin, which never draw on the thinking budget"
+                    onClick={() => patch({ default_intensity: 'light' })}
+                  >
+                    Light
+                  </button>
+                  <button
+                    className={`btn ghost sm ${isDeep ? 'is-deep-on' : ''}`}
+                    aria-pressed={isDeep}
+                    title="Deep — a new task here counts toward the day's thinking budget"
+                    onClick={() => patch({ default_intensity: 'deep' })}
+                  >
+                    Deep
+                  </button>
+                </div>
+                <span className="pj-hint">
+                  {isDeep
+                    ? 'New tasks here start as deep work. Tasks that already exist keep what they have.'
+                    : 'New tasks here start light. Mark the deep ones from the task row.'}
+                </span>
               </Field>
               <Field label="Start">
                 <input className="input" type="date" value={p.start_date || ''}

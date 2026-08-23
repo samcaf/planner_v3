@@ -166,14 +166,20 @@ function Routine({ routine: rt, projects, reload, flash }) {
   })
   const [date, setDate] = useState(today())
   const [draft, setDraft] = useState('')
+  // The item created by the last add, so its title opens ready to type into —
+  // the same trick the Day view uses for a new row.
+  const [justAdded, setJustAdded] = useState(null)
+
+  const byId = new Map(rt.items.map((i) => [i.id, i]))
+  const mine = (id) => byId.has(Number(id))
 
   async function patch(body) {
     await api.patch(`/routines/${rt.id}`, body)
     reload()
   }
 
-  async function patchItem(item, body) {
-    await api.patch(`/routines/items/${item.id}`, body)
+  async function patchItem(id, body) {
+    await api.patch(`/routines/items/${id}`, body)
     reload()
   }
 
@@ -186,8 +192,85 @@ function Routine({ routine: rt, projects, reload, flash }) {
     reload()
   }
 
-  async function removeItem(item) {
-    await api.del(`/routines/items/${item.id}`)
+  /**
+   * Translate one TaskRow patch onto the item's columns. A key with no column
+   * says so out loud rather than being dropped on the floor.
+   */
+  async function changeItem(id, taskPatch) {
+    const body = {}
+    const orphans = []
+    for (const [key, value] of Object.entries(taskPatch)) {
+      if (ITEM_FIELD[key]) body[ITEM_FIELD[key]] = value
+      else orphans.push(key)
+    }
+    if (Object.keys(body).length) {
+      if (taskPatch.title !== undefined && id === justAdded) setJustAdded(null)
+      await patchItem(id, body)
+    }
+    const explained = orphans.find((key) => NO_COLUMN[key])
+    if (explained) flash(NO_COLUMN[explained])
+  }
+
+  /** A sub-step: created on the routine, then nested, exactly as a subtask is. */
+  async function addChild(task) {
+    const parent = byId.get(task.id)
+    const created = await api.post(`/routines/${rt.id}/items`, {
+      title: 'New step',
+      // A sub-step of a line filed under a project belongs to the same one.
+      project_id: parent?.project_id ?? null,
+    })
+    await api.post(`/routines/items/${created.id}/nest`, { parent_id: task.id })
+    setJustAdded(created.id)
+    reload()
+  }
+
+  const nestItem = async (id, parentId) => {
+    if (!mine(id)) return
+    await api.post(`/routines/items/${id}/nest`, { parent_id: parentId })
+    reload()
+  }
+
+  /**
+   * One gesture, two outcomes, the same as on a day: a drop across the middle of
+   * a row nests, a drop near either edge reorders within that row's own sibling
+   * group. `mine` is what keeps a drag from one routine's card out of another's
+   * — the two lists are side by side on this page, and the server would reject
+   * the cross-routine parent anyway, but silently doing nothing is clearer than
+   * a rejected request.
+   */
+  async function onDropTask(draggedId, target, zone) {
+    if (!mine(draggedId)) return
+    if (zone === 'nest') { await nestItem(draggedId, target.id); return }
+
+    const parentId = target.parent_id ?? null
+    const siblings = rt.items
+      .filter((i) => (i.parent_id ?? null) === parentId)
+      .sort((a, b) => a.sort - b.sort || a.id - b.id)
+      .map((i) => i.id)
+      .filter((id) => id !== draggedId)
+
+    const at = siblings.indexOf(target.id)
+    siblings.splice(zone === 'before' ? at : at + 1, 0, draggedId)
+
+    await api.post('/routines/items/reorder', { ids: siblings, parent_id: parentId })
+    reload()
+  }
+
+  /** Dropping a row onto the other group's panel is what shelves or unshelves it. */
+  async function setShelved(ids, shelved) {
+    const changing = ids.filter((id) => mine(id) && !!byId.get(id).shelved !== shelved)
+    if (!changing.length) return
+    await Promise.all(changing.map((id) =>
+      api.patch(`/routines/items/${id}`, { shelved: shelved ? 1 : 0 })))
+    reload()
+  }
+
+  async function removeItem(id) {
+    const kids = rt.items.filter((i) => i.parent_id === id).length
+    if (kids && !window.confirm(
+      `Delete “${byId.get(id)?.title}” and its ${kids} sub-step${kids === 1 ? '' : 's'}?`
+    )) return
+    await api.del(`/routines/items/${id}`)
     reload()
   }
 
@@ -210,10 +293,51 @@ function Routine({ routine: rt, projects, reload, flash }) {
   const rtProject = projects.find((p) => p.id === rt.project_id)
 
   // Shelved items are skipped by /apply, so they are absent from every figure
-  // that describes what applying the routine would actually do.
-  const active = rt.items.filter((i) => !i.shelved)
-  const shelved = rt.items.filter((i) => i.shelved)
+  // that describes what applying the routine would actually do. By *branch*, not
+  // by the flag alone — a sub-step of a shelved line is never created either.
+  const active = rt.items.filter((i) => !branchShelved(i, byId))
+  const shelved = rt.items.filter((i) => branchShelved(i, byId))
   const load = active.reduce((sum, i) => sum + (i.estimate_min || 0), 0)
+
+  const itemExtras = (task) => (
+    <ItemExtras
+      item={byId.get(task.id)}
+      projects={projects}
+      inherits={rtProject}
+      onPatch={patchItem}
+    />
+  )
+
+  const rowProps = (task) => ({
+    task,
+    subtasks: task.subtasks || [],
+    onChange: (body, id = task.id) => changeItem(id, body),
+    onDelete: (id = task.id) => removeItem(id),
+    onNest: nestItem,
+    onDropTask,
+    onAddChild: addChild,
+    autoEdit: task.id === justAdded,
+    // An item's project chip is its own or, where it has none, the routine's —
+    // which is the project the task will actually land in.
+    showProject: true,
+    /*
+     * Both are additive props TaskRow does not yet accept; passing them is inert
+     * until it does, and nothing here depends on them to be correct.
+     *
+     * `dateless` hides the row's three scheduling entries. A template has no day,
+     * so "Move to tomorrow", "Move to…" and "Schedule today" have no column to
+     * write — see NO_COLUMN above, which explains itself in a toast meanwhile.
+     *
+     * `rowExtras` is where the two controls with no TaskRow equivalent live: the
+     * per-item project override, and shelving. Until it is honoured, shelving is
+     * done by dragging a row between this card's two lists, and an item's project
+     * follows the routine's.
+     */
+    dateless: true,
+    rowExtras: itemExtras,
+  })
+
+  const asRows = (items) => nestTasks(items.map((i) => asTask(i, rt, projects)))
 
   function toggle() {
     setCollapsed((was) => {
@@ -341,48 +465,35 @@ function Routine({ routine: rt, projects, reload, flash }) {
         </label>
       </div>
 
-      <div className="rt-items">
-        {rt.items.length === 0 && (
-          <Empty>No items yet. Add the first line of the routine below.</Empty>
-        )}
+      <ItemList
+        rows={asRows(active)}
+        rowProps={rowProps}
+        onDrop={(ids) => setShelved(ids, false)}
+        empty={rt.items.length === 0
+          ? 'No items yet. Add the first line of the routine below.'
+          : 'Every item is shelved, so applying this routine would add nothing.'}
+      />
 
-        {active.map((it) => (
-          <RoutineItem
-            key={it.id}
-            item={it}
-            projects={projects}
-            inherits={rtProject}
-            onPatch={patchItem}
-            onRemove={removeItem}
-          />
-        ))}
-
-        {rt.items.length > 0 && active.length === 0 && (
-          <Empty>Every item is shelved, so applying this routine would add nothing.</Empty>
-        )}
-
-        {/* Grouped rather than merely sorted: one heading explains the whole
-            block, so the rows below it need no per-row justification for being
-            dimmed, and an item does not silently change places on unshelving. */}
-        {shelved.length > 0 && (
+      {/* Grouped rather than merely sorted: one heading explains the whole block,
+          so the rows below it need no per-row justification for being dimmed, and
+          an item does not silently change places on unshelving. The heading is
+          also the drop target — dragging a row between the two lists is what
+          shelves and unshelves it, the same gesture that moves a task between two
+          sections on a day. */}
+      <ItemList
+        rows={asRows(shelved)}
+        rowProps={rowProps}
+        onDrop={(ids) => setShelved(ids, true)}
+        heading={
           <>
-            <div className="rt-shelf-h">
-              <Icon name="moon" size={12} />
-              {shelved.length} shelved — kept here, skipped when the routine is applied
-            </div>
-            {shelved.map((it) => (
-              <RoutineItem
-                key={it.id}
-                item={it}
-                projects={projects}
-                inherits={rtProject}
-                onPatch={patchItem}
-                onRemove={removeItem}
-              />
-            ))}
+            <Icon name="moon" size={12} />
+            {shelved.length
+              ? `${shelved.length} shelved — kept here, skipped when the routine is applied`
+              : 'Shelved — drag an item here to keep it but skip it when the routine is applied'}
           </>
-        )}
-      </div>
+        }
+        empty=""
+      />
 
       <form className="quick-add" onSubmit={addItem}>
         <input
@@ -413,58 +524,66 @@ function Routine({ routine: rt, projects, reload, flash }) {
 }
 
 /**
- * One line of a routine. A shelved item keeps every control it had — shelving is
- * a pause, not an archive, and the row has to stay editable to be worth keeping.
+ * One group of a routine's items, rendered with the day view's own TaskRow.
+ *
+ * The whole body is a drop target, which is what moves an item between this
+ * card's two groups — the same gesture that moves a task between two sections on
+ * a day. A drop that a row handled itself (a reorder or a nest) never reaches
+ * here, because TaskRow stops it.
+ *
+ * A shelved group renders nothing when it is empty *and* nothing is being
+ * dragged; its heading is the target, so it has to stay on screen to be aimed at.
  */
-function RoutineItem({ item, projects, inherits, onPatch, onRemove }) {
+function ItemList({ rows, rowProps, heading, empty, onDrop }) {
+  const [over, setOver] = useState(false)
+  const ids = visibleIds(rows)
+
+  return (
+    <div
+      /* The shelf keeps its heading even when nothing is on it: the heading is
+         the drop target, so it has to stay on screen to be aimed at, and it is
+         where the gesture is explained. */
+      className={['rt-items', heading ? 'rt-shelf' : '', over ? 'sel-drop-on' : ''].filter(Boolean).join(' ')}
+      onDragOver={(e) => { if (!isTaskDrag(e)) return; e.preventDefault(); setOver(true) }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        setOver(false)
+        const dropped = draggedIds(e)
+        if (dropped.length) onDrop(dropped)
+      }}
+    >
+      {heading && <div className="rt-shelf-h">{heading}</div>}
+      {rows.length === 0
+        ? (empty ? <Empty>{empty}</Empty> : null)
+        : rows.map((row) => <TaskRow key={row.id} {...rowProps(row)} listIds={ids} />)}
+    </div>
+  )
+}
+
+/**
+ * The two things a routine item has that a task does not, so TaskRow has no
+ * control for either: which project it overrides the routine with, and whether
+ * it is shelved.
+ *
+ * Rendered through TaskRow's `rowExtras`, which it does not accept yet — until
+ * it does this is simply not on screen, and shelving is done by dragging a row
+ * between the card's two lists. Absent beats present-and-dead.
+ */
+function ItemExtras({ item, projects, inherits, onPatch }) {
+  if (!item) return null
   const shelved = !!item.shelved
 
   return (
-    <div className={`rt-item ${shelved ? 'rt-shelved' : ''}`}>
-      <input
-        className="input rt-time"
-        type="time"
-        value={item.start_time || ''}
-        onChange={(e) => onPatch(item, { start_time: e.target.value || null })}
+    <span className="rt-row-extras">
+      {/* Leaving this empty inherits the routine's project, so it says which one
+          — otherwise the row claims "No project" while the task it makes would
+          land in one. */}
+      <ProjectSelect
+        projects={projects}
+        value={item.project_id}
+        noneLabel={inherits ? `Routine: ${inherits.name}` : 'No project'}
+        onChange={(project_id) => onPatch(item.id, { project_id })}
       />
-      <span className="rt-title">
-        <RichLine
-          value={item.title}
-          onChange={(title) => title.trim() && onPatch(item, { title })}
-          placeholder="Item"
-        />
-      </span>
-      <select
-        className={`select input rt-status rt-s-${item.default_status || 'todo'}`}
-        title="The state this item is in when the routine is applied"
-        aria-label={`Default status for ${item.title}`}
-        value={item.default_status || 'todo'}
-        onChange={(e) => onPatch(item, { default_status: e.target.value })}
-      >
-        {STATUSES.map(([value, label]) => (
-          <option key={value} value={value}>{label}</option>
-        ))}
-      </select>
-      <input
-        className="input rt-min"
-        type="number"
-        min="0"
-        step="5"
-        placeholder="min"
-        value={item.estimate_min ?? ''}
-        onChange={(e) => onPatch(item, { estimate_min: e.target.value ? Number(e.target.value) : null })}
-      />
-      <div className="rt-project">
-        {/* Leaving this empty inherits the routine's project, so it says which
-            one — otherwise the row claims "No project" while the task it makes
-            would land in one. */}
-        <ProjectSelect
-          projects={projects}
-          value={item.project_id}
-          noneLabel={inherits ? `Routine: ${inherits.name}` : 'No project'}
-          onChange={(project_id) => onPatch(item, { project_id })}
-        />
-      </div>
       <button
         className="btn ghost sm rt-shelve"
         aria-pressed={shelved}
@@ -472,17 +591,10 @@ function RoutineItem({ item, projects, inherits, onPatch, onRemove }) {
         title={shelved
           ? 'Unshelve — add this again when the routine is applied'
           : 'Shelve — keep it here, but skip it when the routine is applied'}
-        onClick={() => onPatch(item, { shelved: shelved ? 0 : 1 })}
+        onClick={() => onPatch(item.id, { shelved: shelved ? 0 : 1 })}
       >
         <Icon name="moon" size={13} />
       </button>
-      <button
-        className="btn ghost sm"
-        aria-label={`Remove ${item.title}`}
-        onClick={() => onRemove(item)}
-      >
-        <Icon name="trash" size={13} />
-      </button>
-    </div>
+    </span>
   )
 }

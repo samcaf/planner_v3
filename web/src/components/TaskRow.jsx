@@ -122,6 +122,13 @@ export default function TaskRow({
   depth = 0,
   listIds = [],
   autoEdit = false,
+  // A routine item is a template: it has no day of its own, so every entry
+  // that schedules something is hidden rather than left to fail quietly.
+  dateless = false,
+  // Controls only one caller needs — a routine item's project override and
+  // its shelve toggle — rendered into the action bar without this component
+  // having to learn what a routine is.
+  rowExtras = null,
 }) {
   const [details, setDetails] = useState(false)
   const [expanded, setExpanded] = useState(true)
@@ -411,6 +418,7 @@ export default function TaskRow({
         </div>
 
         <div className="task-actions">
+          {rowExtras?.(task)}
           {!isNote && (
             <button
               className={`btn ghost sm ${details ? 'is-on' : ''}`}
@@ -445,6 +453,7 @@ export default function TaskRow({
           <Menu
             task={task}
             isNote={isNote}
+            dateless={dateless}
             onChange={onChange}
             onNest={onNest}
             onDelete={onDelete}
@@ -475,6 +484,8 @@ export default function TaskRow({
           // dragging off, and a child left draggable there is an affordance
           // that leads nowhere.
           draggable={draggable}
+          dateless={dateless}
+          rowExtras={rowExtras}
           depth={depth + 1}
           listIds={listIds}
         />
@@ -638,7 +649,9 @@ function TaskDetails({ task, derived, onChange, onDone }) {
   )
 }
 
-function Menu({ task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow }) {
+function Menu({
+  task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow, dateless,
+}) {
   return (
     <Popover
       label="Task actions"
@@ -653,6 +666,7 @@ function Menu({ task, isNote, onChange, onNest, onDelete, onAddChild, notesShown
         <MenuItems
           task={task}
           isNote={isNote}
+          dateless={dateless}
           onChange={onChange}
           onNest={onNest}
           onDelete={onDelete}
@@ -671,7 +685,7 @@ function Menu({ task, isNote, onChange, onNest, onDelete, onAddChild, notesShown
  * its content while open, so this state resets itself.
  */
 function MenuItems({
-  task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow, close,
+  task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow, dateless, close,
 }) {
   const [moving, setMoving] = useState(false)
 
@@ -697,7 +711,7 @@ function MenuItems({
       )}
       {/* Only a task with no parent of its own: a sub-section is a heading band
           across the whole width, and a nested one has nowhere to span. */}
-      {!isNote && !task.parent_id && (
+      {!isNote && !dateless && !task.parent_id && (
         <>
           {task.subsection
             ? item('Back to an ordinary task', () => onChange({ subsection: 0 }))
@@ -717,6 +731,8 @@ function MenuItems({
         </>
       )}
 
+      {!dateless && (
+        <>
       {task.scheduled_date && item('Move to tomorrow', () => moveTo(addDays(task.scheduled_date, 1)))}
 
       {moving ? (
@@ -740,6 +756,8 @@ function MenuItems({
       {task.scheduled_date
         ? item('Send to backlog', () => onChange({ scheduled_date: null, status: 'todo', moved_to_date: null }))
         : item('Schedule today', () => onChange({ scheduled_date: today() }))}
+        </>
+      )}
 
       {task.parent_id && onNest && item('Move out of parent', () => onNest(task.id, null))}
     </>

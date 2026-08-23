@@ -256,11 +256,18 @@ export default function Day() {
   async function addTo(sectionId, kind = 'task') {
     // A note starts empty — its text is prose in `notes`, and a placeholder
     // title would just have to be deleted before writing anything.
+    // A section tied to a project passes that on, which is also what gives the
+    // new task the project's deep/light default — the server reads it from the
+    // project on create. Without this, adding a task to a project's own band
+    // produced one belonging to no project at all.
+    const section = d.sections.find((sec) => sec.id === sectionId)
+
     const created = await api.post('/tasks', {
       title: kind === 'note' ? '' : 'New task',
       kind,
       scheduled_date: date,
       section_id: sectionId === UNSECTIONED ? null : sectionId,
+      project_id: section?.project_id ?? null,
     })
     setJustAdded(created.id)
     refresh()
