@@ -1,0 +1,240 @@
+/**
+ * All-tasks view: the filter popover, the in-progress panel, grouped lists and
+ * the drag-reorder affordances.
+ * Every colour comes from a token in styles.css — a dark theme reassigns them,
+ * so a literal hex/rgb here would survive the theme switch and break.
+ */
+
+.at-toolbar { padding: 0; }
+
+.at-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+}
+
+.at-search { position: relative; flex: 1 1 220px; min-width: 170px; }
+.at-search .input { padding-left: 28px; }
+
+.at-search-ico {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.at-filter { flex: 0 0 168px; width: 168px; }
+
+.at-hint { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
+
+.at-note { font-weight: 400; font-size: 11.5px; }
+
+/* ------------------------------------------------------- filter popover */
+
+.at-pop-wrap { position: relative; display: inline-flex; }
+
+.at-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Anchored to the button's right edge: the toolbar pushes the trigger to the
+   right of a wide page, where a left-anchored popover would run off-screen. */
+.at-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: min(420px, calc(100vw - 40px));
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-pop);
+}
+
+.at-group { display: flex; flex-direction: column; gap: 6px; }
+
+.at-group-h {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.at-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Chip toggles rather than checkboxes: the whole set has to be readable at a
+   glance, and a pressed chip carries its own state without a second glyph. */
+.at-chip {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink-2);
+  border-radius: 99px;
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.at-chip:hover { border-color: var(--ink-3); color: var(--ink); }
+
+.at-chip.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.at-pop-f { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+
+/* --------------------------------------------------------- active filters */
+
+.at-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.at-removable .at-chip-scope { color: var(--ink-3); font-weight: 500; }
+.at-removable:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.at-removable:hover .at-chip-scope { color: var(--red); }
+
+/* ----------------------------------------------------------- progress bars */
+
+.at-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 10px;
+}
+
+.at-groupbar { padding: 4px 6px 2px; }
+.at-groupbar:empty { display: none; }
+.at-prog { flex: 1 1 180px; min-width: 120px; max-width: 340px; }
+
+/* --------------------------------------------------------- in progress */
+
+.at-inprog { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-soft), var(--shadow); }
+.at-inprog .panel-h { color: var(--amber); }
+
+.at-live {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+/* ---------------------------------------------------------------- rows */
+
+.at-body { padding: 6px; }
+.at-rows { min-height: 40px; }
+.at-static .task { cursor: default; }
+
+/* The always-present transparent borders keep the drop indicator from
+   nudging rows down as it appears. */
+.at-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+}
+
+.at-row > .task { flex: 1; min-width: 0; }
+.at-row.at-dragging { opacity: .4; }
+.at-row.at-drop-before { border-top-color: var(--accent); }
+.at-row.at-drop-after { border-bottom-color: var(--accent); }
+
+.at-drop-tail { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* ------------------------------------------------------------ date cell */
+
+/* The date is a link first: clicking it opens that day. Only the calendar
+   button swaps in the picker, so the click-through is never stolen. */
+.at-when {
+  flex: 0 0 138px;
+  width: 138px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.at-when-link {
+  border: 0;
+  background: none;
+  padding: 1px 4px;
+  margin: -1px 0;
+  border-radius: 4px;
+  font: inherit;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.at-when-link:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.at-when-link.at-unset { color: var(--ink-3); font-style: italic; }
+
+.at-when-edit {
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  opacity: .5;
+}
+
+.at-row:hover .at-when-edit,
+.at-when-edit:focus-visible { opacity: 1; }
+.at-when-edit:hover { color: var(--accent); background: var(--accent-soft); }
+
+.at-moved {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.at-when-input {
+  flex: 0 0 138px;
+  width: 138px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 760px) {
+  .at-hint { margin-left: 0; }
+  .at-filter { flex-basis: 100%; width: 100%; }
+  .at-row { flex-wrap: wrap; }
+  .at-when,
+  .at-when-input { flex-basis: auto; width: auto; margin: 0 0 6px 25px; }
+  .at-when-edit { opacity: 1; }
+}

@@ -1,0 +1,91 @@
+/*
+ * Deep work has one colour across the whole app — a rich purple that appears on
+ * gauges and controls but never on a task row itself. The association should be
+ * felt, not used to shout.
+ */
+
+:root {
+  --deep: #4b2e83;
+  --deep-soft: #ece7f6;
+  --deep-over: #c71585;      /* mediumvioletred */
+  --deep-done: #4c8f2a;      /* ao */
+  --deep-track: #d7dbe2;     /* slate */
+}
+
+[data-theme="dark"] {
+  --deep: #9d7dea;
+  --deep-soft: #241d3d;
+  --deep-over: #e05fae;
+  --deep-done: #62b83f;
+  --deep-track: #333a49;
+}
+
+.deepbar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* Fixed, so the gauge means the same thing from one day to the next. */
+  width: 190px;
+  flex: none;
+}
+
+.deepbar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--deep-track);
+  overflow: hidden;
+}
+
+.deepbar-track > i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 99px;
+  transition: width .3s ease;
+}
+
+/* Committed but not yet done — present, deliberately quiet. */
+.deepbar-scheduled { background: var(--deep); opacity: .34; }
+
+/* Finished work is the one thing here that gets full strength. */
+.deepbar-done { background: var(--deep-done); opacity: .8; }
+
+/* Past the target the whole track becomes the day; the scheduled band now marks
+   where the target falls, and the excess behind it stays faint. */
+.deepbar.is-over .deepbar-track { background: var(--deep-over); }
+.deepbar.is-over .deepbar-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--panel);
+  opacity: .55;
+}
+
+.deepbar.is-over .deepbar-scheduled {
+  background: var(--deep-over);
+  opacity: 1;
+  z-index: 1;
+}
+
+.deepbar.is-over .deepbar-done { z-index: 2; }
+
+.deepbar-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.deepbar-over { color: var(--deep-over); font-weight: 650; }
+
+/* The subtle association elsewhere: anything that sets or reports deep work. */
+.chip.is-deep { background: var(--deep-soft); color: var(--deep); }
+.btn.is-deep-on { border-color: var(--deep); color: var(--deep); }
+
+/* The only target on screen: the thinking budget is the one worth defending. */
+.deepbar-target { color: var(--ink-3); white-space: nowrap; }

@@ -1,0 +1,62 @@
+/*
+ * Priority and the shared popover. Every colour here is a token from
+ * styles.css — the dark theme reassigns those, so a literal would survive the
+ * theme switch and be the one thing on the page that looks wrong.
+ */
+
+/* Colour is on the icon, not the chip: red rises, blue falls, amber holds. */
+.pri-ico { flex: 0 0 auto; }
+.pri-ico-highest, .pri-ico-high { color: var(--red); }
+.pri-ico-medium { color: var(--amber); }
+.pri-ico-low, .pri-ico-lowest { color: var(--blue); }
+
+/*
+ * Deliberately not a `.chip`. Priority shows on every row now, and five filled
+ * chips per screen would drown the rest of the meta line.
+ */
+.pri-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.55;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+button.pri-chip { cursor: pointer; }
+button.pri-chip:hover,
+button.pri-chip[aria-expanded="true"] { background: var(--line-soft); border-color: var(--line); }
+button.pri-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Compounded with .menu-item so it outranks that rule's `display: block`
+   whichever order the two stylesheets land in. */
+.menu-item.pri-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: capitalize;
+}
+
+.menu-item.pri-opt[aria-checked="true"] { background: var(--line-soft); font-weight: 650; }
+
+/* --------------------------------------------------------------- popover */
+
+/*
+ * Placement, width and z-index are inline styles from Popover.jsx. All this
+ * adds is the overflow behaviour for a panel that had to be clamped to the
+ * space left in the viewport; the caller supplies the surface (`.menu`).
+ */
+.pop {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pop:focus { outline: none; }

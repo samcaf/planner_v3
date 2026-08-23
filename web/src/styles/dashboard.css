@@ -1,0 +1,115 @@
+.db-page { max-width: 1180px; display: flex; flex-direction: column; gap: 16px; }
+
+/* The one thing gets a whole band to itself — it is the only item on this page
+   that is meant to be read rather than scanned. */
+.db-focus {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 4px solid var(--c, var(--accent));
+}
+
+.db-eyebrow {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.db-focus-title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+.db-focus-title:hover { color: var(--accent); text-decoration: none; }
+
+.db-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.db-wide { grid-column: 1 / -1; }
+
+.db-hint {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+  padding: 0 4px;
+}
+
+.db-list { padding: 10px 10px 12px; }
+
+.db-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.db-row:hover { background: var(--line-soft); text-decoration: none; }
+
+.db-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-row-meta {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-row-meta.is-red { color: var(--red); font-weight: 600; }
+
+/* ------------------------------------------------------------- deep chart */
+
+.db-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 96px;
+  padding: 4px 2px 0;
+}
+
+.db-bar {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 3px;
+}
+
+.db-bar > i {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 3px 3px 0 0;
+  min-height: 1px;
+}
+
+/* Planned is the shape of the intent; done is what actually happened. */
+.db-bar-planned { background: var(--deep); opacity: .22; }
+.db-bar-done { background: var(--deep-done); opacity: .8; }
+
+.db-chart-axis {
+  display: flex;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  padding: 6px 2px 0;
+}

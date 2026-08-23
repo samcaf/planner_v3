@@ -1,0 +1,174 @@
+/**
+ * Project list cards and the project detail page.
+ * Every colour comes from a token in styles.css — a dark theme reassigns them,
+ * so a literal hex/rgb here would survive the theme switch and break.
+ */
+
+/* ------------------------------------------------------------- list cards */
+
+.pj-name { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
+
+.pj-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* The type select is also the colour control, so the two sit together and the
+   hint says which way the influence runs. */
+.pj-type {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.pj-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* The cards are a grid with no margin below it, so the digest that follows them
+   has to supply the gap itself. Capped because it is a list of names: run the
+   full width of the page and the count drifts a screen away from what it counts. */
+.pj-backlogs { margin-top: 16px; max-width: 520px; }
+
+/* --------------------------------------------------------------- detail */
+
+/*
+ * An editable title — the topbar h1, a note section's heading — is a flex item
+ * wrapping a RichLine, and two rules in styles.css conspire against it:
+ *
+ *   .rich { overflow-wrap: anywhere }   offers a break between every pair of
+ *     letters, and `anywhere` (unlike `break-word`) also feeds that into
+ *     min-content — so the item's automatic minimum size is ONE CHARACTER and
+ *     flex is free to squeeze the title to nothing the moment a sibling wants
+ *     room.
+ *   .rich-line { padding: 1px 3px; margin: -1px -3px }   the negative margin
+ *     cancels the padding in the max-content contribution, so even unsqueezed
+ *     the box lands on exactly the text advance with nothing to spare.
+ *
+ * Together: a title is always half a pixel from wrapping, and when it wraps it
+ * wraps between letters. `break-word` restores a whole word as the floor and
+ * keeps the padding in the measurement, which is the slack.
+ */
+.pj-title .rich { overflow-wrap: break-word; }
+.pj-title .rich-line { margin-inline: 0; }
+
+/* A section heading has only a delete button beside it, so it takes the row —
+   which is also what gives its editing input something to be 100% of. */
+.pj-section-title { flex: 1 1 auto; min-width: 0; font-size: 14.5px; }
+
+.pj-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pj-prog { flex: 1 1 150px; min-width: 110px; max-width: 260px; }
+
+/* The chip row only appears once something is filtered, so its padding has to
+   collapse with it rather than leave a gap under the toolbar. */
+.pj-toolbar + .at-active { padding-top: 10px; }
+
+.pj-tasks { padding: 6px; }
+
+.pj-colour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.pj-colour .pj-hint { flex: 1 1 140px; }
+
+/* ----------------------------------------------------------- notes tab */
+
+.pj-captured-note { margin-bottom: 10px; align-items: flex-start; }
+
+/* The date is a fixed rail down the left so a run of captured notes reads as a
+   chronology rather than as a stack of unrelated blocks. */
+.pj-captured {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pj-captured:last-child { padding-bottom: 0; border-bottom: 0; }
+.pj-captured > .chip { flex: 0 0 auto; margin-top: 1px; }
+.pj-captured-body { flex: 1; min-width: 0; }
+
+/* --------------------------------------------------- task row actions */
+
+/*
+ * The hover actions used to occupy a column of layout width on every row, so a
+ * long title wrapped early to keep space for buttons that are invisible until
+ * you point at the row. Floating them over the row's top corner gives that
+ * width back to the text and costs only the sliver of title they cover while
+ * the pointer is there. `pointer-events` has to follow the opacity, or the
+ * hidden strip would swallow clicks meant for the title underneath it.
+ */
+.task-actions {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 2;
+  padding: 1px 2px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.task:hover .task-actions,
+.task:focus-within .task-actions {
+  opacity: .82;
+  pointer-events: auto;
+}
+
+/* Full strength once the pointer is on the buttons themselves — and while the
+   row menu is open, since it lives inside this strip. */
+.task-actions:hover,
+.task-actions:focus-within { opacity: 1; }
+
+/* An open menu is a popup rather than part of the strip's hover affordance: it
+   hangs below the row, so it has to stay clickable after the pointer has left
+   the row that opened it. */
+.task-actions .menu { pointer-events: auto; }
+
+/* ------------------------------------------------------ note headings */
+
+/*
+ * `#` and `##` rendered at the same 14.5px, so a note's structure was invisible.
+ * Scoped to `.rich` rather than to this page: a heading means the same thing in
+ * a day note, a task note and a project section.
+ */
+.rich h1, .rich h2, .rich h3, .rich h4 { margin: 14px 0 6px; line-height: 1.3; }
+
+.rich h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.rich h2 { font-size: 16.5px; font-weight: 650; letter-spacing: -.01em; }
+.rich h3 { font-size: 14px; font-weight: 650; }
+
+/* Past h3 the size race is lost, so rank is carried by weight and colour. */
+.rich h4 { font-size: 13px; font-weight: 650; color: var(--ink-2); }

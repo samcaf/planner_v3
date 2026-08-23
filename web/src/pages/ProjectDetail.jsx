@@ -1,0 +1,535 @@
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import Icon from '../components/Icon.jsx'
+import Progress, { CLOSED, tally } from '../components/Progress.jsx'
+import TaskFilter, {
+  ActiveChips, emptyFilters, filterChips, taskFilter, toggleFilter,
+} from '../components/TaskFilter.jsx'
+import QuickMeeting from '../components/QuickMeeting.jsx'
+import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
+import {
+  SelectionBar, SelectionProvider, bulkPatch, draggedIds, isTaskDrag,
+} from '../components/Selection.jsx'
+import { useToast } from '../components/Toast.jsx'
+import { ColorPicker, Empty, Field, Panel, cls, initials } from '../components/ui.jsx'
+import { Rich, RichEditor, RichLine } from '../lib/rich.jsx'
+import { api, useApi } from '../lib/api.js'
+import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
+import { useUndo } from '../lib/undo.jsx'
+import { relative, shortDate } from '../lib/dates.js'
+import '../styles/projects.css'
+
+const STATUSES = ['active', 'planned', 'done', 'archived']
+
+// Every task here is already this project's, and a project spans days rather
+// than sitting on one, so the project and date groups have nothing to say.
+const NO_FILTERS = emptyFilters(['priority', 'status', 'time', 'due'])
+
+/**
+ * The order GET /projects/:id already returns its tasks in, reapplied once the
+ * project's meetings are merged into the same list.
+ */
+const byPlan = (a, b) =>
+  (a.status === 'done') - (b.status === 'done')
+  || (a.scheduled_date == null) - (b.scheduled_date == null)
+  || String(a.scheduled_date).localeCompare(String(b.scheduled_date))
+  || a.sort - b.sort
+
+/** What the colour swatch means, given that a type can be driving it. */
+function colourHint(project, type) {
+  if (!type) return 'No type, so this colour is yours to set.'
+  if (project.color !== type.color) return `Set by hand — overriding the ${type.name} colour.`
+  return `Follows the ${type.name} type. Pick a colour to override it.`
+}
+
+export default function ProjectDetail() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const project = useApi(`/projects/${id}`, [id])
+  const types = useApi('/projects/types')
+  // GET /projects/:id returns only kind='task' rows, so a meeting filed under
+  // this project is invisible in that response — including the one this page's
+  // own button just created. Meetings are work that occupies the day like any
+  // other task, so they are fetched here and merged into the same list.
+  const filed = useApi(`/tasks?project_id=${id}`, [id])
+  // Asked of the server rather than sieved out of the response above, so this
+  // panel and the day view's backlog are answering the same question of the
+  // same table — see lib/backlog.js.
+  const backlog = useApi(`/tasks?${BACKLOG_QUERY}&project_id=${id}`, [id])
+  const [tab, setTab] = useState('tasks')
+  const [draft, setDraft] = useState('')
+  const [mDraft, setMDraft] = useState('')
+  const [filters, setFilters] = useState(NO_FILTERS)
+  const [over, setOver] = useState(false)
+  const [meeting, setMeeting] = useState(false)
+  const undo = useUndo()
+  const toast = useToast()
+
+  if (project.error) return <div className="page"><p className="muted">{project.error.message}</p></div>
+  if (!project.data) return <div className="page"><p className="muted">Loading…</p></div>
+
+  const p = project.data
+  const reload = () => { project.reload(); filed.reload(); backlog.reload() }
+  const patch = async (body) => { await api.patch(`/projects/${p.id}`, body); project.reload() }
+
+  // GET /api/projects/:id carries type_id but neither the type's name nor its
+  // colour, so the type list is what turns the id into something to show.
+  const typeList = types.data || []
+  const type = typeList.find((t) => t.id === p.type_id) || null
+
+  // Notes are prose filed against the project — no status to close, no time to
+  // estimate, nothing to tick off — so they belong on the Notes tab rather than
+  // in the task list. Splitting by kind here as well as on the server means an
+  // older response still lands every row in the right place.
+  const tasks = [
+    ...p.tasks.filter((t) => t.kind === 'task'),
+    ...(filed.data || []).filter((t) => t.kind === 'meeting'),
+  ].sort(byPlan)
+  const notes = p.notes || p.tasks.filter((t) => t.kind === 'note')
+
+  // A note with no day is one of this project's own sections; a dated one was
+  // written on that day and merely tagged with the project.
+  const sections = notes.filter((n) => !n.scheduled_date)
+  const captured = notes.filter((n) => n.scheduled_date)
+
+  const shown = tasks.filter(taskFilter(filters))
+  const chips = filterChips(filters)
+  const toggle = (group, key) => setFilters((f) => toggleFilter(f, group, key))
+  const clearFilters = () => setFilters(NO_FILTERS)
+
+  const counts = tally(tasks)
+  const backlogTasks = (backlog.data || []).filter(isBacklogTask)
+
+  const saveTask = async (taskId, body) => { await api.patch(`/tasks/${taskId}`, body); reload() }
+  const removeTask = async (taskId) => { await api.del(`/tasks/${taskId}`); reload() }
+
+  const rowProps = (t) => ({
+    task: t,
+    subtasks: t.subtasks || [],
+    showProject: false,
+    onChange: (body, taskId = t.id) => saveTask(taskId, body),
+    onDelete: (taskId = t.id) => removeTask(taskId),
+  })
+
+  /**
+   * Dropping on the heading files tasks here. The day they are scheduled on is
+   * left alone — filing work under a project is not a reason to unschedule it.
+   */
+  async function fileHere(ids) {
+    if (!ids.length) return
+    await bulkPatch(ids, { project_id: p.id }, { known: tasks, label: `file ${ids.length} tasks`, undo })
+    reload()
+    toast({ message: `Filed ${ids.length} task${ids.length === 1 ? '' : 's'} under ${p.name}` })
+  }
+
+  async function addTask(e) {
+    e.preventDefault()
+    const title = draft.trim()
+    if (!title) return
+    setDraft('')
+    await api.post('/tasks', { title, project_id: p.id })
+    reload()
+  }
+
+  async function addMilestone(e) {
+    e.preventDefault()
+    const title = mDraft.trim()
+    if (!title) return
+    setMDraft('')
+    await api.post(`/projects/${p.id}/milestones`, { title })
+    project.reload()
+  }
+
+  /**
+   * A note section is a `kind='note'` row with no day. That reuses the note
+   * machinery whole — search, backlinks, images — for the price of one row, and
+   * having no day is exactly what makes it the project's rather than a day's.
+   */
+  async function addNoteSection() {
+    await api.post('/tasks', {
+      title: 'New section',
+      kind: 'note',
+      project_id: p.id,
+      scheduled_date: null,
+    })
+    project.reload()
+  }
+
+  return (
+    <SelectionProvider>
+      <header className="topbar">
+        <Link to="/projects" className="btn ghost sm"><Icon name="left" size={14} /> Projects</Link>
+        <span className="dot" style={{ background: `var(--${p.color})` }} />
+        <h1
+          className={`pj-title ${over ? 'sel-drop-on' : ''}`}
+          title="Drop tasks here to file them under this project"
+          onDragOver={(e) => { if (!isTaskDrag(e)) return; e.preventDefault(); setOver(true) }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { setOver(false); fileHere(draggedIds(e)) }}
+        >
+          <RichLine value={p.name} onChange={(name) => name.trim() && patch({ name })} />
+        </h1>
+        {type && <span className={`chip ${cls(type.color)}`}>{type.name}</span>}
+        <span className="spacer" />
+        <select className="input select" style={{ width: 120 }} value={p.status} onChange={(e) => patch({ status: e.target.value })}>
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </header>
+
+      <div className="page detail-grid">
+        <div className="col" style={{ gap: 16 }}>
+          <div className="tabs">
+            {['tasks', 'milestones', 'notes'].map((t) => (
+              <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+                {t[0].toUpperCase() + t.slice(1)}
+                {t === 'tasks' && counts.openCount > 0 && <span className="muted"> {counts.openCount}</span>}
+                {t === 'notes' && notes.length > 0 && <span className="muted"> {notes.length}</span>}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'tasks' && (
+            <Panel bodyClass="">
+              <div className="pj-toolbar">
+                <TaskFilter
+                  filters={filters}
+                  count={chips.length}
+                  onToggle={toggle}
+                  onClear={clearFilters}
+                />
+                <span className="muted at-note">
+                  {shown.length === tasks.length
+                    ? `${tasks.length} tasks`
+                    : `${shown.length} of ${tasks.length} tasks`}
+                </span>
+                <span className="spacer" />
+                {/* Filed under this project from the start — a meeting about the
+                    work is part of the work, and counts in the same totals. */}
+                <button className="btn ghost sm" onClick={() => setMeeting(true)}>
+                  <Icon name="clock" size={12} /> New meeting
+                </button>
+                <Progress tasks={shown} color={p.color} className="pj-prog" />
+              </div>
+
+              <ActiveChips chips={chips} onRemove={(c) => toggle(c.group, c.key)} onClear={clearFilters} />
+
+              <div className="pj-tasks">
+                {tasks.length === 0 ? (
+                  <Empty>No tasks in this project yet.</Empty>
+                ) : shown.length === 0 ? (
+                  <Empty>Nothing matches these filters.</Empty>
+                ) : (
+                  <TaskList tasks={shown} rowProps={rowProps} />
+                )}
+              </div>
+
+              <form className="quick-add" onSubmit={addTask}>
+                <input
+                  className="input"
+                  placeholder="Add a task to this project…"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+                <button className="btn primary" type="submit"><Icon name="plus" size={14} /> Add</button>
+              </form>
+            </Panel>
+          )}
+
+          {tab === 'milestones' && (
+            <Panel bodyClass="">
+              <div style={{ padding: '6px 14px' }}>
+                {p.milestones.length === 0 && <Empty>No milestones. Add dated checkpoints to see them on the calendar.</Empty>}
+                {p.milestones.map((m) => (
+                  <div key={m.id} className="row" style={{ padding: '7px 0', borderBottom: '1px solid var(--line-soft)' }}>
+                    <button
+                      className="task-check"
+                      style={{ marginTop: 0, background: m.done ? 'var(--green)' : undefined, borderColor: m.done ? 'var(--green)' : undefined, color: m.done ? '#fff' : 'transparent' }}
+                      onClick={async () => {
+                        await api.patch(`/projects/milestones/${m.id}`, { done: m.done ? 0 : 1 })
+                        project.reload()
+                      }}
+                    >
+                      <Icon name="check" size={11} strokeWidth={3} />
+                    </button>
+                    <span style={{ flex: 1, textDecoration: m.done ? 'line-through' : undefined, color: m.done ? 'var(--ink-3)' : undefined }}>
+                      <RichLine
+                        value={m.title}
+                        onChange={async (title) => {
+                          if (!title.trim()) return
+                          await api.patch(`/projects/milestones/${m.id}`, { title })
+                          project.reload()
+                        }}
+                      />
+                    </span>
+                    {m.due_date && !m.done && <span className="muted" style={{ fontSize: 12 }}>{relative(m.due_date)}</span>}
+                    <input
+                      className="input"
+                      type="date"
+                      style={{ width: 140 }}
+                      value={m.due_date || ''}
+                      onChange={async (e) => {
+                        await api.patch(`/projects/milestones/${m.id}`, { due_date: e.target.value || null })
+                        project.reload()
+                      }}
+                    />
+                    <button
+                      className="btn ghost sm danger"
+                      onClick={async () => { await api.del(`/projects/milestones/${m.id}`); project.reload() }}
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <form className="quick-add" onSubmit={addMilestone}>
+                <input
+                  className="input"
+                  placeholder="Add a milestone…"
+                  value={mDraft}
+                  onChange={(e) => setMDraft(e.target.value)}
+                />
+                <button className="btn primary" type="submit"><Icon name="plus" size={14} /> Add</button>
+              </form>
+            </Panel>
+          )}
+
+          {tab === 'notes' && (
+            <>
+              <Panel title="Overview">
+                <RichEditor
+                  value={p.description}
+                  onChange={(description) => patch({ description })}
+                  placeholder="Scope, decisions, references. Markdown + LaTeX supported."
+                  rows={10}
+                  draftKey={`project:${p.id}`}
+                />
+              </Panel>
+
+              {sections.map((note) => (
+                <NoteSection
+                  key={note.id}
+                  note={note}
+                  onChange={(body) => saveTask(note.id, body)}
+                  onDelete={async () => {
+                    if (!confirm(`Delete the section "${note.title || 'Untitled'}" and its notes?`)) return
+                    await removeTask(note.id)
+                  }}
+                />
+              ))}
+
+              <button className="btn ghost" onClick={addNoteSection}>
+                <Icon name="plus" size={14} /> Add a note section
+              </button>
+
+              {captured.length > 0 && (
+                <Panel
+                  title={<>Written on a day <span className="muted">{captured.length}</span></>}
+                >
+                  {/* Read-only on purpose: a note's one-line `title` summary is
+                      kept in step with its body by the row that owns it, so
+                      editing belongs on the day rather than here. */}
+                  <p className="pj-hint pj-captured-note">
+                    Notes filed against this project from a day. They still belong to that
+                    day — the date opens it.
+                  </p>
+                  <div className="col" style={{ gap: 10 }}>
+                    {captured.map((note) => (
+                      <article key={note.id} className="pj-captured">
+                        <Link to={`/day/${note.scheduled_date}`} className="chip">
+                          {shortDate(note.scheduled_date)}
+                        </Link>
+                        <Rich className="pj-captured-body" text={note.notes || note.title} />
+                      </article>
+                    ))}
+                  </div>
+                </Panel>
+              )}
+            </>
+          )}
+        </div>
+
+        <aside className="col" style={{ gap: 16 }}>
+          <Panel title="Progress">
+            <Progress tasks={tasks} color={p.color} />
+            <p className="pj-hint">
+              {counts.doneCount} of {counts.doneCount + counts.openCount} tasks done
+              {counts.total > 0 ? ', by estimated time' : ' — no estimates yet, so this counts tasks'}
+            </p>
+          </Panel>
+
+          <BacklogPanel tasks={backlogTasks} rowProps={rowProps} />
+
+          <Panel title="Details">
+            <div className="col" style={{ gap: 10 }}>
+              <Field label="Type">
+                <select
+                  className="input select"
+                  value={p.type_id ?? ''}
+                  onChange={(e) => patch({ type_id: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">No type</option>
+                  {typeList.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Colour">
+                <ColorPicker value={p.color} onChange={(color) => patch({ color })} />
+                <div className="pj-colour">
+                  <span className="pj-hint">{colourHint(p, type)}</span>
+                  {/* Re-sending type_id is what makes the server re-adopt the
+                      type's colour — there is no separate reset to call. */}
+                  {type && p.color !== type.color && (
+                    <button className="btn ghost sm" onClick={() => patch({ type_id: type.id })}>
+                      Use the {type.name} colour
+                    </button>
+                  )}
+                </div>
+              </Field>
+              <Field label="Start">
+                <input className="input" type="date" value={p.start_date || ''}
+                  onChange={(e) => patch({ start_date: e.target.value || null })} />
+              </Field>
+              <Field label="Target date">
+                <input className="input" type="date" value={p.due_date || ''}
+                  onChange={(e) => patch({ due_date: e.target.value || null })} />
+              </Field>
+            </div>
+          </Panel>
+
+          {p.people.length > 0 && (
+            <Panel title="People">
+              <div className="col" style={{ gap: 6 }}>
+                {p.people.map((person) => (
+                  <Link key={person.id} to={`/people/${person.id}`} className="row" style={{ color: 'inherit' }}>
+                    <span className={`avatar ${cls(person.color)}`} style={{ width: 24, height: 24, flexBasis: 24, fontSize: 10 }}>
+                      {initials(person.name)}
+                    </span>
+                    {person.name}
+                  </Link>
+                ))}
+              </div>
+            </Panel>
+          )}
+
+          <button
+            className="btn danger"
+            onClick={async () => {
+              // Ask the server what would actually go, so the warning is specific.
+              const impact = await api.get(`/projects/${p.id}/impact`)
+              const parts = [
+                impact.tasks ? `${impact.tasks} task${impact.tasks === 1 ? '' : 's'}` : null,
+                impact.notes ? `${impact.notes} note${impact.notes === 1 ? '' : 's'}` : null,
+                impact.milestones ? `${impact.milestones} milestone${impact.milestones === 1 ? '' : 's'}` : null,
+              ].filter(Boolean)
+              const what = parts.length ? ` This also deletes ${parts.join(', ')}.` : ''
+              if (!confirm(`Delete "${p.name}"?${what} This cannot be undone.`)) return
+              await api.del(`/projects/${p.id}`)
+              navigate('/projects')
+            }}
+          >
+            <Icon name="trash" size={14} /> Delete project
+          </button>
+        </aside>
+      </div>
+
+      <SelectionBar tasks={tasks} onDone={reload} />
+
+      {meeting && (
+        <QuickMeeting
+          project={p}
+          onClose={() => setMeeting(false)}
+          onCreated={() => { setMeeting(false); reload() }}
+        />
+      )}
+    </SelectionProvider>
+  )
+}
+
+/**
+ * The unscheduled half of a project: open work that has never been given a day.
+ * The Tasks tab does list these too, at the bottom where the undated sort, but
+ * that is exactly where a long project buries them — a panel of their own is
+ * the only place they are the subject rather than the remainder.
+ *
+ * Rows are the ordinary TaskRow, so giving one a date from here is the same
+ * gesture as anywhere else and the row simply leaves the list afterwards.
+ */
+function BacklogPanel({ tasks, rowProps }) {
+  const tree = nestTasks(tasks)
+  const ids = visibleIds(tree)
+
+  return (
+    <Panel
+      title={<>Backlog <span className="muted">({tasks.length})</span></>}
+      bodyClass="pj-tasks"
+    >
+      {tasks.length === 0
+        ? <Empty>Nothing waiting. Every open task here has a day.</Empty>
+        : tree.map((t) => <TaskRow key={t.id} {...rowProps(t)} listIds={ids} />)}
+    </Panel>
+  )
+}
+
+/**
+ * One note section: an editable heading over a body, backed by a single
+ * `kind='note'` row — `title` is the heading and `notes` the prose, the same
+ * two columns every other note in the app uses.
+ */
+function NoteSection({ note, onChange, onDelete }) {
+  return (
+    <Panel
+      title={
+        <span className="pj-title pj-section-title">
+          <RichLine
+            value={note.title}
+            onChange={(title) => onChange({ title })}
+            placeholder="Section title"
+          />
+        </span>
+      }
+      actions={
+        <button className="btn ghost sm danger" title="Delete this section" onClick={onDelete}>
+          <Icon name="trash" size={13} />
+        </button>
+      }
+    >
+      <RichEditor
+        value={note.notes}
+        onChange={(notes) => onChange({ notes })}
+        placeholder="Markdown, images, links and $math$ all work. [[ links a day or project."
+        rows={8}
+        draftKey={`task:${note.id}`}
+      />
+    </Panel>
+  )
+}
+
+/**
+ * Unfinished work first, finished behind a disclosure — the same split the day
+ * view uses, so a long-lived project opens on what is left rather than on a
+ * wall of ticks.
+ */
+function TaskList({ tasks, rowProps }) {
+  const [showDone, setShowDone] = useState(false)
+  const tree = nestTasks(tasks)
+  const open = tree.filter((t) => !CLOSED.includes(t.status))
+  const closed = tree.filter((t) => CLOSED.includes(t.status))
+
+  // Hidden rows are outside any range a shift-click could mean.
+  const ids = [...visibleIds(open), ...(showDone ? visibleIds(closed) : [])]
+
+  return (
+    <>
+      {open.map((t) => <TaskRow key={t.id} {...rowProps(t)} listIds={ids} />)}
+      {closed.length > 0 && (
+        <>
+          <div className="hr" />
+          <button className="done-toggle" onClick={() => setShowDone(!showDone)}>
+            <Icon name={showDone ? 'chevronDown' : 'right'} size={12} />
+            {closed.length} done
+          </button>
+          {showDone && closed.map((t) => <TaskRow key={t.id} {...rowProps(t)} listIds={ids} />)}
+        </>
+      )}
+    </>
+  )
+}

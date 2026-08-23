@@ -1,0 +1,63 @@
+/* Settings: a narrow column of panels, each one preference and its reasoning. */
+
+.st-page { max-width: 720px; }
+
+.st-stack { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+
+.st-stack > .panel { align-self: stretch; }
+
+.st-note { font-size: 12.5px; color: var(--ink-3); margin: 0 0 12px; max-width: 70ch; }
+
+.st-hint { font-size: 11.5px; color: var(--ink-3); }
+.st-error { color: var(--red); }
+
+/* A target is one number, so it gets one field's worth of width rather than
+   stretching across the panel and reading as a text box. */
+.st-target { max-width: 300px; }
+
+/*
+ * The provenance note. Ruled off rather than muted into invisibility: the number
+ * is borrowed and unverified, and that is exactly what the reader needs to know
+ * before trusting it.
+ */
+.st-cite {
+  margin: 14px 0 0;
+  padding: 9px 0 0 11px;
+  border-left: 2px solid var(--line);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 70ch;
+}
+
+.st-cite strong { color: var(--ink); font-weight: 600; }
+
+/* ------------------------------------------------------------- appearance */
+
+.st-appearance { display: flex; gap: 40px; flex-wrap: wrap; }
+
+.st-themes { display: flex; gap: 4px; }
+
+.st-accents { display: flex; gap: 10px; align-items: center; height: 26px; }
+
+.st-accent {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  /* The ring sits outside the swatch so the colour itself is never clipped. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.st-accent:hover { outline-color: var(--line); }
+.st-accent[aria-pressed="true"] { outline-color: var(--ink); }
+
+/* ---------------------------------------------------------------- raw dump */
+
+.st-raw-toggle { color: var(--ink-3); }
+
+.st-raw-row { grid-template-columns: 200px 1fr; margin-bottom: 6px; }
+.st-raw-val { font-size: 12px; overflow-wrap: anywhere; }

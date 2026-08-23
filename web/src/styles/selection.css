@@ -1,0 +1,107 @@
+/*
+ * Multi-select: the row affordance, the action bar, and the drop-target
+ * highlight shared by sections, project cards and the project heading.
+ * Every colour is a token from styles.css — the dark theme reassigns those, so
+ * a literal here would be the one thing on the page that ignores it.
+ */
+
+/* Sized and offset like .task-check so a row reads as one line of boxes. */
+.sel-check {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 4px;
+  background: none;
+  color: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+}
+
+/* The space is held even while invisible: appearing on hover must not shunt the
+   title sideways under the pointer. */
+.task:hover .sel-check,
+.task:focus-within .sel-check,
+.task.sel-armed .sel-check { opacity: 1; }
+
+.sel-check:hover { border-color: var(--accent); }
+.sel-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sel-check.is-on {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* `.task:hover` in styles.css sets a background at the same specificity, so the
+   hover case is spelled out rather than left to whichever sheet lands last. */
+.task.sel-on,
+.task.sel-on:hover {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ------------------------------------------------------------ action bar */
+
+/*
+ * Clear of the toast host, which owns bottom: 18px — a bulk delete leaves an
+ * Undo toast behind it, and the two must not stack on the same spot.
+ */
+/*
+ * Centred by auto margins rather than by left: 50% + translate: with only a
+ * left offset the shrink-to-fit width is measured against half the viewport,
+ * which wrapped the row of controls in two well before it had to.
+ */
+.sel-bar {
+  position: fixed;
+  bottom: 76px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  z-index: 85;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(960px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.sel-count {
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sel-bar .field { flex: 0 0 auto; }
+.sel-bar .input { width: 148px; }
+
+/* ---------------------------------------------------------- drop targets */
+
+/* An outline rather than a border: none of the targets have room to grow by a
+   couple of pixels without nudging their neighbours. */
+.sel-drop-on {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+}
+
+.pcard.sel-drop-on { outline-offset: 0; }
