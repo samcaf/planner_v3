@@ -52,6 +52,7 @@ addColumn('tasks', 'intensity', "TEXT NOT NULL DEFAULT 'light'")
 // These arrived with the meetings rebuild rather than through schema.sql, so a
 // database created from scratch needs them added here too.
 addColumn('tasks', 'optional', 'INTEGER NOT NULL DEFAULT 0')
+addColumn('tasks', 'subsection', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('tasks', 'url', "TEXT NOT NULL DEFAULT ''")
 addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // Which routine item produced this task. Top-up needs a stable identity for

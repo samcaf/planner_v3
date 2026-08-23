@@ -387,7 +387,9 @@ export function Rich({ text, inline = false, className = '' }) {
  * what is being edited (`day:2026-08-20`, `task:41`) and an in-progress edit
  * survives a reload. Without it nothing is stored.
  */
-export function RichEditor({ value, onChange, placeholder = 'Notes…', rows = 6, autoFocus, draftKey }) {
+export function RichEditor({
+  value, onChange, placeholder = 'Notes…', rows = 6, autoFocus, draftKey, onEditing,
+}) {
   const storeKey = draftKey ? `${DRAFT_PREFIX}${draftKey}` : null
   const [editing, setEditing] = useState(!!autoFocus)
   const [draft, setDraft] = useState(value || '')
@@ -546,8 +548,8 @@ export function RichEditor({ value, onChange, placeholder = 'Notes…', rows = 6
           className={`rich-view ${value ? '' : 'is-empty'}`}
           tabIndex={0}
           role="button"
-          onClick={() => { setDraft(value || ''); setEditing(true) }}
-          onFocus={() => { setDraft(value || ''); setEditing(true) }}
+          onClick={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
+          onFocus={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
         >
           {value ? <Rich text={value} /> : <span className="muted">{placeholder}</span>}
         </div>
@@ -588,6 +590,7 @@ export function RichEditor({ value, onChange, placeholder = 'Notes…', rows = 6
       <textarea
         ref={area}
         autoFocus
+        onFocus={() => onEditing?.(true)}
         rows={rows}
         value={draft}
         placeholder={placeholder}
@@ -694,6 +697,7 @@ export function RichEditor({ value, onChange, placeholder = 'Notes…', rows = 6
 /** Single-line field that still renders links and math when not focused. */
 export function RichLine({
   value, onChange, placeholder = 'Untitled', className = '', autoEdit = false,
+  onEditing,
 }) {
   // `autoEdit` is read once, as the initial state. A freshly created row opens
   // ready to type; later re-renders must not drag the editor back open under
@@ -703,6 +707,7 @@ export function RichLine({
 
   function commit() {
     setEditing(false)
+    onEditing?.(false)
     if (draft !== value) onChange(draft)
   }
 
@@ -718,12 +723,12 @@ export function RichLine({
         // the second click: once the field has focus, the browser's own caret
         // placement is what you want, and re-selecting everything made the text
         // impossible to edit in the middle.
-        onFocus={(e) => e.target.select()}
+        onFocus={(e) => { onEditing?.(true); e.target.select() }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter') commit()
-          if (e.key === 'Escape') { setDraft(value || ''); setEditing(false) }
+          if (e.key === 'Escape') { setDraft(value || ''); setEditing(false); onEditing?.(false) }
         }}
       />
     )
@@ -732,7 +737,7 @@ export function RichLine({
   return (
     <span
       className={`rich-line ${className} ${value ? '' : 'is-empty'}`}
-      onClick={() => { setDraft(value || ''); setEditing(true) }}
+      onClick={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
     >
       {value ? <Rich text={value} inline /> : <span className="muted">{placeholder}</span>}
     </span>

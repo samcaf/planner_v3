@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import TaskRow, { nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
+import TaskRow, { branchMinutes, nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
   SelectionBar, SelectionProvider, bulkPatch, draggedIds, isSectionDrag, isTaskDrag,
@@ -29,16 +29,28 @@ const byPriority = (a, b) =>
  * otherwise it falls out of the duration, so tasks land somewhere sensible
  * without the user placing every one by hand.
  */
-function columnFor(task) {
-  if (task.col_index != null) return Math.min(2, Math.max(0, task.col_index))
-  // A start and end time state a duration just as plainly as an estimate does,
-  // so a task given 09:00–10:00 belongs in the long column without also being
-  // told it is 60 minutes.
-  const m = task.estimate_min || spanMinutes(task.start_time, task.end_time)
+function columnByMinutes(m) {
   if (!m) return 0
   if (m <= 10) return 0
   if (m <= 30) return 1
   return 2
+}
+
+/** A task's own time: an explicit estimate, else the span between its clock times. */
+const ownMinutes = (t) => t.estimate_min || spanMinutes(t.start_time, t.end_time) || 0
+
+/**
+ * Which of the three boxes a task belongs in. An explicit col_index wins;
+ * otherwise it falls out of the duration, so tasks land somewhere sensible
+ * without the user placing every one by hand.
+ *
+ * A parent is sized by its whole subtree, not by its own estimate. A ten-minute
+ * task carrying two hours of children is a two-hour commitment, and filing it
+ * under "quick" misrepresents the day.
+ */
+function columnFor(task) {
+  if (task.col_index != null) return Math.min(2, Math.max(0, task.col_index))
+  return columnByMinutes(ownMinutes(task) + branchMinutes(task.subtasks || []))
 }
 
 export default function Day() {
@@ -786,6 +798,54 @@ function DayBucket({ label, hint, tasks, rowProps, defaultOpen = false }) {
   )
 }
 
+/**
+ * A top-level task promoted to a heading for the work under it. The parent sits
+ * in the column matching its OWN time — it is the heading, and grading it by the
+ * subtree it already visibly contains would say the same thing twice — while its
+ * immediate children each grade by their own total, exactly as they would out in
+ * the grid. Rules above, between and below make the band read as one unit.
+ */
+function SubSection({ task, columnLabels, rowProps }) {
+  const children = task.subtasks || []
+  const head = [[], [], []]
+  head[columnByMinutes(ownMinutes(task))].push(task)
+
+  const kids = [[], [], []]
+  for (const c of children) kids[columnFor(c)].push(c)
+
+  const row = (groups, opts = {}) => (
+    <div className="box-cols">
+      {groups.map((group, i) => (
+        <div className="box-col" key={i}>
+          {group.map((t) => (
+            <TaskRow
+              key={t.id}
+              {...rowProps(t)}
+              // The band already states the grouping, so repeating the parent's
+              // subtasks beneath it would show every child twice.
+              subtasks={opts.flat ? [] : (t.subtasks || [])}
+              showProject={false}
+              listIds={group.map((x) => x.id)}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className="subsec">
+      <div className="subsec-rule" />
+      {row(head, { flat: true })}
+      <div className="subsec-rule" />
+      {children.length > 0
+        ? row(kids, { flat: true })
+        : <p className="subsec-empty">Nothing under this yet — add a subtask.</p>}
+      <div className="subsec-rule" />
+    </div>
+  )
+}
+
 function SectionPanel({
   section, tasks, projects, columnLabels, rowProps,
   onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn,
@@ -833,9 +893,21 @@ function SectionPanel({
   // A loose note has no natural column, so in the three-column layout notes stay
   // full width above the grid rather than all collapsing into the first column.
   const notes = isColumns ? tree.filter((t) => t.kind === 'note') : []
+
+  // A promoted task becomes a band of its own across the full width, so it is
+  // lifted out of the three-column grid entirely rather than filed in one of
+  // the columns. Everything else grades into a column as usual.
+  const bands = isColumns
+    ? tree.filter((t) => t.subsection && t.kind !== 'note')
+    : []
+  const banded = new Set(bands.map((t) => t.id))
+
   const cols = [[], [], []]
   if (isColumns) {
-    for (const t of tree) if (t.kind !== 'note') cols[columnFor(t)].push(t)
+    for (const t of tree) {
+      if (t.kind === 'note' || banded.has(t.id)) continue
+      cols[columnFor(t)].push(t)
+    }
   }
 
   // Each column is its own list, so a range never jumps between them.
@@ -947,6 +1019,15 @@ function SectionPanel({
               ))}
             </div>
           )}
+          {bands.map((band) => (
+            <SubSection
+              key={band.id}
+              task={band}
+              columnLabels={columnLabels}
+              rowProps={rowProps}
+            />
+          ))}
+
           <div className="box-cols">
             {cols.map((colTasks, i) => (
               <div

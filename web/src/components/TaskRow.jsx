@@ -72,7 +72,7 @@ export function spanMinutes(start, end) {
  * rule the day's totals use, so a parent's chip and the day bar never disagree.
  * Work that is dropped or moved away is not time you are going to spend.
  */
-function branchMinutes(tasks = []) {
+export function branchMinutes(tasks = []) {
   return tasks.reduce((sum, t) => {
     if (t.kind === 'note' || FINISHED.slice(1).includes(t.status)) return sum
     const own = t.estimate_min || spanMinutes(t.start_time, t.end_time) || 0
@@ -126,6 +126,12 @@ export default function TaskRow({
   const [details, setDetails] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const [zone, setZone] = useState(null)
+  // True while a title or the notes box in this row has focus. A `draggable`
+  // ancestor swallows the mousedown that would place a caret, so clicking
+  // into the middle of text did nothing and the field stayed fully selected.
+  // Dropping draggable for the duration also stops a text selection that runs
+  // past the edge of the row from turning into a drag.
+  const [texting, setTexting] = useState(false)
   const sel = useSelection()
   const rowRef = useRef(null)
 
@@ -184,7 +190,7 @@ export default function TaskRow({
           picked ? 'sel-on' : '', sel?.size ? 'sel-armed' : '',
         ].join(' ')}
         style={depth ? { marginLeft: depth * 22 } : undefined}
-        draggable={draggable}
+        draggable={draggable && !texting}
         onDragStart={(e) => {
           e.stopPropagation()
           e.dataTransfer.setData('text/task-id', String(task.id))
@@ -236,9 +242,14 @@ export default function TaskRow({
           >
             <Icon name={expanded ? 'chevronDown' : 'right'} size={12} />
           </button>
-        ) : depth > 0 ? (
+        ) : (
+          // The spacer is rendered at every depth, not just inside a subtree.
+          // Without it a parent's twist pushed its checkbox right while a
+          // childless task beside it kept the original position, so the boxes
+          // in one column no longer lined up — and whether a row happened to
+          // have children became a visual difference in the wrong place.
           <span className="task-twist" aria-hidden="true" />
-        ) : null}
+        )}
 
         {isNote ? (
           <>
@@ -281,6 +292,7 @@ export default function TaskRow({
                 onChange={(title) => title.trim() && onChange({ title })}
                 placeholder="Task"
                 autoEdit={autoEdit}
+                onEditing={setTexting}
               />
             </div>
           )}
@@ -389,6 +401,7 @@ export default function TaskRow({
                 placeholder="Notes — markdown, links, images, $math$"
                 rows={3}
                 draftKey={`task:${task.id}`}
+                onEditing={setTexting}
               />
             </div>
           )}
@@ -672,6 +685,16 @@ function MenuItems({
           }))}
           {!isNote && onAddChild && item('Add subtask', () => onAddChild(task))}
           {item('Delete', () => onDelete())}
+          <div className="menu-sep" />
+        </>
+      )}
+      {/* Only a task with no parent of its own: a sub-section is a heading band
+          across the whole width, and a nested one has nowhere to span. */}
+      {!isNote && !task.parent_id && (
+        <>
+          {task.subsection
+            ? item('Back to an ordinary task', () => onChange({ subsection: 0 }))
+            : item('Make a sub-section', () => onChange({ subsection: 1 }))}
           <div className="menu-sep" />
         </>
       )}

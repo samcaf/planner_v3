@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { db, today } from '../db.js'
 import { h } from './_helpers.js'
+import { withPeople } from './tasks.js'
 
 const r = Router()
 
@@ -8,6 +9,54 @@ const WITH_PROJECT = `
   SELECT t.*, p.name AS project_name, p.color AS project_color
   FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
 `
+
+/**
+ * Everything you have started, plus every descendant of it, flat — the client
+ * nests it back into a forest. The descendants come along whatever their own
+ * status, because the question the panel answers is "what am I in the middle
+ * of", and a parent shorn of its subtasks does not answer it.
+ *
+ * A `doing` task nested inside another `doing` task is reached both by the seed
+ * and by the walk, so UNION rather than UNION ALL is what keeps it to one row;
+ * and since its parent is in the set too, the client hangs it underneath rather
+ * than also standing it up as a root. Nothing appears twice either way.
+ *
+ * There is deliberately no LIMIT here, unlike the digest blocks below. Those are
+ * derived from the whole task table and could be arbitrarily long; `doing` is a
+ * state you set by hand, so its size is already a decision the user made — and
+ * silently dropping the ninth thing you are in the middle of would be a lie the
+ * panel's scrollbar exists precisely to avoid.
+ */
+function inProgressUnits() {
+  const rows = withPeople(db.prepare(`
+    WITH RECURSIVE unit(id) AS (
+      SELECT id FROM tasks WHERE status = 'doing' AND kind != 'note'
+      UNION
+      SELECT t.id FROM tasks t JOIN unit ON t.parent_id = unit.id
+    )
+    SELECT t.*, p.name AS project_name, p.color AS project_color
+    FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+    WHERE t.id IN (SELECT id FROM unit)
+    ORDER BY t.sort, t.id
+  `).all())
+
+  // A row is a root of the forest when its parent is absent from the set, which
+  // is not the same as having no parent at all: a `doing` task filed under some
+  // unrelated todo still leads its own unit here.
+  const present = new Set(rows.map((t) => t.id))
+  const isRoot = (t) => t.parent_id == null || !present.has(t.parent_id)
+
+  // Roots read oldest-first, which is the staleness signal this block has always
+  // carried. Nested rows are left in the day-page order the query already gave
+  // them — sorting subtasks by age would make the panel disagree with the day
+  // they live on. Array.sort is stable, so returning 0 preserves that.
+  return rows.sort((a, b) => {
+    const [ra, rb] = [isRoot(a), isRoot(b)]
+    if (ra !== rb) return ra ? -1 : 1
+    if (!ra) return 0
+    return String(a.created_at).localeCompare(String(b.created_at)) || a.id - b.id
+  })
+}
 
 /** N days back from today, oldest first, as YYYY-MM-DD. */
 function lastDays(n) {
@@ -70,15 +119,11 @@ r.get('/', h(() => {
       LIMIT 8
     `).all(),
 
-    // Started and not finished. Without a status-change log the age is measured
-    // from creation, which understates a task picked up long after it was made —
-    // the client says so rather than implying precision it does not have.
-    stuck: db.prepare(`
-      ${WITH_PROJECT}
-      WHERE t.status = 'doing' AND t.kind != 'note'
-      ORDER BY t.created_at
-      LIMIT 8
-    `).all(),
+    // Started and not finished, each with its whole unit of work. Without a
+    // status-change log the age is measured from creation, which understates a
+    // task picked up long after it was made — the client says so rather than
+    // implying precision it does not have.
+    inProgress: inProgressUnits(),
 
     overdue: db.prepare(`
       ${WITH_PROJECT}

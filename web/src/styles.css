@@ -721,6 +721,32 @@ kbd {
 
 .task-notes { margin-top: 6px; }
 
+/* ------------------------------------------------------------ sub-sections */
+
+/* A heading band spanning all three columns. The rules are what separate it
+   from the ordinary grid above and below, so they run the full width rather
+   than sitting inside a column. */
+.subsec { display: flex; flex-direction: column; }
+
+.subsec-rule {
+  height: 1px;
+  background: var(--line);
+  margin: 0;
+}
+
+.subsec > .box-cols { border: 0; }
+
+/* The head row reads as the heading it is: a shade heavier than the children
+   beneath it, without becoming a second kind of task row. */
+.subsec > .box-cols:first-of-type .task-title { font-weight: 620; }
+
+.subsec-empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 /* ---------------------------------------------------- section reordering */
 
 /* The grip is the only handle that starts a section drag, so it is the only
