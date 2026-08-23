@@ -8,6 +8,7 @@ const FIELDS = [
   'parent_id', 'start_time', 'end_time', 'col_index', 'section_id', 'kind',
   'moved_to_date', 'notes_hidden', 'intensity', 'optional', 'url', 'location',
   'subsection',
+  'scaffold',
   // Present so a deleted routine task keeps its link when restored, the same
   // reason from_template is here.
   'routine_item_id',
@@ -293,6 +294,127 @@ r.post('/restore', h((req) => {
  * Tasks owned by a section stay put — a section belongs to its own day, and a
  * routine you skipped is not a debt to carry forward.
  */
+/**
+ * A task's place in the tree, as the titles above it, root first.
+ *
+ * The title path IS the identity. No id is carried between the day and the
+ * backlog, which is what lets a task come back into a tree that has been
+ * rebuilt since it left — and equally means two tasks with the same title
+ * under the same parent are deliberately one slot.
+ */
+function titlePath(id) {
+  const path = []
+  let row = db.prepare('SELECT parent_id FROM tasks WHERE id = ?').get(id)
+  while (row?.parent_id) {
+    const parent = db.prepare('SELECT id, parent_id, title FROM tasks WHERE id = ?').get(row.parent_id)
+    if (!parent) break
+    path.unshift(parent.title)
+    row = parent
+  }
+  return path
+}
+
+/** The first child of `parentId` (top level when null) carrying this title. */
+function childByTitle(title, parentId, { date = null, backlog = false } = {}) {
+  const where = backlog ? 'scheduled_date IS NULL' : 'scheduled_date IS ?'
+  const args = backlog ? [title, parentId] : [title, parentId, date]
+  return db.prepare(`
+    SELECT * FROM tasks
+    WHERE title = ? AND parent_id IS ? AND ${where}
+    ORDER BY id LIMIT 1
+  `).get(...args)
+}
+
+/**
+ * Send a task to the backlog, copying the path that identifies it.
+ *
+ * Without the copies a subtask arrives as a bare title with no sign of what it
+ * belonged to, and nothing to match on when it returns. The copies are marked
+ * `scaffold` so they are never counted as work, and an existing scaffold chain
+ * with the same titles is reused rather than doubled.
+ */
+r.post('/:id/backlog', h((req) => {
+  const id = Number(req.params.id)
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id)
+  if (!task) return undefined
+
+  const path = titlePath(id)
+
+  db.transaction(() => {
+    let parentId = null
+    for (const title of path) {
+      const existing = childByTitle(title, parentId, { backlog: true })
+      if (existing) { parentId = existing.id; continue }
+      const info = db.prepare(`
+        INSERT INTO tasks (title, parent_id, scheduled_date, scaffold, sort, project_id)
+        VALUES (?, ?, NULL, 1, ?, ?)
+      `).run(title, parentId, nextSort('tasks', 'WHERE scheduled_date IS NULL'), task.project_id)
+      parentId = info.lastInsertRowid
+    }
+
+    db.prepare(`
+      UPDATE tasks SET scheduled_date = NULL, section_id = NULL, col_index = NULL, parent_id = ?
+      WHERE id = ?
+    `).run(parentId, id)
+    // Children follow their parent out, or they are stranded on a day whose
+    // parent has gone.
+    db.prepare('UPDATE tasks SET scheduled_date = NULL, section_id = NULL WHERE parent_id = ?').run(id)
+  })()
+
+  return readTask(id)
+}))
+
+/**
+ * Bring a task back onto a day, rebuilding its path there.
+ *
+ * Every title is matched against what the day already holds before anything is
+ * created, so a task returning beside a sibling that never left joins it rather
+ * than raising a second tree with the same names. The scaffolding it travelled
+ * with is torn down behind it once nothing hangs off it.
+ */
+r.post('/:id/schedule', h((req) => {
+  const id = Number(req.params.id)
+  const { date, section_id = null } = req.body || {}
+  if (!date) throw badRequest('date is required')
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id)
+  if (!task) return undefined
+
+  const path = titlePath(id)
+  const cameFrom = task.parent_id
+
+  db.transaction(() => {
+    let parentId = null
+    for (const title of path) {
+      const existing = childByTitle(title, parentId, { date })
+      if (existing) { parentId = existing.id; continue }
+      const info = db.prepare(`
+        INSERT INTO tasks (title, parent_id, scheduled_date, section_id, sort, project_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(title, parentId, date, parentId ? null : section_id,
+        nextSort('tasks', 'WHERE scheduled_date = ?', [date]), task.project_id)
+      parentId = info.lastInsertRowid
+    }
+
+    db.prepare('UPDATE tasks SET scheduled_date = ?, section_id = ?, parent_id = ? WHERE id = ?')
+      .run(date, parentId ? null : section_id, parentId, id)
+    db.prepare('UPDATE tasks SET scheduled_date = ? WHERE parent_id = ?').run(date, id)
+
+    // Walk back up what it hung from, clearing away any scaffold now holding
+    // nothing. Scaffolds only: a real backlog task that happens to be childless
+    // is still someone's work.
+    let up = cameFrom
+    while (up) {
+      const row = db.prepare('SELECT id, parent_id, scaffold FROM tasks WHERE id = ?').get(up)
+      if (!row?.scaffold) break
+      if (db.prepare('SELECT COUNT(*) n FROM tasks WHERE parent_id = ?').get(row.id).n > 0) break
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(row.id)
+      up = row.parent_id
+    }
+  })()
+
+  return readTask(id)
+}))
+
 r.post('/rollover', h((req) => {
   const { from, to } = req.body || {}
   if (!from || !to) throw badRequest('from and to are required')

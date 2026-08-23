@@ -69,7 +69,9 @@ export function SelectionProvider({ children }) {
     i: { label: 'start', patch: { status: 'doing' } },
     o: { label: 'make optional', patch: { optional: 1 } },
     O: { label: 'make committed', patch: { optional: 0 } },
-    b: { label: 'send to backlog', patch: { scheduled_date: null, section_id: null } },
+    // Not a patch: sending to the backlog copies the task's path out with it,
+    // which only the server can do. See POST /api/tasks/:id/backlog.
+    b: { label: 'send to backlog', backlog: true },
   }
 
   useEffect(() => {
@@ -240,7 +242,25 @@ export function SelectionBar({ tasks = [], onDone }) {
   const rows = tasks.filter((t) => t.kind !== 'note').map((t) => t.id)
   useEffect(() => {
     sel?.register(rows, async (action, ids) => {
-      await bulkPatch(ids, action.patch, { known: tasks, label: action.label, undo })
+      if (action.backlog) {
+        // Remember where each one was, so undo can put it back on its own day
+        // rather than on whichever day happens to be open.
+        const from = ids.map((id) => {
+          const t = tasks.find((x) => x.id === id)
+          return { id, date: t?.scheduled_date, section_id: t?.section_id ?? null }
+        }).filter((x) => x.date)
+
+        const out = async () => { for (const { id } of from) await api.post(`/tasks/${id}/backlog`, {}) }
+        const back = async () => {
+          for (const { id, date, section_id } of from) {
+            await api.post(`/tasks/${id}/schedule`, { date, section_id })
+          }
+        }
+        await out()
+        undo?.record?.({ label: action.label, undo: back, redo: out })
+      } else {
+        await bulkPatch(ids, action.patch, { known: tasks, label: action.label, undo })
+      }
       sel.clear()
       onDone?.()
     })

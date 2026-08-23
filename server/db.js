@@ -53,6 +53,10 @@ addColumn('tasks', 'intensity', "TEXT NOT NULL DEFAULT 'light'")
 // database created from scratch needs them added here too.
 addColumn('tasks', 'optional', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('tasks', 'subsection', 'INTEGER NOT NULL DEFAULT 0')
+// A stand-in for a real parent, created only so a backlogged child keeps the
+// path that identifies it. It is scaffolding, not work: it is never counted,
+// and it is torn down again the moment nothing hangs off it.
+addColumn('tasks', 'scaffold', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('tasks', 'url', "TEXT NOT NULL DEFAULT ''")
 addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // Which routine item produced this task. Top-up needs a stable identity for

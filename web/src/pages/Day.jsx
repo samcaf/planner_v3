@@ -127,7 +127,20 @@ export default function Day() {
   /** A drop moves whatever the drag carries — one row, or the whole selection. */
   const dropTasks = async (ids, patch, label) => {
     if (!ids.length) return
-    await bulkPatch(ids, patch, { known, label, undo })
+
+    // A row arriving from the backlog is not just a date change: it carries a
+    // path of scaffold copies that has to be matched against what this day
+    // already holds, and then cleared away. Only the server can do that, so
+    // those ids go through /schedule and the rest stay a plain patch.
+    const returning = patch.scheduled_date === date
+      ? ids.filter((id) => known.find((t) => t.id === id)?.scheduled_date == null)
+      : []
+
+    for (const id of returning) {
+      await api.post(`/tasks/${id}/schedule`, { date, section_id: patch.section_id ?? null })
+    }
+    const rest = ids.filter((id) => !returning.includes(id))
+    if (rest.length) await bulkPatch(rest, patch, { known, label, undo })
     refresh()
   }
 
@@ -565,7 +578,12 @@ export default function Day() {
             <div
               style={{ padding: 6, minHeight: 60 }}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => dropTasks(draggedIds(e), { scheduled_date: null, section_id: null }, 'send to backlog')}
+              onDrop={async (e) => {
+                const ids = draggedIds(e)
+                if (!ids.length) return
+                for (const id of ids) await api.post(`/tasks/${id}/backlog`, {})
+                refresh()
+              }}
             >
               {backlogTasks.length === 0 ? (
                 <Empty>Empty. Drag a task here to unschedule it.</Empty>
