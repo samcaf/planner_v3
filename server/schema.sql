@@ -62,9 +62,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   from_template  INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
   completed_at   TEXT,
-  intensity      TEXT    NOT NULL DEFAULT 'light',
-  routine_item_id INTEGER REFERENCES routine_items(id) ON DELETE SET NULL
+  intensity      TEXT    NOT NULL DEFAULT 'light'
                    CHECK (intensity IN ('deep','light')),
+  routine_item_id INTEGER REFERENCES routine_items(id) ON DELETE SET NULL,
   moved_to_date  TEXT,                           -- where a 'moved' task went
   notes_hidden   INTEGER NOT NULL DEFAULT 0
 );
@@ -141,16 +141,36 @@ CREATE TABLE IF NOT EXISTS routines (
   sort    INTEGER NOT NULL DEFAULT 0
 );
 
+-- An item is edited with the same row component a day's section uses, so it has
+-- to hold everything that row can set. Everything below `sort` is a *default*:
+-- what the task gets at the moment the routine is applied, after which the task
+-- is its own record. The `default_` prefix marks the ones whose plain name
+-- already means something else on a task.
+--
+-- These columns are repeated in the addColumn() block of server/db.js, which is
+-- what gives them to a database created before they existed. Both places or
+-- neither: a column declared in only one of them makes a fresh install and the
+-- live database disagree from the first row written.
 CREATE TABLE IF NOT EXISTS routine_items (
   id           INTEGER PRIMARY KEY,
   routine_id   INTEGER NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
   title        TEXT    NOT NULL,
   estimate_min INTEGER,
   col_index    INTEGER,
-  sort         INTEGER NOT NULL DEFAULT 0
+  sort         INTEGER NOT NULL DEFAULT 0,
+  -- Sub-steps of an item, recreated as nested tasks when the routine is applied.
+  parent_id    INTEGER REFERENCES routine_items(id) ON DELETE CASCADE,
+  notes        TEXT    NOT NULL DEFAULT '',
+  notes_hidden INTEGER NOT NULL DEFAULT 0,
+  default_priority  TEXT NOT NULL DEFAULT 'medium',
+  -- NULL, not 'light': empty means "whatever the routine says", the same way an
+  -- item's empty project_id defers to the routine's.
+  default_intensity TEXT,
+  end_time     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_routine_items ON routine_items(routine_id);
+CREATE INDEX IF NOT EXISTS idx_routine_items_parent ON routine_items(parent_id);
 
 -- One row per planned day.
 CREATE TABLE IF NOT EXISTS days (

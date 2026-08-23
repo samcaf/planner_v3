@@ -1,17 +1,102 @@
 import { useState } from 'react'
 import Icon from '../components/Icon.jsx'
+import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
+import { draggedIds, isTaskDrag } from '../components/Selection.jsx'
 import { ColorPicker, Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
 import { RichLine } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel, shortDate, today } from '../lib/dates.js'
 import '../styles/routines.css'
 
-// The states a task can be in; an item is created in whichever one it defaults to.
-// "Might do" is no longer one of them — it is the separate `optional` flag now.
-const STATUSES = [
-  ['todo', 'To do'], ['doing', 'Doing'], ['done', 'Done'],
-  ['moved', 'Moved'], ['dropped', 'Dropped'],
-]
+/*
+ * A routine's items are edited with the same TaskRow a day's section uses, so
+ * everything a row can do — status, priority, intensity, notes, the time panel,
+ * drag to reorder, drag to nest, sub-steps — works here without a second, weaker
+ * implementation of any of it.
+ *
+ * The two tables do not have the same columns, so the row is fed an adapted
+ * object and its patches are translated back. The mapping below is the whole of
+ * that translation, in both directions; a field that is not in it has no column
+ * to write, which is why the affordances that would produce one are suppressed
+ * rather than left on screen doing nothing.
+ */
+
+/** TaskRow patch key -> routine_items column. */
+const ITEM_FIELD = {
+  title: 'title',
+  notes: 'notes',
+  notes_hidden: 'notes_hidden',
+  status: 'default_status',
+  optional: 'default_optional',
+  priority: 'default_priority',
+  intensity: 'default_intensity',
+  estimate_min: 'estimate_min',
+  start_time: 'start_time',
+  end_time: 'end_time',
+  col_index: 'col_index',
+}
+
+/**
+ * Why a patch had nowhere to go. An item is a template: it has no day, and the
+ * row's date controls are hidden for it — but until the `dateless` prop below is
+ * honoured they are still in the overflow menu, and a control that silently does
+ * nothing is worse than one that explains itself.
+ */
+const NO_COLUMN = {
+  scheduled_date: 'A routine item has no day of its own — it gets one when the routine is applied.',
+  moved_to_date: 'A routine item has no day of its own — it gets one when the routine is applied.',
+  subsection: 'Sub-sections belong to a day, not to the template that makes one.',
+}
+
+/**
+ * One item in the shape TaskRow reads.
+ *
+ * Absent on purpose, and hidden by TaskRow for exactly that reason: scheduled_date,
+ * due_date and moved_to_date (a template has no day), created_at, people, url and
+ * location (a routine makes tasks, never meetings or notes), and `kind`, which is
+ * always an ordinary task.
+ */
+function asTask(item, routine, projects) {
+  const project = projects.find((p) => p.id === (item.project_id ?? routine.project_id))
+  return {
+    id: item.id,
+    kind: 'task',
+    title: item.title,
+    notes: item.notes || '',
+    notes_hidden: item.notes_hidden,
+    // 'maybe' is a retired status the tasks table would now reject. It meant
+    // "might do", which is the optional flag — the same bridge /apply uses.
+    status: item.default_status === 'maybe' ? 'todo' : (item.default_status || 'todo'),
+    optional: item.default_optional,
+    priority: item.default_priority || 'medium',
+    // The *effective* value, not the stored one: NULL means "whatever the
+    // routine says", and a chip reading "light" beneath a deep routine would
+    // misdescribe the task this item is actually going to produce.
+    intensity: item.default_intensity ?? routine.default_intensity ?? 'light',
+    estimate_min: item.estimate_min,
+    start_time: item.start_time,
+    end_time: item.end_time,
+    col_index: item.col_index,
+    parent_id: item.parent_id,
+    project_name: project?.name,
+    project_color: project?.color,
+  }
+}
+
+/**
+ * Shelving a parent shelves the branch — the identical rule /apply uses to
+ * decide what to skip. Grouping by the item's own flag instead would show a
+ * sub-step in the active list that applying the routine would never create.
+ */
+function branchShelved(item, byId) {
+  const seen = new Set()
+  for (let cursor = item; cursor; cursor = byId.get(cursor.parent_id)) {
+    if (cursor.shelved) return true
+    if (seen.has(cursor.id)) return true
+    seen.add(cursor.id)
+  }
+  return false
+}
 
 export default function Routines() {
   const routines = useApi('/routines')

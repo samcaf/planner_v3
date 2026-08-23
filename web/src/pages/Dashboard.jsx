@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
+import TaskRow, { nestTasks } from '../components/TaskRow.jsx'
 import { PriorityIcon } from '../components/Priority.jsx'
-import { Empty, Panel, cls } from '../components/ui.jsx'
-import { useApi } from '../lib/api.js'
+import { useToast } from '../components/Toast.jsx'
+import { Panel, cls } from '../components/ui.jsx'
+import { api, useApi } from '../lib/api.js'
+import { taskOps, useUndo } from '../lib/undo.jsx'
 import { longDate, minutesLabel, relative, shortDate, today } from '../lib/dates.js'
 import '../styles/dashboard.css'
 
@@ -16,12 +19,59 @@ function ageInDays(stamp) {
 
 export default function Dashboard() {
   const dash = useApi('/dashboard')
+  const undo = useUndo()
+  const toast = useToast()
 
   if (dash.error) return <div className="page"><p className="muted">{dash.error.message}</p></div>
   if (!dash.data) return <div className="page"><p className="muted">Loading…</p></div>
 
   const d = dash.data
   const peak = Math.max(60, ...d.deep.map((x) => Math.max(x.done, x.planned)))
+
+  // Every write here goes through the same ops the day page uses, so a tick in
+  // this panel lands on the same undo stack as a tick anywhere else and Ctrl-Z
+  // means the same thing on every screen.
+  const ops = taskOps(undo, dash.reload)
+  const units = d.inProgress || []
+
+  const patchTask = async (id, patch) => {
+    const task = units.find((t) => t.id === id)
+    if (task) await ops.patch(task, patch)
+    else { await api.patch(`/tasks/${id}`, patch); dash.reload() }
+  }
+
+  const removeTask = async (id) => {
+    const task = units.find((t) => t.id === id)
+    if (!task) return
+    const restore = await ops.remove(task)
+    toast({
+      message: `Deleted "${(task.title || 'note').slice(0, 40)}"`,
+      action: { label: 'Undo', onClick: async () => { await restore(); dash.reload() } },
+    })
+  }
+
+  /** A subtask inherits where its parent lives, so it lands on the same day. */
+  const addChild = async (parent) => {
+    const created = await api.post('/tasks', {
+      title: 'New subtask',
+      scheduled_date: parent.scheduled_date,
+      project_id: parent.project_id,
+      section_id: parent.section_id,
+    })
+    await api.post(`/tasks/${created.id}/nest`, { parent_id: parent.id })
+    dash.reload()
+  }
+
+  const rowProps = (task) => ({
+    task,
+    subtasks: task.subtasks || [],
+    onChange: (patch, id = task.id) => patchTask(id, patch),
+    onDelete: (id = task.id) => removeTask(id),
+    onAddChild: addChild,
+    // Nothing on the dashboard accepts a drop, so a draggable row would be a
+    // gesture that can only ever be abandoned. Reordering belongs on the day.
+    draggable: false,
+  })
 
   return (
     <>
@@ -62,6 +112,8 @@ export default function Dashboard() {
           )}
         </section>
 
+        <InProgress tasks={units} rowProps={rowProps} />
+
         <div className="db-grid">
           <DeepChart days={d.deep} peak={peak} />
 
@@ -71,17 +123,6 @@ export default function Dashboard() {
             icon="arrowRight"
             tasks={d.slipping}
             meta={(t) => t.moved_to_date && `→ ${shortDate(t.moved_to_date)}`}
-          />
-
-          <TaskPanel
-            title="Started, not finished"
-            hint="Measured from when the task was created — there is no status history yet, so treat the age as a floor."
-            icon="clock"
-            tasks={d.stuck}
-            meta={(t) => {
-              const days = ageInDays(t.created_at)
-              return days > 0 ? `${days}d` : 'today'
-            }}
           />
 
           <TaskPanel
@@ -103,6 +144,45 @@ export default function Dashboard() {
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * What you are in the middle of, second only to the one thing. It is drawn as a
+ * day page rather than as a digest because a link and a coloured dot cannot be
+ * worked from: the whole point of seeing this here is to be able to tick a part
+ * of it off without first navigating to the day it happens to live on.
+ *
+ * The server sends each started task together with its descendants whatever
+ * their own status, so what appears is the unit of work rather than the one row
+ * that happens to be flagged — the two subtasks you have not begun are exactly
+ * what tells you how far from finished the thing is.
+ */
+function InProgress({ tasks, rowProps }) {
+  if (!tasks.length) return null
+
+  const tree = nestTasks(tasks)
+  // The count is of things you actually marked as started, not of rows on
+  // screen: most of the rows here are children that came along for the ride.
+  const started = tasks.filter((t) => t.status === 'doing').length
+  const oldest = Math.max(...tasks.filter((t) => t.status === 'doing').map((t) => ageInDays(t.created_at)))
+
+  return (
+    <Panel
+      className="db-progress"
+      title={<><Icon name="clock" size={14} /> In progress <span className="muted">({started})</span></>}
+      actions={<span className="muted db-hint">oldest {oldest > 0 ? `${oldest}d` : '<1d'}</span>}
+      bodyClass="db-progress-b"
+    >
+      <p className="db-hint">
+        The whole unit of work, subtasks and all — including the parts you have not
+        started. Age is measured from when the task was created, because there is
+        still no status history, so treat it as a floor.
+      </p>
+      <div className="db-progress-list">
+        {tree.map((t) => <TaskRow key={t.id} {...rowProps(t)} />)}
+      </div>
+    </Panel>
   )
 }
 

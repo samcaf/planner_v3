@@ -72,7 +72,33 @@ addColumn('routines', 'default_intensity', "TEXT NOT NULL DEFAULT 'light'")
 // line of it belonging to another.
 addColumn('routines', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL')
 
+/*
+ * A routine item is edited with the same row component a day's section uses, so
+ * it has to be able to hold everything that row can set. These are the columns
+ * that gap was made of: without them the controls would be on screen and inert.
+ *
+ * They are all *defaults* — what the task gets when the routine is applied —
+ * which is why the ones whose task-side name is already taken by a different
+ * meaning wear the `default_` prefix, as `default_status` and `default_optional`
+ * already do.
+ *
+ * `default_intensity` is the exception that is nullable: NULL means "whatever
+ * the routine says", the same way an item's empty project_id defers to the
+ * routine's. The routine's own column is NOT NULL, so there is always an answer.
+ *
+ * These are declared in schema.sql too. Both, always: schema.sql builds a fresh
+ * install and never touches an existing table, so a column added in only one
+ * place makes a new database and the live one disagree from the first row.
+ */
+addColumn('routine_items', 'parent_id', 'INTEGER REFERENCES routine_items(id) ON DELETE CASCADE')
+addColumn('routine_items', 'notes', "TEXT NOT NULL DEFAULT ''")
+addColumn('routine_items', 'notes_hidden', 'INTEGER NOT NULL DEFAULT 0')
+addColumn('routine_items', 'default_priority', "TEXT NOT NULL DEFAULT 'medium'")
+addColumn('routine_items', 'default_intensity', 'TEXT')
+addColumn('routine_items', 'end_time', 'TEXT')
+
 db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id)')
+db.exec('CREATE INDEX IF NOT EXISTS idx_routine_items_parent ON routine_items(parent_id)')
 
 // Identifies which routine produced a section. Matching on name alone breaks the
 // moment a routine is renamed, which would silently duplicate it on every day.

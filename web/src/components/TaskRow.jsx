@@ -324,7 +324,10 @@ export default function TaskRow({
             {/* A parent shows its own time and its children's separately. The
                 sum alone would hide the fact that the parent carries time of its
                 own, and the parent's alone understates what the branch costs. */}
-            {(own || childMinutes) && (
+            {/* `> 0`, not a bare truthiness test: with neither an estimate nor
+                timed children, `own || childMinutes` is the NUMBER zero, and
+                React renders a literal "0" into the row rather than nothing. */}
+            {(own || childMinutes) > 0 && (
               <span
                 className="chip"
                 title={childMinutes
@@ -468,6 +471,10 @@ export default function TaskRow({
           onDropTask={onDropTask}
           onAddChild={onAddChild}
           showProject={showProject}
+          // Forwarded, not defaulted: a list that does not accept drops turns
+          // dragging off, and a child left draggable there is an affordance
+          // that leads nowhere.
+          draggable={draggable}
           depth={depth + 1}
           listIds={listIds}
         />

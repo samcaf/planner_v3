@@ -61,9 +61,13 @@ const R_FIELDS = [
   'name', 'color', 'layout', 'weekdays', 'active', 'auto',
   'hide_from_all_tasks', 'default_intensity', 'project_id', 'sort',
 ]
+// `parent_id` is deliberately absent: re-parenting goes through
+// POST /routines/items/:iid/nest, which is the only path that checks for cycles,
+// exactly as tasks.js keeps parent_id out of a plain PATCH.
 const RI_FIELDS = [
-  'routine_id', 'title', 'project_id', 'start_time', 'estimate_min',
-  'col_index', 'default_status', 'default_optional', 'shelved', 'sort',
+  'routine_id', 'title', 'project_id', 'start_time', 'end_time', 'estimate_min',
+  'col_index', 'default_status', 'default_optional', 'default_priority',
+  'default_intensity', 'notes', 'notes_hidden', 'shelved', 'sort',
 ]
 
 const routines = crud('routines', R_FIELDS)
@@ -168,10 +172,105 @@ routinesRouter.post('/:id/items', h((req) => items.create({
   ...req.body,
 })))
 
-routinesRouter.patch('/items/:iid', h((req) => items.update(req.params.iid, req.body)))
+routinesRouter.patch('/items/:iid', h((req) => {
+  if (req.body?.parent_id !== undefined) {
+    throw badRequest('use POST /api/routines/items/:iid/nest to change an item\'s parent')
+  }
+  return items.update(req.params.iid, req.body)
+}))
+
+/**
+ * Write a new order for one sibling group of items, and optionally re-file them
+ * under a parent or into a column — the routine-side twin of POST /tasks/reorder,
+ * so a drag on the Routines page and the same drag on a day mean the same thing.
+ *
+ * `parent_id` and `col_index` are applied only when the caller actually supplies
+ * them, so a plain reorder inside a group cannot silently un-nest the rows it
+ * touched. Re-parenting through here is safe for the same reason it is in
+ * tasks.js: the ids come from one sibling group the client is already showing,
+ * and the /nest route below is what handles the arbitrary case.
+ */
+routinesRouter.post('/items/reorder', h((req) => {
+  const body = req.body || {}
+  const ids = body.ids || []
+  if (!ids.length) return { ok: true, moved: 0 }
+
+  const extra = []
+  const extraArgs = []
+  for (const field of ['parent_id', 'col_index']) {
+    if (body[field] !== undefined) {
+      extra.push(`${field} = ?`)
+      extraArgs.push(body[field])
+    }
+  }
+
+  const stmt = db.prepare(
+    `UPDATE routine_items SET sort = ?${extra.length ? `, ${extra.join(', ')}` : ''} WHERE id = ?`
+  )
+  db.transaction(() => ids.forEach((id, i) => stmt.run(i, ...extraArgs, id)))()
+
+  return { ok: true, moved: ids.length }
+}))
+
+/**
+ * Nest one item under another (or un-nest with parent_id null). An item cannot
+ * become its own ancestor, and cannot be nested under an item from a different
+ * routine — a cross-routine parent would be applied to a different section on a
+ * different day, so the child would point at a task that is not there.
+ */
+routinesRouter.post('/items/:iid/nest', h((req) => {
+  const id = Number(req.params.iid)
+  const parentId = req.body?.parent_id ?? null
+
+  const self = items.get(id)
+  if (!self) throw notFound('routine item not found')
+
+  if (parentId === null) {
+    db.prepare('UPDATE routine_items SET parent_id = NULL WHERE id = ?').run(id)
+    return items.get(id)
+  }
+
+  if (Number(parentId) === id) throw badRequest('an item cannot be its own parent')
+  const parent = items.get(parentId)
+  if (!parent) throw badRequest('parent item not found')
+  if (parent.routine_id !== self.routine_id) throw badRequest('parent belongs to another routine')
+
+  // Walk up from the proposed parent; meeting `id` would close a cycle.
+  let cursor = Number(parentId)
+  const seen = new Set()
+  while (cursor) {
+    if (cursor === id) throw badRequest('that would nest an item inside its own subtree')
+    if (seen.has(cursor)) break
+    seen.add(cursor)
+    cursor = db.prepare('SELECT parent_id FROM routine_items WHERE id = ?').get(cursor)?.parent_id
+  }
+
+  db.prepare('UPDATE routine_items SET parent_id = ? WHERE id = ?').run(parentId, id)
+  return items.get(id)
+}))
+
+/**
+ * Deleting an item takes its sub-steps with it. The column is declared
+ * ON DELETE CASCADE, but that only fires while `PRAGMA foreign_keys` is on for
+ * this connection, and a half-deleted branch would leave orphans that `withItems`
+ * would then show at the top level as if they had been promoted. Doing it
+ * explicitly makes the outcome the same either way.
+ */
 routinesRouter.delete('/items/:iid', h((req) => {
-  items.remove(req.params.iid)
-  return { ok: true }
+  const doomed = db.prepare(`
+    WITH RECURSIVE branch(id) AS (
+      SELECT id FROM routine_items WHERE id = ?
+      UNION ALL
+      SELECT i.id FROM routine_items i JOIN branch b ON i.parent_id = b.id
+    )
+    SELECT id FROM branch
+  `).all(req.params.iid).map((row) => row.id)
+
+  const remove = db.prepare('DELETE FROM routine_items WHERE id = ?')
+  // Deepest first, so no row is ever deleted while another still references it.
+  db.transaction(() => [...doomed].reverse().forEach((id) => remove.run(id)))()
+
+  return { ok: true, deleted: doomed.length }
 }))
 
 /**
@@ -215,7 +314,7 @@ routinesRouter.post('/:id/apply', h((req) => {
     // its minutes twice. Titles are still consulted for rows written before the
     // link existed, which carry no routine_item_id.
     const existing = db
-      .prepare('SELECT title, routine_item_id FROM tasks WHERE section_id = ?')
+      .prepare('SELECT id, title, routine_item_id FROM tasks WHERE section_id = ?')
       .all(section.id)
     const presentItems = new Set(
       existing.map((t) => t.routine_item_id).filter((v) => v != null)
@@ -224,16 +323,77 @@ routinesRouter.post('/:id/apply', h((req) => {
       existing.filter((t) => t.routine_item_id == null).map((t) => t.title)
     )
 
+    /*
+     * Which task on the day stands for which item, so a sub-step can be hung off
+     * its parent's row. Rows an *earlier* apply left behind are in here as well
+     * as the ones written below, because topping a routine up has to nest a
+     * newly added child under the parent that is already on the day — otherwise
+     * a step added to an existing routine arrives orphaned at the top level.
+     *
+     * The title map is the same bridge presentTitles is: rows written before
+     * routine_item_id existed carry no link, so a child of one can still find it.
+     */
+    const taskForItem = new Map()
+    const taskForTitle = new Map()
+    for (const row of existing) {
+      if (row.routine_item_id != null) taskForItem.set(row.routine_item_id, row.id)
+      else taskForTitle.set(row.title, row.id)
+    }
+
+    const byId = new Map(routine.items.map((i) => [i.id, i]))
+
+    // Shelving a parent shelves the branch. A sub-step whose parent is never
+    // applied has nothing to hang off, and half of a nested chore is not the
+    // chore — it would arrive as a loose orphan reading "Chop onions".
+    const shelved = (item) => {
+      const seen = new Set()
+      for (let cursor = item; cursor; cursor = byId.get(cursor.parent_id)) {
+        if (cursor.shelved) return true
+        if (seen.has(cursor.id)) return true    // a cycle can never be applied
+        seen.add(cursor.id)
+      }
+      return false
+    }
+
+    // Parents before children, depth first, so a child always finds its parent's
+    // task id already in the map — and so the day reads in the same order the
+    // routine does.
+    const ordered = []
+    const placed = new Set()
+    const emit = (parentId) => {
+      for (const item of routine.items) {
+        if ((item.parent_id ?? null) !== parentId) continue
+        ordered.push(item)
+        placed.add(item.id)
+        emit(item.id)
+      }
+    }
+    emit(null)
+    // An item whose parent is not in this routine at all is unreachable from the
+    // walk above. It is applied at the top level rather than silently dropped.
+    for (const item of routine.items) if (!placed.has(item.id)) ordered.push(item)
+
     const insert = db.prepare(`
-      INSERT INTO tasks (title, project_id, scheduled_date, section_id, start_time,
-                         estimate_min, col_index, sort, status, optional, intensity,
+      INSERT INTO tasks (title, notes, notes_hidden, project_id, scheduled_date,
+                         section_id, start_time, end_time, estimate_min, col_index,
+                         sort, status, priority, optional, intensity, parent_id,
                          from_template, routine_item_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     `)
     let base = nextSort('tasks', 'WHERE scheduled_date = ?', [date])
 
-    for (const item of routine.items) {
-      if (item.shelved) continue
+    for (const item of ordered) {
+      if (shelved(item)) continue
+
+      // Resolved before the skip below, so an item already on the day still
+      // acts as a parent for a child that is not.
+      const parentItem = item.parent_id != null ? byId.get(item.parent_id) : null
+      const parentTask = item.parent_id == null ? null : (
+        taskForItem.get(item.parent_id)
+        ?? (parentItem ? taskForTitle.get(parentItem.title) : undefined)
+        ?? null
+      )
+
       if (presentItems.has(item.id) || presentTitles.has(item.title)) continue
 
       // 'maybe' is a retired status that tasks.status would now reject, and it
@@ -247,16 +407,21 @@ routinesRouter.post('/:id/apply', h((req) => {
       // Project and intensity are inherited from the routine, so the common case
       // — every line of a routine belongs to the same project and costs the same
       // kind of attention — is set once on the routine instead of once per item.
-      // An item that names its own project still keeps it: the routine supplies
-      // a default, it does not overwrite a deliberate choice. There is no
-      // per-item intensity column, so the routine's is the only source for it.
-      insert.run(item.title, item.project_id ?? routine.project_id,
-        date, section.id, item.start_time,
+      // An item that names its own is a deliberate choice and keeps it: the
+      // routine supplies a default, it does not overwrite one. `??` and not `||`
+      // for intensity, because NULL is what "ask the routine" looks like and an
+      // item pinned to 'light' under a deep routine has to stay light.
+      const info = insert.run(item.title, item.notes || '', item.notes_hidden ? 1 : 0,
+        item.project_id ?? routine.project_id,
+        date, section.id, item.start_time, item.end_time,
         item.estimate_min, item.col_index, base++,
         maybe ? 'todo' : (item.default_status || 'todo'),
+        item.default_priority || 'medium',
         (maybe || item.default_optional) ? 1 : 0,
-        routine.default_intensity || 'light',
+        item.default_intensity ?? routine.default_intensity ?? 'light',
+        parentTask,
         item.id)
+      taskForItem.set(item.id, info.lastInsertRowid)
       added++
     }
   })()
