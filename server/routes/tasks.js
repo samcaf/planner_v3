@@ -443,12 +443,66 @@ r.post('/:id/schedule', h((req) => {
 }))
 
 /**
+ * The section a task belongs to, following its parents up. A subtask usually
+ * carries none of its own — the band was set on whatever heads the branch — so
+ * asking only the task itself finds nothing and the whole tree lands loose.
+ */
+function sectionOf(id) {
+  let row = db.prepare('SELECT section_id, parent_id FROM tasks WHERE id = ?').get(id)
+  while (row) {
+    if (row.section_id) return row.section_id
+    if (!row.parent_id) return null
+    row = db.prepare('SELECT section_id, parent_id FROM tasks WHERE id = ?').get(row.parent_id)
+  }
+  return null
+}
+
+/** That band on another day: the one already there by name, or a copy of it. */
+function landingSection(fromId, date) {
+  if (!fromId) return null
+  const from = db.prepare('SELECT * FROM sections WHERE id = ?').get(fromId)
+  if (!from) return null
+
+  const there = db.prepare('SELECT id FROM sections WHERE date = ? AND name = ?').get(date, from.name)
+  if (there) return there.id
+
+  return db.prepare(`
+    INSERT INTO sections (date, name, color, layout, sort, project_id, routine_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(date, from.name, from.color, from.layout,
+    nextSort('sections', 'WHERE date = ?', [date]), from.project_id, from.routine_id
+  ).lastInsertRowid
+}
+
+/**
+ * Rebuild a task's ancestry on `date` and return the id it should hang from.
+ * Each title is matched against what the day already holds before anything is
+ * made, so a task arriving beside relatives that are already there joins them
+ * rather than raising a second tree with the same names.
+ */
+function rebuildPath(path, date, sectionId, project_id) {
+  let parentId = null
+  for (const title of path) {
+    const existing = childByTitle(title, parentId, { date })
+    if (existing) { parentId = existing.id; continue }
+    const info = db.prepare(`
+      INSERT INTO tasks (title, parent_id, scheduled_date, section_id, sort, project_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(title, parentId, date, parentId ? null : sectionId,
+      nextSort('tasks', 'WHERE scheduled_date = ?', [date]), project_id)
+    parentId = info.lastInsertRowid
+  }
+  return parentId
+}
+
+/**
  * Move a task to another day — or leave it where it is and put a copy there.
  *
- * A task that lives in a section belongs to that band, not just to that date,
- * so the band has to exist on the far side or the task lands loose and the
- * grouping it was part of is quietly lost. A section of the same name on the
- * target day is reused; otherwise one is made in its image.
+ * Both the band it sits in and the parents above it have to exist on the far
+ * side, or the task lands somewhere that cannot show it: loose when it belonged
+ * to a section, or still pointing at a parent that is on the day it left, which
+ * means it appears on neither. The section is found by name or copied; the
+ * ancestry is rebuilt by title, the same rule the backlog uses.
  *
  * A copy takes the whole subtree, because half a branch is not a copy of it.
  */
@@ -460,35 +514,29 @@ r.post('/:id/move', h((req) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id)
   if (!task) return undefined
 
-  let landing = null
+  const path = titlePath(id)
 
   const result = db.transaction(() => {
-    if (task.section_id) {
-      const from = db.prepare('SELECT * FROM sections WHERE id = ?').get(task.section_id)
-      if (from) {
-        const there = db.prepare('SELECT * FROM sections WHERE date = ? AND name = ?').get(date, from.name)
-        landing = there?.id ?? db.prepare(`
-          INSERT INTO sections (date, name, color, layout, sort, project_id, routine_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(date, from.name, from.color, from.layout,
-          nextSort('sections', 'WHERE date = ?', [date]), from.project_id, from.routine_id
-        ).lastInsertRowid
-      }
-    }
+    const landing = landingSection(sectionOf(id), date)
+    const parentId = rebuildPath(path, date, landing, task.project_id)
+
+    // Only a root sits in the band directly; anything nested hangs off its
+    // parent and would be in two places at once if it also held a section.
+    const ownSection = parentId ? null : landing
 
     if (!copy) {
       db.prepare(`
-        UPDATE tasks SET scheduled_date = ?, section_id = ?, status = 'moved', moved_to_date = ?
+        UPDATE tasks SET scheduled_date = ?, section_id = ?, parent_id = ?,
+                         status = 'moved', moved_to_date = ?
         WHERE id = ?
-      `).run(date, landing, date, id)
+      `).run(date, ownSection, parentId, date, id)
       db.prepare(`UPDATE tasks SET scheduled_date = ? WHERE id IN (${DESCENDANTS})`).run(date, id)
       return id
     }
 
-    // Copy the branch, parents before children so each child has somewhere to
-    // hang. `moved_to_date` is deliberately not carried: a copy was not pushed
-    // on from anywhere, it was made here.
-    const copyOne = (row, parentId, sectionId) => {
+    // `moved_to_date` is deliberately not carried: a copy was not pushed on
+    // from anywhere, it was made here.
+    const copyOne = (row, under, sectionId) => {
       const made = db.prepare(`
         INSERT INTO tasks (title, notes, project_id, milestone_id, status, priority,
                            scheduled_date, due_date, estimate_min, sort, parent_id,
@@ -497,7 +545,7 @@ r.post('/:id/move', h((req) => {
         VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(row.title, row.notes, row.project_id, row.milestone_id, row.priority,
         date, row.due_date, row.estimate_min,
-        nextSort('tasks', 'WHERE scheduled_date = ?', [date]), parentId,
+        nextSort('tasks', 'WHERE scheduled_date = ?', [date]), under,
         row.start_time, row.end_time, row.col_index, sectionId, row.kind,
         row.notes_hidden, row.intensity, row.optional, row.url, row.location, row.subsection)
 
@@ -506,7 +554,7 @@ r.post('/:id/move', h((req) => {
       return made.lastInsertRowid
     }
 
-    return copyOne(task, null, landing)
+    return copyOne(task, parentId, ownSection)
   })()
 
   return readTask(result)

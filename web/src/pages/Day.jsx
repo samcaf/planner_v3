@@ -32,6 +32,9 @@ const COLUMN_MINUTES = [5, 15, 60]
 /** How long a task must be held over a column before its time is rewritten. */
 const RETIME_DWELL = 900
 
+/** Wide enough for the backlog to read, narrow enough to leave the day room. */
+const clampAside = (px) => Math.min(560, Math.max(240, Math.round(px)))
+
 /** Rank for sorting; anything unrecognised sits with medium. */
 const PRI_RANK = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4 }
 const byPriority = (a, b) =>
@@ -100,6 +103,12 @@ export default function Day() {
     }
   }, [dragSection, sectionDropAt])
   const [backlogBy, setBacklogBy] = useState(() => localStorage.getItem('backlog_by') || 'priority')
+  const [asideWidth, setAsideWidth] = useState(
+    () => clampAside(Number(localStorage.getItem('day_aside_width')) || 340)
+  )
+  useEffect(() => {
+    localStorage.setItem('day_aside_width', String(asideWidth))
+  }, [asideWidth])
   useArrowNav(useCallback((by) => navigate(`/day/${addDays(date, by)}`), [date, navigate]))
   const undo = useUndo()
   const toast = useToast()
@@ -478,7 +487,10 @@ export default function Day() {
         deepTarget={deepTarget}
       />
 
-      <div className="day-wrap">
+      <div
+        className="day-wrap"
+        style={{ gridTemplateColumns: `minmax(0, 1fr) 4px ${asideWidth}px` }}
+      >
         <div className="day-col">
           {scheduled.length > 0 && (
             <Panel title={<><Icon name="clock" size={14} /> Schedule</>}>
@@ -636,6 +648,28 @@ export default function Day() {
             />
           </Panel>
         </div>
+
+        {/* The aside's inner edge, as a handle. Dragging left widens it, which
+            is the direction it grows — the grip is on that side of it. */}
+        <div
+          className="grip-v"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the side column"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId)
+            const from = e.clientX
+            const start = asideWidth
+            const move = (ev) => setAsideWidth(clampAside(start - (ev.clientX - from)))
+            const done = () => {
+              window.removeEventListener('pointermove', move)
+              window.removeEventListener('pointerup', done)
+            }
+            window.addEventListener('pointermove', move)
+            window.addEventListener('pointerup', done)
+          }}
+          onDoubleClick={() => setAsideWidth(340)}
+        />
 
         <aside className="day-aside">
           {d.routines.length > 0 && (

@@ -273,16 +273,19 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .main { flex: 1; min-width: 0; overflow-y: auto; }
 
 /* A hit area wider than the line it draws: four pixels is findable with a
-   mouse, one pixel is not. Double-click puts it back to the default. */
-.rail-grip {
-  flex: 0 0 4px;
+   mouse, one pixel is not. Double-click puts it back to the default.
+   The rail's handle is a flex item and the day's is a grid track, which is the
+   only difference between them. */
+.rail-grip { flex: 0 0 4px; }
+
+.rail-grip, .grip-v {
   cursor: col-resize;
   background: transparent;
   position: relative;
   z-index: 5;
 }
 
-.rail-grip::after {
+.rail-grip::after, .grip-v::after {
   content: '';
   position: absolute;
   inset: 0 1px;
@@ -291,8 +294,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
   transition: opacity .12s;
 }
 
-.rail-grip:hover::after { opacity: .5; }
-.rail-grip:active::after { opacity: 1; }
+.rail-grip:hover::after, .grip-v:hover::after { opacity: .5; }
+.rail-grip:active::after, .grip-v:active::after { opacity: 1; }
+
+/* The day's columns scroll; the handle between them must not. */
+.day-wrap > .grip-v { align-self: stretch; }
 
 .topbar {
   position: sticky;
@@ -541,7 +547,9 @@ kbd {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  /* Overridden inline from the stored width; this is the fallback, and the
+     middle track is the drag handle between the two columns. */
+  grid-template-columns: minmax(0, 1fr) 4px 340px;
   gap: 16px;
   padding: 16px 24px 0;
   overflow: hidden;
