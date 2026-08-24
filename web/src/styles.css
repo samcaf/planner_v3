@@ -1308,6 +1308,14 @@ kbd {
 }
 
 .box-col-tail { flex: 1 1 auto; min-height: 26px; }
+
+/* Held long enough that letting go will re-time the task. It has to look like
+   a different outcome from an ordinary drop, because it is one. */
+.box-col.is-armed {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: var(--radius-sm);
+}
 .box-col:last-child { border-right: 0; }
 
 .box-col-h {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import TaskRow, { branchMinutes, nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
@@ -19,6 +19,17 @@ import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 
 const UNSECTIONED = 'loose'
+
+/**
+ * What a column means as a duration. Dropping a task into a column and holding
+ * it there re-times it to this, which is the middle of what that column stands
+ * for rather than its boundary — a task dragged into "quick" is a five-minute
+ * job, not a ten-minute one.
+ */
+const COLUMN_MINUTES = [5, 15, 60]
+
+/** How long a task must be held over a column before its time is rewritten. */
+const RETIME_DWELL = 900
 
 /** Rank for sorting; anything unrecognised sits with medium. */
 const PRI_RANK = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4 }
@@ -224,6 +235,12 @@ export default function Day() {
     const section = d.sections.find((s) => s.id === target.section_id)
     const intoColumns = section?.layout === 'columns'
 
+    // A task that already says how long it is sorts itself: clearing the pin
+    // lets it grade into the column its own duration implies, rather than being
+    // filed under whichever row it happened to land next to.
+    const dragged = known.find((t) => t.id === draggedId)
+    const selfTiming = intoColumns && !!(dragged && ownMinutes(dragged))
+
     const before = snapshot([draggedId, ...siblings])
     const move = async () => {
       await api.post('/tasks/reorder', {
@@ -233,7 +250,9 @@ export default function Day() {
         parent_id: target.parent_id ?? null,
         // Named, so the server applies the column to this one row rather than
         // to every sibling in the list.
-        ...(intoColumns ? { col_index: columnFor(target), moved_id: draggedId } : {}),
+        ...(intoColumns
+        ? { col_index: selfTiming ? null : columnFor(target), moved_id: draggedId }
+        : {}),
       })
     }
     await move()
@@ -461,10 +480,18 @@ export default function Day() {
               onDelete={async () => { await api.del(`/sections/${section.id}`); refresh() }}
               onDropLoose={(ids) =>
                 dropTasks(ids, { section_id: section.id, scheduled_date: date }, `move to ${section.name}`)}
-              onMoveToColumn={(ids, col) => dropTasks(
+              onMoveToColumn={(ids, col, retime) => dropTasks(
                 ids,
-                { col_index: col, section_id: section.id, scheduled_date: date },
-                `move to ${columnLabels[col]}`,
+                {
+                  col_index: col,
+                  section_id: section.id,
+                  scheduled_date: date,
+                  // Only when the drag was held there, and only for rows already
+                  // in this section: re-timing something arriving from elsewhere
+                  // would overwrite an estimate you had just made somewhere else.
+                  ...(retime ? { estimate_min: COLUMN_MINUTES[col] } : {}),
+                },
+                retime ? `re-time to ${columnLabels[col]}` : `move to ${columnLabels[col]}`,
               )}
             />
           ))}
@@ -1004,8 +1031,32 @@ function SectionPanel({
 }) {
   const [renaming, setRenaming] = useState(false)
   const [over, setOver] = useState(false)
+  // Which column the drag has been held over long enough to re-time into.
+  // Re-timing rewrites an estimate you may have thought about, so it is not
+  // something a passing drag should be able to do: a quick drop still moves the
+  // task, and only a deliberate pause changes what it says about itself.
+  const [armed, setArmed] = useState(null)
+  const dwell = useRef({ col: null, timer: null })
   const tree = nestTasks(tasks)
   const isColumns = section.layout === 'columns'
+
+  const watchColumn = (col) => {
+    if (dwell.current.col === col) return
+    clearTimeout(dwell.current.timer)
+    dwell.current = {
+      col,
+      timer: setTimeout(() => setArmed(col), RETIME_DWELL),
+    }
+    setArmed(null)
+  }
+
+  const stopWatching = () => {
+    clearTimeout(dwell.current.timer)
+    dwell.current = { col: null, timer: null }
+    setArmed(null)
+  }
+
+  useEffect(() => () => clearTimeout(dwell.current.timer), [])
 
   // The header takes drops as well as the body, so a collapsed section is still
   // somewhere to put a task. A section being dragged past is a different gesture
@@ -1182,14 +1233,24 @@ function SectionPanel({
             {cols.map((colTasks, i) => (
               <div
                 key={i}
-                className="box-col"
-                onDragOver={(e) => e.preventDefault()}
+                className={`box-col${armed === i ? ' is-armed' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); watchColumn(i) }}
+                onDragLeave={(e) => {
+                  // Only when the pointer has actually left this column, not
+                  // when it crosses one of the rows inside it.
+                  if (!e.currentTarget.contains(e.relatedTarget)) stopWatching()
+                }}
                 onDrop={(e) => {
                   const ids = draggedIds(e)
                   if (!ids.length) return
                   e.stopPropagation()
                   setOver(false)
-                  onMoveToColumn(ids, i)
+                  const held = armed === i
+                  stopWatching()
+                  // Only rows already in this section are re-timed; one arriving
+                  // from elsewhere keeps whatever it was given there.
+                  const inHere = ids.every((id) => tasks.some((t) => t.id === id))
+                  onMoveToColumn(ids, i, held && inHere)
                 }}
               >
                 <div className="box-col-h">

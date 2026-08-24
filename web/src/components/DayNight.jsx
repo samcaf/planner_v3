@@ -70,15 +70,32 @@ const CORE = { o: [20.2, 20.4, 5.2], i: [21.9, 19.0, 4.5] }
 /** Sparks fade as they go out, so the eye settles on the middle. */
 const SPARKS = [
   [31.4, 7.6, 2.5, 0.85], [8.0, 10.6, 1.9, 0.7], [33.6, 29.4, 1.7, 0.6],
-  [11.4, 32.6, 1.5, 0.5], [20.2, 3.4, 1.3, 0.45],
+  // Pulled in from y=3.4: at the moon's scale the window starts at 3.33, and
+  // this spark's top edge was outside it.
+  [11.4, 32.6, 1.5, 0.5], [20.2, 5.8, 1.3, 0.45],
 ]
+
+/**
+ * Each face is drawn against the same 40-unit square and the same centre, then
+ * shown through a smaller window — which magnifies it about that centre without
+ * touching the button's own size, so the mark above it never moves and the two
+ * faces stay concentric with each other.
+ */
+function window(scale) {
+  const side = 40 / scale
+  const off = 20 - side / 2
+  return `${off.toFixed(2)} ${off.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`
+}
+
+const SUN_VIEW = window(1.1)
+const MOON_VIEW = window(1.2)
 
 export default function DayNight({ dark, onToggle }) {
   const label = dark ? 'Switch to day' : 'Switch to night'
 
   return (
     <button type="button" className="daynight" title={label} aria-label={label} onClick={onToggle}>
-      <svg viewBox="0 0 40 40" aria-hidden="true">
+      <svg viewBox={dark ? SUN_VIEW : MOON_VIEW} aria-hidden="true">
         {dark ? (
           // Silhouette, khatim as a hole in it, and the eye filled back in —
           // three subpaths, so even-odd alternates fill and hole down the stack.

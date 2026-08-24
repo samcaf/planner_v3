@@ -407,8 +407,14 @@ export default function TaskRow({
               </span>
             )}
             {task.optional === 1 && <span className="chip is-optional">optional</span>}
-            {task.status === 'moved' && task.moved_to_date && (
-              <span className="chip c-blue">→ {shortDate(task.moved_to_date)}</span>
+            {/* Keyed on the date alone, not on the status. Where a task came
+                from is a fact about it that ticking it off does not undo — and
+                losing the trail the moment you complete something is exactly
+                when you most want to see that it had been pushed on. */}
+            {task.moved_to_date && (
+              <span className="chip c-blue" title={`Pushed on to ${task.moved_to_date}`}>
+                → {shortDate(task.moved_to_date)}
+              </span>
             )}
             {task.due_date && (
               <span
