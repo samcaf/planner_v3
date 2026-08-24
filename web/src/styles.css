@@ -150,17 +150,26 @@ button, input, textarea, select { font: inherit; color: inherit; }
    auto` is what holds it at the foot: it takes up the rail's spare height, so
    the mark sits at the bottom on a tall window and simply follows the last nav
    item on a short one, rather than being overlapped by it. */
+/* The pair is what sits at the foot now, so the spare height is taken here
+   rather than by the mark alone — otherwise the switch would be pushed below
+   the rail's edge on a short window. */
+.sb-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .sidebar .brand {
   display: block;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  margin-top: auto;
+  width: 100%;
   /* The side padding is what sets the mark's size: it spans this box, and its
      aspect ratio comes from a padding-bottom percentage resolved against the
      same width — so insetting here scales the whole thing without the height
      needing to be restated. The bottom value is clearance from the rail's edge. */
-  margin-bottom: 4px;
-  padding: 16px 15px 22px;
+  padding: 16px 15px 10px;
   color: #fff;
   font-weight: 650;
   letter-spacing: -.01em;
@@ -744,6 +753,30 @@ kbd {
 }
 
 .task-notes-stub:hover > span { background: var(--accent); }
+
+/* A quarter the mark's height. The mark spans the rail's 196px of content
+   less its own 30px of side padding, and its aspect ratio is very nearly
+   square — so ~166px tall, and this is 42. */
+.daynight {
+  width: 42px;
+  height: 42px;
+  margin-bottom: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  color: var(--sb-accent);
+  opacity: .75;
+  transition: opacity .15s, transform .25s ease;
+}
+
+.daynight svg { width: 100%; height: 100%; display: block; }
+.daynight polygon, .daynight path { fill: currentColor; }
+.daynight .dn-ray { stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+
+.daynight:hover { opacity: 1; transform: rotate(18deg); }
+.daynight:active { transform: rotate(18deg) scale(.94); }
 
 /* ------------------------------------------- group selection and backlog */
 

@@ -15,9 +15,10 @@
  *   30m  ▪            75m  ▪▪ ∴               ▪▪▪
  *   45m  ▪ ∴         120m  ▪▪▪▪
  *
- * The tilts are deliberate and deliberately deterministic: they come from the
- * box's own index, so the drawing has a hand-inked wobble that stays put across
- * re-renders instead of twitching every time the row updates.
+ * The cells sit square and identical. An earlier version tilted each one by a
+ * few degrees for a hand-inked look; at this size the tilts read as a row of
+ * boxes that failed to line up rather than as a flourish, and counting them
+ * became harder, which is the one thing the drawing exists to make easy.
  */
 
 const BOX = 7.5
@@ -40,15 +41,8 @@ function rows(n) {
   return out
 }
 
-const TILT = [-6, 4, -3, 7, -5, 2, -4, 5]
-
-function Cell({ i, x, y }) {
-  return (
-    <rect
-      x={x} y={y} width={BOX} height={BOX} rx="1.8"
-      transform={`rotate(${TILT[i % TILT.length]} ${x + BOX / 2} ${y + BOX / 2})`}
-    />
-  )
+function Cell({ x, y }) {
+  return <rect x={x} y={y} width={BOX} height={BOX} rx="1.8" />
 }
 
 /** The ∴, as three dots: two below, one above and centred. */
@@ -98,12 +92,12 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
         {many ? (
           <>
             <text className="tg-count" x="0" y={H / 2 + 3.6}>{halves}×</text>
-            <Cell i={0} x={width - BOX} y={(H - BOX) / 2} />
+            <Cell x={width - BOX} y={(H - BOX) / 2} />
           </>
         ) : (
           shape.flatMap((len, r) =>
             Array.from({ length: len }, (_, c) => (
-              <Cell key={`${r}-${c}`} i={r * PER_ROW + c} x={c * (BOX + GAP)} y={dy + r * (BOX + GAP)} />
+              <Cell key={`${r}-${c}`} x={c * (BOX + GAP)} y={dy + r * (BOX + GAP)} />
             ))
           )
         )}

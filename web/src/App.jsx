@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import Icon from './components/Icon.jsx'
 import Wordmark from './components/Wordmark.jsx'
+import DayNight from './components/DayNight.jsx'
 import { Modal } from './components/ui.jsx'
 import { ToastHost } from './components/Toast.jsx'
 import { UndoButtons, UndoProvider } from './lib/undo.jsx'
@@ -41,6 +42,9 @@ const NAV_2 = [
 export default function App() {
   const [accent, setAccent] = useState(() => localStorage.getItem('accent') || 'blue')
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system')
+  // What the theme actually resolved to. `theme` may be 'system', and the
+  // switch has to show the opposite of what is on screen, not of the setting.
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.accent = accent
@@ -54,6 +58,7 @@ export default function App() {
     const apply = () => {
       const dark = theme === 'dark' || (theme === 'system' && !!media?.matches)
       document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      setIsDark(dark)
     }
     apply()
     localStorage.setItem('theme', theme)
@@ -80,11 +85,15 @@ export default function App() {
           <SideLink key={n.label} {...n} />
         ))}
 
-        {/* The mark now signs the foot of the rail rather than heading it. The
-            calligraphy already says the name, so nothing sits beside it. */}
-        <NavLink to="/dashboard" className="brand" title="Dashboard">
-          <Wordmark />
-        </NavLink>
+        {/* The mark signs the foot of the rail, with the day/night switch
+            centred beneath it. Both sit in one block so the spare height goes
+            above the pair rather than between them. */}
+        <div className="sb-foot">
+          <NavLink to="/dashboard" className="brand" title="Dashboard">
+            <Wordmark />
+          </NavLink>
+          <DayNight dark={isDark} onToggle={() => setTheme(isDark ? 'light' : 'dark')} />
+        </div>
       </nav>
 
       <main className="main">

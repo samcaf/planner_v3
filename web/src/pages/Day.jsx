@@ -1166,13 +1166,6 @@ function SectionPanel({
       <div {...dropZone}>
         {isColumns ? (
           <>
-          {notes.length > 0 && (
-            <div className="section-notes">
-              {notes.map((t) => (
-                <TaskRow key={t.id} {...rowProps(t)} showProject={false} listIds={noteIds} />
-              ))}
-            </div>
-          )}
           {bands.map((band) => (
             <SubSection
               key={band.id}
@@ -1211,6 +1204,17 @@ function SectionPanel({
               </div>
             ))}
           </div>
+
+          {/* Under the grid, not above it. A loose note is commentary on the
+              section, and putting it first pushed the actual work down the
+              page behind whatever had been jotted about it. */}
+          {notes.length > 0 && (
+            <div className="section-notes">
+              {notes.map((t) => (
+                <TaskRow key={t.id} {...rowProps(t)} showProject={false} listIds={noteIds} />
+              ))}
+            </div>
+          )}
           </>
         ) : (
           <div style={{ padding: 6, minHeight: 44 }}>
