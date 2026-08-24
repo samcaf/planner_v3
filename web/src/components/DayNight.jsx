@@ -63,15 +63,14 @@ function spark(cx, cy, r) {
     + `Q${P(cx - k, cy - k)} ${P(cx, cy - r)}Z`
 }
 
-/** Ring, then centre: outer disc, its subtractor, inner disc, its subtractor. */
-const CRESCENTS = [
-  { o: [20, 20, 15.4], i: [21.9, 18.1, 13.9] },
-  { o: [20.2, 20.4, 5.2], i: [21.9, 19.0, 4.5] },
-]
+/** Each crescent is a disc with a second, offset disc taken out of it. */
+const RING = { o: [20, 20, 15.4], i: [21.9, 18.1, 13.9] }
+const CORE = { o: [20.2, 20.4, 5.2], i: [21.9, 19.0, 4.5] }
 
+/** Sparks fade as they go out, so the eye settles on the middle. */
 const SPARKS = [
-  [31.4, 7.6, 2.5], [8.0, 10.6, 1.9], [33.6, 29.4, 1.7],
-  [11.4, 32.6, 1.5], [20.2, 3.4, 1.3],
+  [31.4, 7.6, 2.5, 0.85], [8.0, 10.6, 1.9, 0.7], [33.6, 29.4, 1.7, 0.6],
+  [11.4, 32.6, 1.5, 0.5], [20.2, 3.4, 1.3, 0.45],
 ]
 
 export default function DayNight({ dark, onToggle }) {
@@ -83,25 +82,32 @@ export default function DayNight({ dark, onToggle }) {
         {dark ? (
           // Silhouette, khatim as a hole in it, and the eye filled back in —
           // three subpaths, so even-odd alternates fill and hole down the stack.
-          <path fillRule="evenodd" d={`${edge(20, 20, 17.5, 4.5, 12)} ${khatim(20, 20, 7)} ${disc(20, 20, 2.4)}`} />
+          <path className="dn-ink" fillRule="evenodd" d={`${edge(20, 20, 17.5, 4.5, 12)} ${khatim(20, 20, 7)} ${disc(20, 20, 2.4)}`} />
         ) : (
           <>
-            {/* A mask, not even-odd: even-odd on two overlapping discs gives
-                their symmetric difference — a lens-shaped hole — where what is
-                wanted is one taken out of the other. Both crescents share one
-                mask, painted in order, so the inner pair is not erased by the
-                outer subtractor it sits inside. */}
+{/* A mask, not even-odd: even-odd on two overlapping discs gives their
+                symmetric difference — a lens-shaped hole — where what is wanted
+                is one taken out of the other.
+
+                The ring and the centre get a mask each rather than sharing one,
+                so the ring can be held back. At full strength it was the
+                brightest thing in the rail and sat on top of the sidebar rather
+                than in it; at this weight it reads as depth behind the moon,
+                which is what the artwork it comes from does. */}
             <defs>
-              <mask id="dn-crescents">
-                <rect width="40" height="40" fill="black" />
-                {CRESCENTS.flatMap(({ o, i }, n) => [
-                  <circle key={`o${n}`} cx={o[0]} cy={o[1]} r={o[2]} fill="white" />,
-                  <circle key={`i${n}`} cx={i[0]} cy={i[1]} r={i[2]} fill="black" />,
-                ])}
-              </mask>
+              {[['dn-ring', RING], ['dn-core', CORE]].map(([id, { o, i }]) => (
+                <mask key={id} id={id}>
+                  <rect width="40" height="40" fill="black" />
+                  <circle cx={o[0]} cy={o[1]} r={o[2]} fill="white" />
+                  <circle cx={i[0]} cy={i[1]} r={i[2]} fill="black" />
+                </mask>
+              ))}
             </defs>
-            <rect width="40" height="40" mask="url(#dn-crescents)" />
-            {SPARKS.map(([x, y, r]) => <path key={`${x}-${y}`} d={spark(x, y, r)} />)}
+            <rect className="dn-ink dn-far" width="40" height="40" mask="url(#dn-ring)" />
+            <rect className="dn-ink" width="40" height="40" mask="url(#dn-core)" />
+            {SPARKS.map(([x, y, r, o]) => (
+              <path key={`${x}-${y}`} className="dn-ink" d={spark(x, y, r)} opacity={o} />
+            ))}
           </>
         )}
       </svg>

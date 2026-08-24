@@ -457,11 +457,20 @@ export function RichEditor({
   function commit() {
     setEditing(false)
     setFragment(null)
+    onEditing?.(false)
     pending.current = null
-    if (draft === value) { forget(); return }
+
+    // Whitespace is not content. A note opened from the bar below a task holds
+    // a single space so the textarea has something to bind to; comparing the
+    // raw draft meant that space came back equal to itself, no change was ever
+    // emitted, and a note you had opened and not written in stayed open for
+    // good. Normalising first is what lets the caller see it become empty.
+    const next = draft.trim() ? draft : ''
+    if (next === value) { forget(); return }
+
     // The mirror is only dropped once the write has gone through — a save that
     // fails is exactly when the draft is worth keeping.
-    Promise.resolve(onChange(draft)).then(forget, () => {})
+    Promise.resolve(onChange(next)).then(forget, () => {})
   }
 
   /** Put a recovered draft back in the textarea, caret at its end. */

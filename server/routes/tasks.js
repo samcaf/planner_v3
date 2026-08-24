@@ -321,6 +321,20 @@ function titlePath(id) {
   return path
 }
 
+/**
+ * Every task below one, to any depth. Written once because both directions of
+ * the backlog need it and a one-level `parent_id` match silently strands
+ * grandchildren.
+ */
+const DESCENDANTS = `
+  WITH RECURSIVE below(id) AS (
+    SELECT id FROM tasks WHERE parent_id = ?
+    UNION
+    SELECT t.id FROM tasks t JOIN below b ON t.parent_id = b.id
+  )
+  SELECT id FROM below
+`
+
 /** The first child of `parentId` (top level when null) carrying this title. */
 function childByTitle(title, parentId, { date = null, backlog = false } = {}) {
   const where = backlog ? 'scheduled_date IS NULL' : 'scheduled_date IS ?'
@@ -363,9 +377,14 @@ r.post('/:id/backlog', h((req) => {
       UPDATE tasks SET scheduled_date = NULL, section_id = NULL, col_index = NULL, parent_id = ?
       WHERE id = ?
     `).run(parentId, id)
-    // Children follow their parent out, or they are stranded on a day whose
-    // parent has gone.
-    db.prepare('UPDATE tasks SET scheduled_date = NULL, section_id = NULL WHERE parent_id = ?').run(id)
+    // The WHOLE branch follows, not just the first generation. A plain
+    // `WHERE parent_id = ?` left grandchildren sitting on a day whose parent
+    // had gone — visible nowhere, and orphaned from the tree that explained
+    // them.
+    db.prepare(`
+      UPDATE tasks SET scheduled_date = NULL, section_id = NULL, col_index = NULL
+      WHERE id IN (${DESCENDANTS})
+    `).run(id)
   })()
 
   return readTask(id)
@@ -404,7 +423,8 @@ r.post('/:id/schedule', h((req) => {
 
     db.prepare('UPDATE tasks SET scheduled_date = ?, section_id = ?, parent_id = ? WHERE id = ?')
       .run(date, parentId ? null : section_id, parentId, id)
-    db.prepare('UPDATE tasks SET scheduled_date = ? WHERE parent_id = ?').run(date, id)
+    // The whole branch comes back too, for the same reason it all left.
+    db.prepare(`UPDATE tasks SET scheduled_date = ? WHERE id IN (${DESCENDANTS})`).run(date, id)
 
     // Walk back up what it hung from, clearing away any scaffold now holding
     // nothing. Scaffolds only: a real backlog task that happens to be childless

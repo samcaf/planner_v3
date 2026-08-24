@@ -140,6 +140,10 @@ export default function TaskRow({
   // Dropping draggable for the duration also stops a text selection that runs
   // past the edge of the row from turning into a drag.
   const [texting, setTexting] = useState(false)
+  // True from the moment the bar below a task is clicked until that note is
+  // committed. Clicking "add a note" should land you in the text, not in a
+  // preview of the single space that opening it wrote.
+  const [openingNote, setOpeningNote] = useState(false)
   const sel = useSelection()
   const rowRef = useRef(null)
 
@@ -464,15 +468,12 @@ export default function TaskRow({
             <div className="task-notes">
               <RichEditor
                 value={task.notes}
-                // Whitespace is not a note. Opening the bar writes a single
-                // space so the editor has something to hold; without this that
-                // space would keep the box open for ever, and a note emptied on
-                // purpose would too.
-                onChange={(notes) => onChange({ notes: notes.trim() ? notes : '' })}
+                onChange={(notes) => onChange({ notes })}
                 placeholder="Notes — markdown, links, images, $math$"
                 rows={3}
                 draftKey={`task:${task.id}`}
-                onEditing={setTexting}
+                autoFocus={openingNote}
+                onEditing={(on) => { setTexting(on); if (!on) setOpeningNote(false) }}
               />
             </div>
           )}
@@ -487,7 +488,7 @@ export default function TaskRow({
               type="button"
               className="task-notes-stub"
               title="Add a note"
-              onClick={() => onChange({ notes: ' ', notes_hidden: 0 })}
+              onClick={() => { setOpeningNote(true); onChange({ notes: ' ', notes_hidden: 0 }) }}
             >
               <span />
             </button>

@@ -924,7 +924,10 @@ function SubSection({ task, columnLabels, rowProps }) {
  * Open by default: the path is the point of it being there.
  */
 function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
-  const [open, setOpen] = useState(true)
+  // Closed to begin with. A backlogged branch arrives whole — its path above it
+  // and everything under it — and unrolling all of that into the aside buries
+  // the rest of the backlog under one item you have deliberately set aside.
+  const [open, setOpen] = useState(false)
   const kids = task.subtasks || []
 
   return (
