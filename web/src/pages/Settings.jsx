@@ -12,6 +12,11 @@ const THEMES = [['light', 'Light'], ['dark', 'Night'], ['system', 'Auto']]
 const ACCENTS = [
   ['blue', '#4a63d8'],
   ['teal', '#0f7d8c'],
+  // Warm schemes move the neutrals too, so they change the feel of the whole
+  // page rather than just the highlight colour.
+  ['clay', '#b4552f'],
+  ['olive', '#6b7f39'],
+  ['rose', '#a8456a'],
   ['green', '#12805c'],
   ['purple', '#5b4fd0'],
 ]

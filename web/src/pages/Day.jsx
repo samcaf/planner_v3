@@ -1236,14 +1236,13 @@ function SectionPanel({
             {section.project_name}
           </Link>
         )}
+        {/* Beside the progress bar, because that is where you are already
+            looking when you decide to act on the whole band. In three-column
+            layout each column has its own box as well; this is the one that
+            covers all of them. */}
+        <SelectAllBox ids={visibleIds(tree)} label={`everything in ${section.name}`} />
         <Progress tasks={tasks} color={section.color} className="section-prog" />
         <span className="spacer" />
-
-        {/* The whole section in one click. In three-column layout each column
-            has its own box as well; this is the one that covers all of them,
-            and the only one in list layout, where there are no columns to
-            speak of. */}
-        <SelectAllBox ids={visibleIds(tree)} label={`everything in ${section.name}`} />
 
         <select
           className="input select sm"

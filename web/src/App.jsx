@@ -24,6 +24,9 @@ import Settings from './pages/Settings.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Resolver, { InternalLinks } from './components/Resolver.jsx'
 
+/** Wide enough for the mark, narrow enough to leave the page most of the screen. */
+const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
+
 const NAV = [
   { to: `/day/${today()}`, match: '/day', icon: 'today', label: 'Today' },
   { to: `/week/${today()}`, match: '/week', icon: 'week', label: 'Week' },
@@ -49,6 +52,13 @@ export default function App() {
   // What the theme actually resolved to. `theme` may be 'system', and the
   // switch has to show the opposite of what is on screen, not of the setting.
   const [isDark, setIsDark] = useState(false)
+  const [railWidth, setRailWidth] = useState(
+    () => clampRail(Number(localStorage.getItem('rail_width')) || 216)
+  )
+
+  // The width is written on pointerup rather than on every move, so a drag is
+  // one entry in storage rather than a hundred.
+  useEffect(() => { localStorage.setItem('rail_width', String(railWidth)) }, [railWidth])
 
   useEffect(() => {
     document.documentElement.dataset.accent = accent
@@ -76,7 +86,7 @@ export default function App() {
     <UndoProvider onChange={refreshAll}>
     <ToastHost>
     <div className="app">
-      <nav className="sidebar">
+      <nav className="sidebar" style={{ width: railWidth, flexBasis: railWidth }}>
         <UndoButtons />
 
         <div className="sb-section">Calendar</div>
@@ -99,6 +109,30 @@ export default function App() {
           <DayNight dark={isDark} onToggle={() => setTheme(isDark ? 'light' : 'dark')} />
         </div>
       </nav>
+
+      {/* The rail's inner edge, as a handle. Dragging it is a pointer gesture
+          rather than a native drag, so nothing is being carried and no drop
+          target lights up on the way past. */}
+      <div
+        className="rail-grip"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the sidebar"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          const from = e.clientX
+          const start = railWidth
+          const move = (ev) => setRailWidth(clampRail(start + ev.clientX - from))
+          const done = () => {
+            window.removeEventListener('pointermove', move)
+            window.removeEventListener('pointerup', done)
+            localStorage.setItem('rail_width', String(railWidth))
+          }
+          window.addEventListener('pointermove', move)
+          window.addEventListener('pointerup', done)
+        }}
+        onDoubleClick={() => { setRailWidth(216); localStorage.setItem('rail_width', '216') }}
+      />
 
       <main className="main">
         <Shortcuts />

@@ -38,6 +38,33 @@
 [data-accent="green"]  { --accent: #12805c; --accent-soft: #e1f5ee; --sb-accent: #7fd6b4; --sb-bg: #15332b; --sb-hi: #1c3f35; --sb-act: #234c40; }
 [data-accent="purple"] { --accent: #5b4fd0; --accent-soft: #edeafc; --sb-accent: #a99cf5; --sb-bg: #262040; --sb-hi: #2f2850; --sb-act: #393060; }
 
+/* Warm schemes. These move the neutrals as well as the accent — a warm accent
+   on cold grey still reads cold, because the page is mostly neutral. */
+[data-accent="clay"] {
+  --accent: #b4552f; --accent-soft: #f8ebe4; --sb-accent: #e8a888;
+  --sb-bg: #33231c; --sb-hi: #3f2c23; --sb-act: #4d372c;
+  --bg: #faf6f2; --panel: #fffdfb; --line: #ece2da; --line-soft: #f4ede7;
+  --ink: #2a211c; --ink-2: #6b5b52; --ink-3: #a5948a;
+}
+
+[data-accent="olive"] {
+  --accent: #6b7f39; --accent-soft: #eef2e2; --sb-accent: #b9cd84;
+  --sb-bg: #2a2e20; --sb-hi: #353a29; --sb-act: #414733;
+  --bg: #f8f8f2; --panel: #fefefa; --line: #e6e7db; --line-soft: #f0f1e8;
+  --ink: #24261d; --ink-2: #5e6152; --ink-3: #9b9d8c;
+}
+
+[data-accent="rose"] {
+  --accent: #a8456a; --accent-soft: #f9e8ee; --sb-accent: #e79cb5;
+  --sb-bg: #331f27; --sb-hi: #3f2831; --sb-act: #4d323d;
+  --bg: #fbf6f7; --panel: #fffcfd; --line: #eddfe3; --line-soft: #f5ebee;
+  --ink: #2b1e22; --ink-2: #6c5860; --ink-3: #a89099;
+}
+
+[data-theme="dark"][data-accent="clay"]  { --accent: #e08a5f; --accent-soft: #3a251b; --bg: #17120f; --panel: #201915; --line: #362a23; --line-soft: #2a211c; --ink: #f2e8e1; --ink-2: #bcaba0; --ink-3: #8a7a71; }
+[data-theme="dark"][data-accent="olive"] { --accent: #a8bf72; --accent-soft: #262a19; --bg: #14150f; --panel: #1c1e16; --line: #2f3226; --line-soft: #23261c; --ink: #ecefe2; --ink-2: #b1b4a1; --ink-3: #808373; }
+[data-theme="dark"][data-accent="rose"]  { --accent: #dd7f9e; --accent-soft: #33202a; --bg: #171113; --panel: #20181b; --line: #362830; --line-soft: #2a2025; --ink: #f3e6ec; --ink-2: #bda6b0; --ink-3: #8c757f; }
+
 /* ------------------------------------------------------------ night mode */
 /* Every surface reads from the variables above, so the dark theme is a
    reassignment rather than a second set of rules. `color-scheme` is what makes
@@ -116,6 +143,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .app { display: flex; height: 100%; }
 
 .sidebar {
+  /* Width is set inline from the stored value; these are the fallback. */
   width: 216px;
   flex: 0 0 216px;
   background: var(--sb-bg);
@@ -229,6 +257,28 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .sb-link .count { margin-left: auto; font-size: 11px; color: #8b95b5; }
 
 .main { flex: 1; min-width: 0; overflow-y: auto; }
+
+/* A hit area wider than the line it draws: four pixels is findable with a
+   mouse, one pixel is not. Double-click puts it back to the default. */
+.rail-grip {
+  flex: 0 0 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 5;
+}
+
+.rail-grip::after {
+  content: '';
+  position: absolute;
+  inset: 0 1px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .12s;
+}
+
+.rail-grip:hover::after { opacity: .5; }
+.rail-grip:active::after { opacity: 1; }
 
 .topbar {
   position: sticky;
@@ -820,6 +870,18 @@ kbd {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Box and twist share one column, so a checkbox never shifts sideways just
+   because its task happens to have children. */
+.task-box {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.task-box .task-twist { margin: 0; }
 
 /* ------------------------------------------- group selection and backlog */
 

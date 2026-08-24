@@ -32,9 +32,22 @@ r.patch('/:id', h((req) => sections.update(req.params.id, req.body)))
  * Deleting a section keeps its tasks — they fall back to the day's loose list
  * rather than vanishing with the container.
  */
+/**
+ * Removing a band takes the chores the routine put there with it, and leaves
+ * anything you wrote yourself.
+ *
+ * Orphaning everything, which is what this used to do, meant deleting the
+ * Morning band tipped all of its chores into the day as loose tasks — so the
+ * routine appeared to have been re-added rather than removed. A task the
+ * routine generated has no life outside it; one you typed into the band does.
+ */
 r.delete('/:id', h((req) => {
-  db.prepare('UPDATE tasks SET section_id = NULL WHERE section_id = ?').run(req.params.id)
-  sections.remove(req.params.id)
+  const id = req.params.id
+  db.transaction(() => {
+    db.prepare('DELETE FROM tasks WHERE section_id = ? AND from_template = 1').run(id)
+    db.prepare('UPDATE tasks SET section_id = NULL WHERE section_id = ?').run(id)
+    sections.remove(id)
+  })()
   return { ok: true }
 }))
 

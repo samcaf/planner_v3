@@ -350,36 +350,35 @@ export default function TaskRow({
         )}
         {sel && isNote && <span className="time-glyph" aria-hidden="true" />}
 
-        {subtasks.length > 0 ? (
-          <button
-            className="task-twist"
-            title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}
-            onClick={() => setExpanded(!expanded)}
-          >
-            <Icon name={expanded ? 'chevronDown' : 'right'} size={12} />
-          </button>
-        ) : (
-          // The spacer is rendered at every depth, not just inside a subtree.
-          // Without it a parent's twist pushed its checkbox right while a
-          // childless task beside it kept the original position, so the boxes
-          // in one column no longer lined up — and whether a row happened to
-          // have children became a visual difference in the wrong place.
-          <span className="task-twist" aria-hidden="true" />
-        )}
-
         {isNote ? (
           <>
             <span className="task-note-mark" aria-hidden="true" />
             <time className="task-note-time">{createdClock(task.created_at)}</time>
           </>
         ) : (
-          <StatusBox
-            status={task.status}
-            optional={task.optional}
-            meeting={isMeeting}
-            onClick={() => onChange({ status: CHECK_CYCLE[task.status] })}
-            onToggleOptional={() => onChange({ optional: task.optional ? 0 : 1 })}
-          />
+          <span className="task-box">
+            <StatusBox
+              status={task.status}
+              optional={task.optional}
+              meeting={isMeeting}
+              onClick={() => onChange({ status: CHECK_CYCLE[task.status] })}
+              onToggleOptional={() => onChange({ optional: task.optional ? 0 : 1 })}
+            />
+            {/* Under the box, not beside it. To the left it pushed the checkbox
+                out of line with every childless row in the same column, and
+                whether a task happened to have children became a difference
+                in the wrong place. */}
+            {subtasks.length > 0 && (
+              <button
+                className="task-twist"
+                title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}
+                aria-expanded={expanded}
+                onClick={() => setExpanded(!expanded)}
+              >
+                <Icon name={expanded ? 'chevronDown' : 'right'} size={12} />
+              </button>
+            )}
+          </span>
         )}
 
         <div className="task-body">
