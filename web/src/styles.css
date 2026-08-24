@@ -642,8 +642,10 @@ kbd {
 .task {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 7px 10px;
+  /* Tight: the boxes at the head of a row are a cluster, not a series of
+     separate controls, and every pixel between them is width the title loses. */
+  gap: 4px;
+  padding: 7px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: grab;
@@ -735,7 +737,7 @@ kbd {
 .task-notes-stub {
   display: block;
   width: 100%;
-  height: 11px;
+  height: 12px;
   margin-top: 3px;
   padding: 0;
   border: 0;
@@ -743,11 +745,13 @@ kbd {
   cursor: text;
 }
 
+/* A bar rather than a hairline: it is a control, and a 1px rule read as a
+   divider nobody would think to click. */
 .task-notes-stub > span {
   display: block;
-  height: 1px;
-  margin-top: 5px;
-  border-radius: 1px;
+  height: 5px;
+  margin-top: 3px;
+  border-radius: 999px;
   background: var(--line-soft);
   transition: background .12s;
 }
@@ -756,11 +760,16 @@ kbd {
 
 /* A quarter the mark's height. The mark spans the rail's 196px of content
    less its own 30px of side padding, and its aspect ratio is very nearly
-   square — so ~166px tall, and this is 42. */
+   square — so ~166px tall, and this is 42.
+   The margin-right nudges it onto the artwork's own axis: the finial and the
+   pendant both centre on 48.5% of the mark's width, not 50%, so centring the
+   switch in the rail left it a couple of pixels right of the ornaments it
+   hangs under. Half of 5px is that difference at this size. */
 .daynight {
   width: 42px;
   height: 42px;
   margin-bottom: 10px;
+  margin-right: 5px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -772,11 +781,21 @@ kbd {
 }
 
 .daynight svg { width: 100%; height: 100%; display: block; }
-.daynight polygon, .daynight path { fill: currentColor; }
-.daynight .dn-ray { stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.daynight path, .daynight rect { fill: currentColor; }
 
-.daynight:hover { opacity: 1; transform: rotate(18deg); }
-.daynight:active { transform: rotate(18deg) scale(.94); }
+/* Half a turn, slow enough to read as the sky coming round rather than as a
+   button twitching. */
+.daynight { transition: opacity .15s, transform .5s cubic-bezier(.4, 0, .2, 1); }
+.daynight:hover { opacity: 1; transform: rotate(180deg); }
+.daynight:active { transform: rotate(180deg) scale(.94); }
+
+/* A parent's controls sit under its text rather than beside it. A row with
+   children is the one most likely to have a long title, and the hover bar was
+   taking that width from exactly the row that could least spare it. */
+.task-body > .task-actions {
+  margin-top: 4px;
+  margin-left: -4px;
+}
 
 /* ------------------------------------------- group selection and backlog */
 
@@ -816,10 +835,11 @@ kbd {
 
 /* A fixed-width slot, contents right-aligned. The drawing's width varies with
    the duration, and letting that push the row around would undo the checkbox
-   alignment it sits next to. */
+   alignment it sits next to. Narrow on purpose — the stack is two cells wide
+   now, and everything this slot does not take is width the task's text gets. */
 .time-glyph {
   flex: none;
-  width: 48px;
+  width: 26px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -832,7 +852,7 @@ kbd {
   transition: opacity .12s, color .12s;
 }
 
-.time-glyph svg { overflow: visible; }
+.time-glyph svg { overflow: visible; display: block; }
 .time-glyph rect { fill: currentColor; }
 .time-glyph .tg-dots circle { fill: currentColor; }
 

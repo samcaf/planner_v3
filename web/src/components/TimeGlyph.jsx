@@ -5,28 +5,35 @@
  *
  * A task's minutes are rounded to the nearest quarter hour and split as
  * `N1 × 30m + N2 × 15m`, so N2 is only ever 0 or 1. N1 becomes that many small
- * boxes stacked as a Young diagram — rows of at most three, longest first, so
- * the row lengths never increase going down. N2 adds a "therefore" ∴ to the
- * right. Past six boxes the stack stops being countable at a glance, so it
- * collapses to "N ×" and one box; the ∴ still shows, because it is the odd
- * quarter-hour rather than part of the count.
+ * cells stacked as a Young diagram — longest row first, so row lengths never
+ * increase going down. N2 adds a "therefore" ∴ beneath them.
  *
- *   15m  ∴            60m  ▪▪           195m  ▪▪▪  ∴        300m  10× ▪
- *   30m  ▪            75m  ▪▪ ∴               ▪▪▪
- *   45m  ▪ ∴         120m  ▪▪▪▪
+ * Everything here is arranged to spend as little width as it can, because every
+ * pixel it takes is one the task's own text does not get: two cells to a row
+ * rather than three, the ∴ under the stack rather than beside it, and a count
+ * past four rather than a taller stack.
  *
- * The cells sit square and identical. An earlier version tilted each one by a
- * few degrees for a hand-inked look; at this size the tilts read as a row of
- * boxes that failed to line up rather than as a flourish, and counting them
- * became harder, which is the one thing the drawing exists to make easy.
+ *   15m   ∴        60m  ▪▪        105m  ▪▪        150m  5× ▪
+ *   30m   ▪        75m  ▪▪              ▪▪ ∴
+ *   45m   ▪              ∴        120m  ▪▪
+ *         ∴                             ▪▪
+ *
+ * The cells sit square and identical. An earlier version tilted each one a few
+ * degrees for a hand-inked look; at this size the tilts read as boxes that
+ * failed to line up rather than as a flourish, and counting them became harder,
+ * which is the one thing the drawing exists to make easy.
  */
 
 const BOX = 7.5
 // Unchanged: the gap reads as a line between the cells, and widening the
 // cells rather than the spacing is what makes the stack easier to count.
 const GAP = 1.6
-const PER_ROW = 3
-const MAX_BOXES = 6
+const PER_ROW = 2
+const MAX_BOXES = 4
+
+const DOTS_H = 7.4
+const DOTS_W = 8.4
+const DOTS_PAD = 2.4
 
 /** Rounded to the quarter hour, then split into half-hours and one remainder. */
 export function splitTime(minutes) {
@@ -45,14 +52,14 @@ function Cell({ x, y }) {
   return <rect x={x} y={y} width={BOX} height={BOX} rx="1.8" />
 }
 
-/** The ∴, as three dots: two below, one above and centred. */
-function Therefore({ x, y }) {
+/** The ∴, as three dots: one above, two below. */
+function Therefore({ cx, y }) {
   const r = 1.7
   return (
     <g className="tg-dots">
-      <circle cx={x + 3.6} cy={y} r={r} />
-      <circle cx={x} cy={y + 6.2} r={r} />
-      <circle cx={x + 7.2} cy={y + 6.2} r={r} />
+      <circle cx={cx} cy={y} r={r} />
+      <circle cx={cx - 3.5} cy={y + 4.6} r={r} />
+      <circle cx={cx + 3.5} cy={y + 4.6} r={r} />
     </g>
   )
 }
@@ -62,13 +69,16 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
   const many = halves > MAX_BOXES
 
   const shape = many ? [1] : rows(halves)
-  const width = many ? PER_ROW * (BOX + GAP) : Math.max(1, shape[0] || 1) * (BOX + GAP)
-  const height = Math.max(1, shape.length) * (BOX + GAP)
-  const dotsX = width + 2.5
+  const cellsW = many ? 17.5 : Math.max(1, shape[0] || 1) * (BOX + GAP) - GAP
+  // A quarter-hour task has no cells at all, and an untimed one shows a ghost
+  // where a cell would be — so the block above the dots is only zero-height in
+  // the first case.
+  const cellsH = halves ? shape.length * (BOX + GAP) - GAP : (rounded ? 0 : BOX)
 
-  const H = 19
-  const W = dotsX + (quarter ? 11 : 0)
-  const dy = (H - height) / 2
+  const W = Math.max(cellsW, quarter ? DOTS_W : 0)
+  const pad = cellsH ? DOTS_PAD : 0
+  const H = cellsH + (quarter ? pad + DOTS_H : 0)
+  const cellsX = (W - cellsW) / 2
 
   const title = rounded
     ? `${label || 'Task'} — ${rounded} minutes. Click to select; shift-click for a range.`
@@ -86,23 +96,23 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
         {/* An untimed task still needs somewhere to click, so it keeps a faint
             outline rather than becoming an invisible hit target. */}
         {rounded === 0 && (
-          <rect className="tg-ghost" x="0" y={(H - BOX) / 2} width={BOX} height={BOX} rx="1.8" />
+          <rect className="tg-ghost" x={cellsX} y="0" width={BOX} height={BOX} rx="1.8" />
         )}
 
         {many ? (
           <>
-            <text className="tg-count" x="0" y={H / 2 + 3.6}>{halves}×</text>
-            <Cell x={width - BOX} y={(H - BOX) / 2} />
+            <text className="tg-count" x={cellsX} y={BOX - 0.6}>{halves}×</text>
+            <Cell x={cellsX + cellsW - BOX} y={0} />
           </>
         ) : (
           shape.flatMap((len, r) =>
             Array.from({ length: len }, (_, c) => (
-              <Cell key={`${r}-${c}`} x={c * (BOX + GAP)} y={dy + r * (BOX + GAP)} />
+              <Cell key={`${r}-${c}`} x={cellsX + c * (BOX + GAP)} y={r * (BOX + GAP)} />
             ))
           )
         )}
 
-        {quarter === 1 && <Therefore x={dotsX} y={H / 2 - 3.1} />}
+        {quarter === 1 && <Therefore cx={W / 2} y={cellsH + pad + 1.7} />}
       </svg>
     </button>
   )

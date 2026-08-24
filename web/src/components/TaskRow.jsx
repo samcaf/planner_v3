@@ -179,6 +179,7 @@ export default function TaskRow({
   // text. Past the first level the bar keeps only the two controls used while
   // reading a list, and everything else moves into the overflow menu.
   const roomy = depth === 0
+  const isParent = subtasks.length > 0
 
   function zoneFor(e) {
     const r = e.currentTarget.getBoundingClientRect()
@@ -187,6 +188,59 @@ export default function TaskRow({
     if (y > 0.72) return 'after'
     return 'nest'
   }
+
+  // Hoisted so the same controls can hang in either place: beside the text on
+  // an ordinary row, and beneath it on a parent — whose title is the one most
+  // likely to be long, and which can least afford to lose the width.
+  const actions = (
+    <div className="task-actions">
+      {rowExtras?.(task)}
+      {!isNote && (
+        <button
+          className={`btn ghost sm ${details ? 'is-on' : ''}`}
+          title="Time and duration"
+          onClick={() => setDetails(!details)}
+        >
+          <Icon name="clock" size={13} />
+        </button>
+      )}
+      {!isNote && roomy && (
+        <button
+          className={`btn ghost sm ${notesShown ? 'is-on' : ''}`}
+          title={notesShown ? 'Hide notes' : 'Show notes'}
+          onClick={() => onChange({
+            notes_hidden: notesShown ? 1 : 0,
+            ...(task.notes ? {} : { notes: ' ' }),
+          })}
+        >
+          <Icon name="templates" size={13} />
+        </button>
+      )}
+      {onAddChild && !isNote && roomy && (
+        <button className="btn ghost sm" title="Add subtask" onClick={() => onAddChild(task)}>
+          <Icon name="subtask" size={13} />
+        </button>
+      )}
+      {roomy && (
+        <button className="btn ghost sm danger" title="Delete" onClick={() => onDelete()}>
+          <Icon name="trash" size={13} />
+        </button>
+      )}
+      <Menu
+        task={task}
+        isNote={isNote}
+        dateless={dateless}
+        onChange={onChange}
+        onNest={onNest}
+        onDelete={onDelete}
+        onAddChild={onAddChild}
+        notesShown={notesShown}
+        /* Whatever the bar dropped for want of room reappears in here, so
+           nothing becomes unreachable on a nested row. */
+        overflow={!roomy}
+      />
+    </div>
+  )
 
   return (
     <>
@@ -410,7 +464,11 @@ export default function TaskRow({
             <div className="task-notes">
               <RichEditor
                 value={task.notes}
-                onChange={(notes) => onChange({ notes })}
+                // Whitespace is not a note. Opening the bar writes a single
+                // space so the editor has something to hold; without this that
+                // space would keep the box open for ever, and a note emptied on
+                // purpose would too.
+                onChange={(notes) => onChange({ notes: notes.trim() ? notes : '' })}
                 placeholder="Notes — markdown, links, images, $math$"
                 rows={3}
                 draftKey={`task:${task.id}`}
@@ -434,55 +492,11 @@ export default function TaskRow({
               <span />
             </button>
           )}
+
+          {isParent && actions}
         </div>
 
-        <div className="task-actions">
-          {rowExtras?.(task)}
-          {!isNote && (
-            <button
-              className={`btn ghost sm ${details ? 'is-on' : ''}`}
-              title="Time and duration"
-              onClick={() => setDetails(!details)}
-            >
-              <Icon name="clock" size={13} />
-            </button>
-          )}
-          {!isNote && roomy && (
-            <button
-              className={`btn ghost sm ${notesShown ? 'is-on' : ''}`}
-              title={notesShown ? 'Hide notes' : 'Show notes'}
-              onClick={() => onChange({
-                notes_hidden: notesShown ? 1 : 0,
-                ...(task.notes ? {} : { notes: ' ' }),
-              })}
-            >
-              <Icon name="templates" size={13} />
-            </button>
-          )}
-          {onAddChild && !isNote && roomy && (
-            <button className="btn ghost sm" title="Add subtask" onClick={() => onAddChild(task)}>
-              <Icon name="subtask" size={13} />
-            </button>
-          )}
-          {roomy && (
-            <button className="btn ghost sm danger" title="Delete" onClick={() => onDelete()}>
-              <Icon name="trash" size={13} />
-            </button>
-          )}
-          <Menu
-            task={task}
-            isNote={isNote}
-            dateless={dateless}
-            onChange={onChange}
-            onNest={onNest}
-            onDelete={onDelete}
-            onAddChild={onAddChild}
-            notesShown={notesShown}
-            /* Whatever the bar dropped for want of room reappears in here, so
-               nothing becomes unreachable on a nested row. */
-            overflow={!roomy}
-          />
-        </div>
+        {!isParent && actions}
       </div>
 
       {expanded && subtasks.map((child) => (
