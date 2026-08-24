@@ -1016,6 +1016,46 @@ kbd {
 
 .pomo-count { opacity: .75; font-weight: 400; }
 
+/* An image in prose is a thumbnail so the note stays readable; clicking opens
+   it to whatever the column allows, and clicking again puts it back. */
+.rich img {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: var(--radius-sm);
+  cursor: zoom-in;
+  transition: max-height .18s ease;
+}
+
+.rich img.is-open {
+  max-height: none;
+  cursor: zoom-out;
+}
+
+/* The uploads viewer: over the page, not instead of it. */
+.ex-view {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(8, 10, 16, .82);
+  backdrop-filter: blur(3px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  cursor: zoom-out;
+}
+
+.ex-view img {
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.ex-view-name { color: #e8ecf6; font-size: 12.5px; }
+
 /* ------------------------------------------- group selection and backlog */
 
 /* Sized and offset to sit with the row's own boxes rather than beside them. */

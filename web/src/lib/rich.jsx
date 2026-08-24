@@ -365,6 +365,18 @@ export function Rich({ text, inline = false, className = '' }) {
       // reload the whole app. Catching the click here keeps it in the SPA — and
       // stops the click reaching an editor that opens on click underneath.
       onClick={(e) => {
+        // An embedded image is a thumbnail so a note stays readable; clicking
+        // it should show the picture, and clicking it again put it back. It is
+        // toggled as a class on the element itself rather than held in state,
+        // because the markup here is a string and has no components to hold it.
+        const img = e.target.closest?.('img')
+        if (img) {
+          e.stopPropagation()
+          e.preventDefault()
+          img.classList.toggle('is-open')
+          return
+        }
+
         const a = e.target.closest?.('a')
         if (!a) return
         e.stopPropagation()
@@ -577,6 +589,22 @@ export function RichEditor({
           Restore as staying in the editor rather than as a commit. */}
       {strip}
       <div className="nt-tb">
+        {/* Attach sits with the other tools as well as in the hint below: the
+            footer button is easy to miss, and adding a file is not a rarer act
+            than making a list. */}
+        <button
+          type="button"
+          className="nt-tb-btn"
+          title="Attach a file"
+          aria-label="Attach a file"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => picker.current?.click()}
+        >
+          <Icon name="paperclip" size={13} />
+        </button>
+        <span className="nt-tb-sep" />
+
         {TOOL_GROUPS.map((group, g) => (
           <span key={g} style={{ display: 'contents' }}>
             {g > 0 && <span className="nt-tb-sep" />}

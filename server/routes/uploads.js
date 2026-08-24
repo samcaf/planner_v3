@@ -49,8 +49,19 @@ const EXT = {
 
 const MIME_BY_EXT = Object.fromEntries(Object.entries(EXT).map(([mime, ext]) => [ext, mime]))
 
-/** Extensions the browser is allowed to render in place — images, and no more. */
-const INLINE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'])
+/**
+ * Extensions the browser may render in place. Images, and PDF.
+ *
+ * PDF is the one non-image worth viewing rather than saving, and it is safe in
+ * a way the refused types are not: it opens in the browser's own PDF viewer,
+ * which is not an HTML document in this origin and cannot reach the planner's
+ * DOM, cookies or API. An `.svg` or `.html` would be exactly that document,
+ * which is why those are turned away at the door instead.
+ */
+const INLINE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'pdf'])
+
+/** Served with its real type so the viewer opens; everything else downloads. */
+const INLINE_TYPE = { pdf: 'application/pdf' }
 
 /**
  * Uploads are served from this app's own origin, so anything the browser
@@ -240,7 +251,11 @@ export function uploadHeaders(res, path) {
   res.setHeader('X-Content-Type-Options', 'nosniff')
 
   const name = path.slice(path.lastIndexOf('/') + 1)
-  if (INLINE_EXT.has(name.slice(name.lastIndexOf('.') + 1))) return
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  if (INLINE_EXT.has(ext)) {
+    if (INLINE_TYPE[ext]) res.setHeader('Content-Type', INLINE_TYPE[ext])
+    return
+  }
 
   // The stored name is a hash, so the original goes on the download itself —
   // otherwise every attachment saves as `a1b2c3….pdf`.

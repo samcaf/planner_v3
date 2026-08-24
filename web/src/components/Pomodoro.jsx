@@ -64,6 +64,17 @@ export default function Pomodoro() {
     return { phase: finished % len.beforeLong === 0 ? 'long' : 'short', done: finished }
   }, [len.beforeLong])
 
+  /**
+   * The inverse of `next`. A break came after the work that earned it, so going
+   * back from one lands on that work with the count not yet banked; going back
+   * from work lands on the break before it, if there was one.
+   */
+  const back = useCallback((from, done) => {
+    if (from !== 'work') return { phase: 'work', done: Math.max(0, done - 1) }
+    if (done <= 0) return { phase: 'work', done: 0 }
+    return { phase: done % len.beforeLong === 0 ? 'long' : 'short', done }
+  }, [len.beforeLong])
+
   const goTo = useCallback((phase, done, run) => {
     rang.current = false
     const ms = (phase === 'work' ? len.work : phase === 'short' ? len.short : len.long) * 60000
@@ -91,6 +102,9 @@ export default function Pomodoro() {
 
   const running = !!s.endsAt
   const elapsed = total(s.phase) - remaining
+  // A second of slack: a phase that has only just been set up should still
+  // count as untouched, so the first press of rewind steps back a round.
+  const started = elapsed > 1000
   const progress = total(s.phase) ? elapsed / total(s.phase) : 0
 
   const mm = Math.floor(remaining / 60000)
@@ -120,6 +134,23 @@ export default function Pomodoro() {
       <span className="pomo-clock">{clock}</span>
 
       <div className="pomo-keys">
+        {/* Rewind, as a music player does it: part-way through, it takes you
+            back to the start of this stretch; already at the start, it steps
+            back to the one before. So pressing it repeatedly walks you back to
+            the first round rather than sticking on a phase you have already
+            rewound. */}
+        <button
+          className="btn ghost"
+          title={started ? 'Back to the start of this stretch' : 'Back one round'}
+          onClick={() => {
+            if (started) { goTo(s.phase, s.done, false); return }
+            const b = back(s.phase, s.done)
+            goTo(b.phase, b.done, false)
+          }}
+        >
+          <Icon name="rewind" size={16} />
+        </button>
+
         <button className="btn ghost" title={running ? 'Pause' : 'Start'} onClick={toggle}>
           <Icon name={running ? 'pause' : 'play'} size={16} />
         </button>
@@ -129,13 +160,6 @@ export default function Pomodoro() {
           onClick={() => { const a = next(s.phase, s.done); goTo(a.phase, a.done, false) }}
         >
           <Icon name="skip" size={16} />
-        </button>
-        <button
-          className="btn ghost"
-          title="Reset this phase"
-          onClick={() => goTo(s.phase, s.done, false)}
-        >
-          <Icon name="reset" size={16} />
         </button>
       </div>
 

@@ -22,6 +22,7 @@ const PATHS = {
   undo: 'M4 10h11a5 5 0 0 1 0 10h-6 M4 10l4-4 M4 10l4 4',
   redo: 'M20 10H9a5 5 0 0 0 0 10h6 M20 10l-4-4 M20 10l-4 4',
   grip: 'M9 6h.01 M15 6h.01 M9 12h.01 M15 12h.01 M9 18h.01 M15 18h.01',
+  rewind: 'M11 6L4 12l7 6V6Z M20 6l-7 6 7 6V6Z',
   play: 'M8 5l11 7-11 7z',
   pause: 'M9 5v14 M15 5v14',
   skip: 'M6 5l9 7-9 7z M18 5v14',

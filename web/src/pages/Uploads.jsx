@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Empty, Modal, Panel } from '../components/ui.jsx'
@@ -24,6 +24,9 @@ const extOf = (name) => String(name || '').slice(String(name).lastIndexOf('.') +
 
 const isImage = (file) => String(file.mime || '').startsWith('image/')
 
+/** Anything the browser will show rather than save. Mirrors the server's list. */
+const viewable = (file) => isImage(file) || /\.pdf$/i.test(file.name || '')
+
 /**
  * A glyph per broad family, from the icon set the app already ships. Nothing
  * here distinguishes .docx from .pages — the extension badge does that, and a
@@ -44,6 +47,15 @@ function iconFor(file) {
 export default function Uploads() {
   const list = useApi('/uploads')
   const [doomed, setDoomed] = useState(null)
+  // The image currently held open over the page, if any.
+  const [viewing, setViewing] = useState(null)
+
+  useEffect(() => {
+    if (!viewing) return
+    const onKey = (e) => { if (e.key === 'Escape') setViewing(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewing])
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState(null)
@@ -155,10 +167,25 @@ export default function Uploads() {
                   href={file.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  // Same-origin, so the browser honours this and the file saves
-                  // under the name it was uploaded with rather than its hash.
-                  download={file.filename}
-                  title={isImage(file) ? 'Open full size' : `Download ${file.filename}`}
+                  // `download` used to be set on every card, so clicking an
+                  // image saved it rather than showing it. It is now only set
+                  // for files there is nothing to look at — and there it also
+                  // restores the name they were uploaded with, since the stored
+                  // one is a hash.
+                  {...(viewable(file) ? {} : { download: file.filename })}
+                  title={
+                    isImage(file) ? 'View full size'
+                      : viewable(file) ? `Open ${file.filename}`
+                        : `Download ${file.filename}`
+                  }
+                  onClick={(e) => {
+                    // An image opens over the page rather than in a tab:
+                    // looking at one is usually a glance, and a glance should
+                    // not cost you the view you were on.
+                    if (!isImage(file) || e.metaKey || e.ctrlKey || e.shiftKey) return
+                    e.preventDefault()
+                    setViewing(file)
+                  }}
                 >
                   {isImage(file) ? (
                     <img src={file.url} alt={file.filename} loading="lazy" />
@@ -198,6 +225,20 @@ export default function Uploads() {
           </div>
         )}
       </div>
+
+      {/* Held over the page rather than replacing it. Click anywhere, or press
+          Escape, and you are back where you were. */}
+      {viewing && (
+        <div
+          className="ex-view"
+          role="dialog"
+          aria-label={viewing.filename}
+          onClick={() => setViewing(null)}
+        >
+          <img src={viewing.url} alt={viewing.filename} />
+          <span className="ex-view-name">{viewing.filename}</span>
+        </div>
+      )}
 
       {doomed && (
         <ConfirmDelete
