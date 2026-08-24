@@ -557,7 +557,10 @@ export function RichEditor({
           className={`rich-view ${value ? '' : 'is-empty'}`}
           tabIndex={0}
           role="button"
-          onClick={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
+          // A link in the text is there to be followed. Without this the click
+          // that would open it opens the editor instead, and the only way to
+          // reach a link was to copy it out of the markdown by hand.
+          onClick={(e) => { if (e.target.closest('a')) return; setDraft(value || ''); setEditing(true); onEditing?.(true) }}
           onFocus={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
         >
           {value ? <Rich text={value} /> : <span className="muted">{placeholder}</span>}
@@ -746,7 +749,7 @@ export function RichLine({
   return (
     <span
       className={`rich-line ${className} ${value ? '' : 'is-empty'}`}
-      onClick={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
+      onClick={(e) => { if (e.target.closest('a')) return; setDraft(value || ''); setEditing(true); onEditing?.(true) }}
     >
       {value ? <Rich text={value} inline /> : <span className="muted">{placeholder}</span>}
     </span>

@@ -1094,8 +1094,26 @@ function SectionPanel({
   // task, and only a deliberate pause changes what it says about itself.
   const [armed, setArmed] = useState(null)
   const dwell = useRef({ col: null, timer: null })
+
+  // Folded away once nothing in it is left to do, and only on the transition —
+  // so opening a finished band to look at it stays open, and it only folds
+  // again if something in it is reopened and finished afresh.
+  const [folded, setFolded] = useState(false)
+  const wasDone = useRef(null)
   const tree = nestTasks(tasks)
   const isColumns = section.layout === 'columns'
+
+  const live = tasks.filter((t) => t.kind !== 'note' && t.status !== 'dropped' && !t.optional)
+  const complete = live.length > 0 && live.every((t) => t.status === 'done')
+
+  useEffect(() => {
+    if (wasDone.current === null) { wasDone.current = complete; return }
+    if (complete && !wasDone.current) setFolded(true)
+    if (!complete && wasDone.current) setFolded(false)
+    wasDone.current = complete
+  }, [complete])
+
+  const shut = section.collapsed || folded
 
   const watchColumn = (col) => {
     if (dwell.current.col === col) return
@@ -1190,6 +1208,7 @@ function SectionPanel({
     <section
       className={[
         'panel section', cls(section.color),
+        complete ? 'is-complete' : '',
         over ? 'sel-drop-on' : '',
         dragging === section.id ? 'sec-dragging' : '',
         dropAt?.id === section.id ? `sec-drop-${dropAt.side}` : '',
@@ -1213,10 +1232,16 @@ function SectionPanel({
         <button
           className="task-twist"
           title={section.collapsed ? 'Expand section' : 'Minimise section'}
-          aria-expanded={!section.collapsed}
-          onClick={() => onPatch({ collapsed: section.collapsed ? 0 : 1 })}
+          aria-expanded={!shut}
+          onClick={() => {
+            // Whichever way it is shut, the twist opens it — and opening one
+            // that folded itself must not immediately re-fold.
+            if (folded) setFolded(false)
+            if (section.collapsed) onPatch({ collapsed: 0 })
+            else if (!folded) onPatch({ collapsed: 1 })
+          }}
         >
-          <Icon name={section.collapsed ? 'right' : 'chevronDown'} size={12} />
+          <Icon name={shut ? 'right' : 'chevronDown'} size={12} />
         </button>
         <span className="dot" style={{ background: 'var(--c)' }} />
         {renaming ? (
@@ -1285,7 +1310,7 @@ function SectionPanel({
         </button>
       </header>
 
-      {section.collapsed ? null : (
+      {shut ? null : (
       <div {...dropZone}>
         {isColumns ? (
           <>

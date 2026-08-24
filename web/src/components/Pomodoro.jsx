@@ -114,33 +114,37 @@ export default function Pomodoro() {
         <Pomegranate progress={progress} />
       </button>
 
-      <div className="pomo-read">
-        <span className="pomo-clock">{clock}</span>
-        <span className="pomo-phase">
-          {label}
-          {s.done > 0 && <span className="pomo-count"> · {s.done}</span>}
-        </span>
-      </div>
+      {/* Under the fruit and in its colour, only brighter: the clock is what
+          the fruit is counting, so the two read as one object rather than as a
+          picture with a number beside it. */}
+      <span className="pomo-clock">{clock}</span>
 
       <div className="pomo-keys">
-        <button className="btn ghost sm" title={running ? 'Pause' : 'Start'} onClick={toggle}>
-          <Icon name={running ? 'pause' : 'play'} size={12} />
+        <button className="btn ghost" title={running ? 'Pause' : 'Start'} onClick={toggle}>
+          <Icon name={running ? 'pause' : 'play'} size={16} />
         </button>
         <button
-          className="btn ghost sm"
+          className="btn ghost"
           title="Skip to the next phase"
           onClick={() => { const a = next(s.phase, s.done); goTo(a.phase, a.done, false) }}
         >
-          <Icon name="skip" size={12} />
+          <Icon name="skip" size={16} />
         </button>
         <button
-          className="btn ghost sm"
+          className="btn ghost"
           title="Reset this phase"
           onClick={() => goTo(s.phase, s.done, false)}
         >
-          <Icon name="reset" size={12} />
+          <Icon name="reset" size={16} />
         </button>
       </div>
+
+      {/* Under the controls, in the same colour the fruit is wearing, so which
+          kind of stretch you are in is legible without reading it. */}
+      <span className="pomo-phase">
+        {label}
+        {s.done > 0 && <span className="pomo-count"> · {s.done}</span>}
+      </span>
     </div>
   )
 }

@@ -197,7 +197,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
      aspect ratio comes from a padding-bottom percentage resolved against the
      same width — so insetting here scales the whole thing without the height
      needing to be restated. The bottom value is clearance from the rail's edge. */
-  padding: 16px 15px 10px;
+  padding: 12px 15px 10px;
   color: #fff;
   font-weight: 650;
   letter-spacing: -.01em;
@@ -928,22 +928,28 @@ kbd {
 
 /* ----------------------------------------------------------- pomodoro */
 
+/* One centred column: fruit, clock, controls, phase. A rule above separates it
+   from the nav, and one below from the mark, so it reads as its own thing
+   rather than as the tail of the list or the top of the signature. */
 .pomo {
   margin-top: 16px;
-  padding: 10px 8px 4px;
-  border-top: 1px solid rgba(255, 255, 255, .07);
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas: 'face read' 'keys keys';
+  padding: 14px 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, .09);
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 2px 9px;
+  gap: 4px;
   color: var(--sb-ink);
 }
 
 .pomo-face {
-  grid-area: face;
-  width: 38px; height: 38px;
-  padding: 0; border: 0; background: none; cursor: pointer;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
 .pom { width: 100%; height: 100%; display: block; }
@@ -954,20 +960,47 @@ kbd {
 .pom-seed { fill: currentColor; opacity: .85; }
 
 /* The fruit takes the accent while it is counting and goes quiet when it is
-   not, so a glance at the rail says whether anything is running. */
-.pomo .pom { color: var(--sb-ink); opacity: .55; transition: opacity .2s, color .2s; }
-.pomo.is-running .pom { color: var(--sb-accent); opacity: 1; }
-.pomo.is-running.phase-short .pom,
-.pomo.is-running.phase-long .pom { color: var(--green); }
+   not, so a glance at the rail says whether anything is running. Everything
+   below inherits that colour, which is what ties the group together. */
+.pomo { --pomo-ink: var(--sb-ink); }
+.pomo.is-running { --pomo-ink: var(--sb-accent); }
+.pomo.is-running.phase-short,
+.pomo.is-running.phase-long { --pomo-ink: var(--green); }
 
-.pomo-read { grid-area: read; display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-.pomo-clock { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; color: #fff; }
-.pomo-phase { font-size: 11px; color: #8b95b5; white-space: nowrap; }
-.pomo-count { opacity: .8; }
+.pomo .pom { color: var(--pomo-ink); opacity: .55; transition: opacity .2s, color .2s; }
+.pomo.is-running .pom { opacity: 1; }
 
-.pomo-keys { grid-area: keys; display: flex; gap: 2px; margin-top: 4px; }
-.pomo-keys .btn { flex: 1; color: var(--sb-ink); justify-content: center; padding: 3px 0; }
-.pomo-keys .btn:hover { background: var(--sb-hi); }
+/* Brighter than the fruit rather than a different colour: same family, more
+   weight, because it is the thing you actually read. */
+.pomo-clock {
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  color: var(--pomo-ink);
+  filter: brightness(1.25);
+  line-height: 1.1;
+}
+
+.pomo-keys { display: flex; gap: 4px; margin-top: 2px; }
+
+.pomo-keys .btn {
+  color: var(--pomo-ink);
+  padding: 5px 8px;
+  opacity: .8;
+}
+
+.pomo-keys .btn:hover { background: var(--sb-hi); opacity: 1; }
+
+.pomo-phase {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--pomo-ink);
+  opacity: .85;
+  white-space: nowrap;
+}
+
+.pomo-count { opacity: .75; font-weight: 400; }
 
 /* ------------------------------------------- group selection and backlog */
 
