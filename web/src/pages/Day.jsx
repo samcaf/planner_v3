@@ -4,7 +4,8 @@ import Icon from '../components/Icon.jsx'
 import TaskRow, { branchMinutes, nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
-  SelectionBar, SelectionProvider, bulkPatch, draggedIds, isSectionDrag, isTaskDrag,
+  SelectAllBox, SelectionBar, SelectionProvider, bulkPatch, draggedIds,
+  isSectionDrag, isTaskDrag,
 } from '../components/Selection.jsx'
 import { Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
 import Progress, { tally } from '../components/Progress.jsx'
@@ -267,6 +268,16 @@ export default function Day() {
       undo: async () => { await api.post('/sections/reorder', { ids: wasOrder }) },
       redo: apply,
     })
+    refresh()
+  }
+
+  /**
+   * Out of the backlog and onto this day. It goes through /schedule rather than
+   * a date patch because the row may be carrying a path of scaffold parents
+   * that has to be matched against the day and then cleared away.
+   */
+  async function scheduleFromBacklog(id) {
+    await api.post(`/tasks/${id}/schedule`, { date })
     refresh()
   }
 
@@ -648,32 +659,14 @@ export default function Day() {
               {backlogTasks.length === 0 ? (
                 <Empty>Empty. Drag a task here to unschedule it.</Empty>
               ) : (
-                backlogTasks.map((t) => (
-                  <div key={t.id} className="task" draggable
-                    onDragStart={(ev) => ev.dataTransfer.setData('text/task-id', String(t.id))}
-                  >
-                    <div className="task-body">
-                      <div className="task-title">{t.title}</div>
-                      <div className="task-meta">
-                        <PriorityChip
-                          level={t.priority}
-                          onChange={(pri) => patchTask(t.id, { priority: pri })}
-                        />
-                        {t.project_name && (
-                          <span className={`chip ${cls(t.project_color)}`}>{t.project_name}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="task-actions">
-                      <button
-                        className="btn ghost sm"
-                        title="Schedule on this day"
-                        onClick={() => patchTask(t.id, { scheduled_date: date })}
-                      >
-                        <Icon name="arrowRight" size={13} />
-                      </button>
-                    </div>
-                  </div>
+                nestTasks(backlogTasks).map((t) => (
+                  <BacklogRow
+                    key={t.id}
+                    task={t}
+                    date={date}
+                    onPriority={(pri) => patchTask(t.id, { priority: pri })}
+                    onSchedule={scheduleFromBacklog}
+                  />
                 ))
               )}
             </div>
@@ -924,6 +917,83 @@ function SubSection({ task, columnLabels, rowProps }) {
   )
 }
 
+/**
+ * A backlog entry and everything filed under it. Since a task now leaves for
+ * the backlog carrying copies of its parents, the panel has real trees in it,
+ * and a flat list would show "Draft" three times with no clue which was which.
+ * Open by default: the path is the point of it being there.
+ */
+function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
+  const [open, setOpen] = useState(true)
+  const kids = task.subtasks || []
+
+  return (
+    <>
+      <div
+        className={`task bl-row${task.scaffold ? ' is-scaffold' : ''}`}
+        style={depth ? { marginLeft: depth * 16 } : undefined}
+        draggable
+        onDragStart={(ev) => ev.dataTransfer.setData('text/task-id', String(task.id))}
+      >
+        {kids.length > 0 ? (
+          <button
+            className="task-twist"
+            title={open ? 'Collapse' : 'Expand'}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            <Icon name={open ? 'chevronDown' : 'right'} size={12} />
+          </button>
+        ) : (
+          <span className="task-twist" aria-hidden="true" />
+        )}
+
+        <div className="task-body">
+          <div className="task-title">{task.title}</div>
+          <div className="task-meta">
+            {/* A scaffold row is a heading, not work: it carries no priority of
+                its own and nothing to schedule. */}
+            {!task.scaffold && (
+              <>
+                <PriorityChip level={task.priority} onChange={onPriority} />
+                {task.project_name && (
+                  <span className={`chip ${cls(task.project_color)}`}>{task.project_name}</span>
+                )}
+              </>
+            )}
+            {kids.length > 0 && (
+              <span className="chip">{kids.length} under this</span>
+            )}
+          </div>
+        </div>
+
+        {!task.scaffold && (
+          <div className="task-actions">
+            <button
+              className="btn ghost sm"
+              title="Schedule on this day, back under its own parents"
+              onClick={() => onSchedule(task.id)}
+            >
+              <Icon name="arrowRight" size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {open && kids.map((kid) => (
+        <BacklogRow
+          key={kid.id}
+          task={kid}
+          date={date}
+          onPriority={onPriority}
+          onSchedule={onSchedule}
+          depth={depth + 1}
+        />
+      ))}
+    </>
+  )
+}
+
 function SectionPanel({
   section, tasks, projects, columnLabels, rowProps,
   onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn,
@@ -1045,6 +1115,12 @@ function SectionPanel({
         <Progress tasks={tasks} color={section.color} className="section-prog" />
         <span className="spacer" />
 
+        {/* The whole section in one click. In three-column layout each column
+            has its own box as well; this is the one that covers all of them,
+            and the only one in list layout, where there are no columns to
+            speak of. */}
+        <SelectAllBox ids={visibleIds(tree)} label={`everything in ${section.name}`} />
+
         <select
           className="input select sm"
           style={{ width: 128 }}
@@ -1120,7 +1196,10 @@ function SectionPanel({
                   onMoveToColumn(ids, i)
                 }}
               >
-                <div className="box-col-h">{columnLabels[i]}</div>
+                <div className="box-col-h">
+                  <SelectAllBox ids={colIds[i]} label={`the ${columnLabels[i]} column`} />
+                  {columnLabels[i]}
+                </div>
                 {colTasks.length === 0
                   ? <p className="box-col-empty">Drop here</p>
                   : colTasks.map((t) => (

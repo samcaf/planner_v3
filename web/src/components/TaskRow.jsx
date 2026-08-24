@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import Popover from './Popover.jsx'
+import TimeGlyph from './TimeGlyph.jsx'
 import { useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
 import { RichEditor, RichLine } from '../lib/rich.jsx'
@@ -225,21 +226,22 @@ export default function TaskRow({
           else if (dropped === 'nest') onNest(id, task.id)
         }}
       >
-        {sel && (
-          <button
-            className={`sel-check ${picked ? 'is-on' : ''}`}
-            role="checkbox"
-            aria-checked={picked}
-            title={picked ? 'Deselect' : 'Select — shift-click for a range'}
-            onClick={(e) => {
+        {/* The old plain checkbox is gone: this both says how long the task is
+            and is what selects it, so the row spends no width on a control that
+            only did the latter. */}
+        {sel && !isNote && (
+          <TimeGlyph
+            minutes={own + childMinutes}
+            selected={picked}
+            label={task.title}
+            onSelect={(e) => {
               e.stopPropagation()
               if (e.shiftKey) sel.selectRange(task.id, listIds)
               else sel.toggle(task.id)
             }}
-          >
-            <Icon name="check" size={10} strokeWidth={3} />
-          </button>
+          />
         )}
+        {sel && isNote && <span className="time-glyph" aria-hidden="true" />}
 
         {subtasks.length > 0 ? (
           <button

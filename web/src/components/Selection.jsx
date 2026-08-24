@@ -121,6 +121,41 @@ export function SelectionProvider({ children }) {
 }
 
 /**
+ * Select — or clear — a whole group at once: one column of a three-column
+ * section, or a section entire. It reads as a tri-state, because "some of these
+ * are picked" is a different answer from "none are", and clicking it when the
+ * group is partly selected takes the whole group rather than dropping what you
+ * already had.
+ */
+export function SelectAllBox({ ids = [], label = 'these tasks', className = '' }) {
+  const sel = useSelection()
+  if (!sel || !ids.length) return null
+
+  const picked = ids.filter((id) => sel.has(id)).length
+  const all = picked === ids.length
+  const some = picked > 0 && !all
+
+  return (
+    <button
+      type="button"
+      className={`sel-all ${all ? 'is-on' : ''} ${some ? 'is-some' : ''} ${className}`}
+      role="checkbox"
+      aria-checked={all ? 'true' : some ? 'mixed' : 'false'}
+      title={all ? `Deselect ${label}` : `Select ${label} (${ids.length})`}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (all) ids.forEach((id) => sel.has(id) && sel.toggle(id))
+        else sel.select(ids)
+      }}
+    >
+      {all
+        ? <Icon name="check" size={10} strokeWidth={3} />
+        : some ? <span className="sel-all-dash" /> : null}
+    </button>
+  )
+}
+
+/**
  * The ids a drag is carrying. A row that was part of a selection also writes the
  * whole list, so a target reading this handles both without knowing which.
  */

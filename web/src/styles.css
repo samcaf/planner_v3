@@ -721,6 +721,92 @@ kbd {
 
 .task-notes { margin-top: 6px; }
 
+/* ------------------------------------------- group selection and backlog */
+
+/* Sized and offset to sit with the row's own boxes rather than beside them. */
+.sel-all {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: #fff;
+  padding: 0;
+}
+
+.sel-all:hover { border-color: var(--accent); }
+.sel-all.is-on { background: var(--accent); border-color: var(--accent); }
+
+/* Partly selected reads as a dash, not a tick: "some of these" is a different
+   answer from "all of these", and the control should not claim otherwise. */
+.sel-all.is-some { border-color: var(--accent); }
+.sel-all-dash { width: 7px; height: 2px; border-radius: 1px; background: var(--accent); }
+
+.box-col-h { display: flex; align-items: center; gap: 6px; }
+
+.bl-row { align-items: flex-start; }
+
+/* A scaffold row is the path a backlogged task travelled with, not work in its
+   own right, so it recedes and carries none of a task's controls. */
+.bl-row.is-scaffold .task-title { color: var(--ink-3); font-weight: 500; }
+.bl-row.is-scaffold { opacity: .85; }
+
+/* ------------------------------------------------------------- time glyph */
+
+/* A fixed-width slot, contents right-aligned. The drawing's width varies with
+   the duration, and letting that push the row around would undo the checkbox
+   alignment it sits next to. */
+.time-glyph {
+  flex: none;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 4px 0 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--ink-3);
+  opacity: .8;
+  transition: opacity .12s, color .12s;
+}
+
+.time-glyph svg { overflow: visible; }
+.time-glyph rect { fill: currentColor; }
+.time-glyph .tg-dots circle { fill: currentColor; }
+
+/* Hollow, not filled: an untimed task has a place to click without claiming
+   to be half an hour long. */
+.time-glyph .tg-ghost {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 1.6 1.4;
+  opacity: .55;
+}
+
+.time-glyph .tg-count {
+  fill: currentColor;
+  font-size: 7.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-glyph:hover { opacity: 1; color: var(--accent); }
+
+.time-glyph.is-on {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.time-glyph.is-on rect { fill: var(--accent); }
+
+.task.sel-on .time-glyph { color: var(--accent); opacity: 1; }
+
 /* ------------------------------------------------------------ sub-sections */
 
 /* A heading band spanning all three columns. The rules are what separate it
