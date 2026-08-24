@@ -257,6 +257,18 @@ export default function TaskRow({
         ].join(' ')}
         style={depth ? { marginLeft: depth * 22 } : undefined}
         draggable={draggable && !texting}
+        // Releasing the drag on focus is too late to select text with the
+        // mouse: the gesture that selects begins with the mousedown, and by
+        // then the row is still draggable, so the browser starts carrying the
+        // task instead of sweeping a selection. Catching the press on the way
+        // down — before the drag can begin — is what makes dragging across a
+        // notes box or an open title select the words in it.
+        //
+        // Only real editing surfaces count. The title's rendered text is left
+        // draggable on purpose, because that is how a row is picked up.
+        onMouseDownCapture={(e) => {
+          if (e.target.closest('input, textarea, [contenteditable], .rich-view')) setTexting(true)
+        }}
         onDragStart={(e) => {
           e.stopPropagation()
           e.dataTransfer.setData('text/task-id', String(task.id))
