@@ -150,7 +150,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
   color: var(--sb-ink);
   display: flex;
   flex-direction: column;
-  padding: 14px 10px;
+  /* Barely any at the top: undo is the first thing in the rail and should sit
+     against its edge rather than floating below it. */
+  padding: 4px 10px 14px;
   gap: 2px;
   overflow-y: auto;
 }
@@ -158,18 +160,26 @@ button, input, textarea, select { font: inherit; color: inherit; }
 /* At the head of the rail: undo is global, so it sits above the nav rather than
    scrolling away with whichever section you happen to be looking at. */
 .sb-undo {
-  padding-bottom: 12px;
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
 }
 
+/* Sixty/forty of whatever the rail is: growth factors rather than fixed
+   widths, so the split survives the rail being dragged wider and the gap is
+   taken out of the row before the share is worked out. The height is fixed for
+   the same reason — resizing should change how wide they are, not how tall. */
 .sb-undo .btn {
-  flex: 1;
+  flex: 6 6 0;
+  height: 26px;
+  min-height: 0;
+  padding: 0 6px;
   color: var(--sb-ink);
   justify-content: center;
 }
 
-.sb-undo .btn:last-child { flex: 0 0 34px; }
+.sb-undo .btn:last-child { flex: 4 4 0; }
 .sb-undo .btn:hover:not(:disabled) { background: var(--sb-hi); }
 .sb-undo .btn:disabled { opacity: .35; cursor: default; }
 
@@ -235,6 +245,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
   padding: 14px 9px 5px;
   font-weight: 600;
 }
+
+/* The rule above already separates the two, so the heading does not also need
+   a run-up to it. */
+.sb-undo + .sb-section { padding-top: 6px; }
 
 .sb-link {
   display: flex;
