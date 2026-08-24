@@ -57,6 +57,16 @@ addColumn('tasks', 'subsection', 'INTEGER NOT NULL DEFAULT 0')
 // path that identifies it. It is scaffolding, not work: it is never counted,
 // and it is torn down again the moment nothing hangs off it.
 addColumn('tasks', 'scaffold', 'INTEGER NOT NULL DEFAULT 0')
+
+// Some work takes exactly as long as it takes — a timed exercise, a brew, a
+// meditation — so its minutes are a fact rather than a guess. Marking that is
+// what turns the estimate into something a timer can run against.
+addColumn('tasks', 'fixed_time', 'INTEGER NOT NULL DEFAULT 0')
+// The timer lives in the database, not in the page: a count-down that forgets
+// itself on refresh is not a count-down. `started_at` is null while paused, and
+// `elapsed_ms` carries everything banked before the current run.
+addColumn('tasks', 'timer_started_at', 'TEXT')
+addColumn('tasks', 'timer_elapsed_ms', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('tasks', 'url', "TEXT NOT NULL DEFAULT ''")
 addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // Which routine item produced this task. Top-up needs a stable identity for
@@ -110,6 +120,21 @@ addColumn('sections', 'routine_id', 'INTEGER REFERENCES routines(id) ON DELETE S
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_sections_routine_day
     ON sections(date, routine_id) WHERE routine_id IS NOT NULL
+`)
+
+// Notes that are not about a day or a project — references, standing lists, the
+// things a planner has nowhere else to put. Its own table rather than a task
+// with no date, which would surface in the backlog and be counted as work.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notebook (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT    NOT NULL DEFAULT '',
+    body       TEXT    NOT NULL DEFAULT '',
+    sort       INTEGER NOT NULL DEFAULT 0,
+    pinned     INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
 `)
 
 export const DEFAULTS = {

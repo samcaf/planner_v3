@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import Icon from './components/Icon.jsx'
 import Wordmark from './components/Wordmark.jsx'
 import DayNight from './components/DayNight.jsx'
+import Pomodoro from './components/Pomodoro.jsx'
 import Crash from './components/Crash.jsx'
 import { Modal } from './components/ui.jsx'
 import { ToastHost } from './components/Toast.jsx'
@@ -13,6 +14,7 @@ import Day from './pages/Day.jsx'
 import Week from './pages/Week.jsx'
 import Month from './pages/Month.jsx'
 import Notes from './pages/Notes.jsx'
+import Notebook from './pages/Notebook.jsx'
 import AllTasks from './pages/AllTasks.jsx'
 import Projects from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
@@ -36,6 +38,7 @@ const NAV = [
 
 const NAV_2 = [
   { to: '/tasks', icon: 'check', label: 'All tasks' },
+  { to: '/notebook', icon: 'templates', label: 'Notebook' },
   { to: '/projects', icon: 'projects', label: 'Projects' },
   { to: '/routines', icon: 'today', label: 'Routines' },
   { to: '/people', icon: 'people', label: 'People' },
@@ -99,6 +102,10 @@ export default function App() {
           <SideLink key={n.label} {...n} />
         ))}
 
+        {/* Between the last nav entry and the mark, as its own thing: it is
+            neither navigation nor branding. */}
+        <Pomodoro />
+
         {/* The mark signs the foot of the rail, with the day/night switch
             centred beneath it. Both sit in one block so the spare height goes
             above the pair rather than between them. */}
@@ -151,6 +158,7 @@ export default function App() {
           <Route path="/notes" element={<Navigate to={`/notes/${today()}`} replace />} />
           <Route path="/notes/:date" element={<Notes />} />
           <Route path="/tasks" element={<AllTasks />} />
+          <Route path="/notebook" element={<Notebook />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/people" element={<People />} />

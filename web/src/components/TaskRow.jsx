@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import Popover from './Popover.jsx'
+import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
 import { isSectionDrag, useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
@@ -728,6 +729,19 @@ function TaskDetails({ task, derived, onChange, onDone }) {
           onDone={onDone}
         />
       </label>
+
+      {/* Only for work whose length is a fact. A countdown against an estimate
+          would be counting down to an opinion. */}
+      <label className="td-fixed">
+        <input
+          type="checkbox"
+          checked={!!task.fixed_time}
+          onChange={(e) => onChange({ fixed_time: e.target.checked ? 1 : 0 })}
+        />
+        <span>Fixed length</span>
+      </label>
+
+      {!!task.fixed_time && <TaskTimer task={task} onChange={onChange} />}
 
       <div className="task-durations">
         <span>Duration</span>

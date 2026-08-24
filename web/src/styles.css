@@ -883,6 +883,92 @@ kbd {
 
 .task-box .task-twist { margin: 0; }
 
+/* ------------------------------------------------------- task timer */
+
+.td-fixed { display: flex; flex-direction: row !important; align-items: center; gap: 6px; font-size: 12px; }
+.td-fixed input { width: auto; }
+
+.tt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+/* The bar takes the room, because it is the part you read at a glance. */
+.tt-bar {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.tt-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  /* Matches the repaint interval, so the bar creeps rather than stepping. */
+  transition: width .5s linear;
+}
+
+.tt.is-running .tt-bar > i { background: var(--accent); }
+.tt.is-done .tt-bar > i { background: var(--green); }
+
+.tt-clock { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 13px; }
+.tt-of { font-size: 11.5px; white-space: nowrap; }
+.tt-none { font-size: 11.5px; color: var(--ink-3); }
+
+/* ----------------------------------------------------------- pomodoro */
+
+.pomo {
+  margin-top: 16px;
+  padding: 10px 8px 4px;
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'face read' 'keys keys';
+  align-items: center;
+  gap: 2px 9px;
+  color: var(--sb-ink);
+}
+
+.pomo-face {
+  grid-area: face;
+  width: 38px; height: 38px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+}
+
+.pom { width: 100%; height: 100%; display: block; }
+.pom-track { fill: none; stroke: currentColor; stroke-width: 2.4; opacity: .18; }
+.pom-arc { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pom-shell { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.pom-ink { fill: currentColor; }
+.pom-seed { fill: currentColor; opacity: .85; }
+
+/* The fruit takes the accent while it is counting and goes quiet when it is
+   not, so a glance at the rail says whether anything is running. */
+.pomo .pom { color: var(--sb-ink); opacity: .55; transition: opacity .2s, color .2s; }
+.pomo.is-running .pom { color: var(--sb-accent); opacity: 1; }
+.pomo.is-running.phase-short .pom,
+.pomo.is-running.phase-long .pom { color: var(--green); }
+
+.pomo-read { grid-area: read; display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.pomo-clock { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; color: #fff; }
+.pomo-phase { font-size: 11px; color: #8b95b5; white-space: nowrap; }
+.pomo-count { opacity: .8; }
+
+.pomo-keys { grid-area: keys; display: flex; gap: 2px; margin-top: 4px; }
+.pomo-keys .btn { flex: 1; color: var(--sb-ink); justify-content: center; padding: 3px 0; }
+.pomo-keys .btn:hover { background: var(--sb-hi); }
+
 /* ------------------------------------------- group selection and backlog */
 
 /* Sized and offset to sit with the row's own boxes rather than beside them. */

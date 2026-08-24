@@ -8,7 +8,7 @@ const FIELDS = [
   'parent_id', 'start_time', 'end_time', 'col_index', 'section_id', 'kind',
   'moved_to_date', 'notes_hidden', 'intensity', 'optional', 'url', 'location',
   'subsection',
-  'scaffold',
+  'scaffold', 'fixed_time', 'timer_started_at', 'timer_elapsed_ms',
   // Present so a deleted routine task keeps its link when restored, the same
   // reason from_template is here.
   'routine_item_id',

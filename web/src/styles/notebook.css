@@ -1,0 +1,33 @@
+/* A list beside the note, because a notebook is browsed as much as it is read. */
+.nb-page {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .nb-page { grid-template-columns: 1fr; }
+}
+
+.nb-list { display: flex; flex-direction: column; gap: 2px; }
+
+.nb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.nb-item:hover { background: var(--line-soft); }
+.nb-item.is-on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+.nb-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

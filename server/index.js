@@ -10,6 +10,7 @@ import dashboard from './routes/dashboard.js'
 import days from './routes/days.js'
 import sections, { routinesRouter } from './routes/sections.js'
 import search from './routes/search.js'
+import notebook from './routes/notebook.js'
 import settings from './routes/settings.js'
 import uploads, { UPLOAD_DIR, uploadHeaders } from './routes/uploads.js'
 
@@ -35,6 +36,7 @@ app.use('/api/days', days)
 app.use('/api/sections', sections)
 app.use('/api/routines', routinesRouter)
 app.use('/api/search', search)
+app.use('/api/notebook', notebook)
 app.use('/api/settings', settings)
 app.use('/api/uploads', uploads)
 

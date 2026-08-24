@@ -61,3 +61,16 @@
 
 .st-raw-row { grid-template-columns: 200px 1fr; margin-bottom: 6px; }
 .st-raw-val { font-size: 12px; overflow-wrap: anywhere; }
+
+/* Pomodoro lengths: label and field on one line, so the four read as a set. */
+.st-pomo { display: flex; flex-direction: column; gap: 8px; }
+
+.st-pomo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.st-pomo-row input { width: 96px; }

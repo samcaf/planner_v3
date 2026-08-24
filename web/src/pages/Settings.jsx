@@ -22,7 +22,10 @@ const ACCENTS = [
 ]
 
 // Settings edited by a control above; the raw dump would only repeat them.
-const HANDLED = ['deep_capacity_min', 'column_labels']
+const HANDLED = [
+  'deep_capacity_min', 'column_labels',
+  'pomodoro_work', 'pomodoro_short', 'pomodoro_long', 'pomodoro_before_long',
+]
 
 /** Minutes in, "5h 30m" out, so a target can be typed in either. */
 function parseDuration(text) {
@@ -72,6 +75,33 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
 
       <div className="page st-page">
         <div className="st-stack">
+          <Panel title={<><Icon name="clock" size={14} /> Pomodoro</>}>
+            <p className="st-note">
+              How long each phase of the timer in the sidebar runs, in minutes,
+              and how many work blocks go by before the long break.
+            </p>
+
+            <div className="st-pomo">
+              {[
+                ['pomodoro_work', 'Work', 30],
+                ['pomodoro_short', 'Short break', 5],
+                ['pomodoro_long', 'Long break', 20],
+                ['pomodoro_before_long', 'Blocks before a long break', 4],
+              ].map(([key, label, fallback]) => (
+                <label key={key} className="st-pomo-row">
+                  <span>{label}</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="1"
+                    value={s[key] ?? fallback}
+                    onChange={(e) => save(key, e.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </Panel>
+
           <Panel title={<><Icon name="clock" size={14} /> Deep work target</>}>
             <p className="st-note">
               Minutes of deep work you are aiming at each day. Only tasks marked deep
