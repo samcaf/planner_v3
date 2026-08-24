@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import Popover from './Popover.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
-import { useSelection } from './Selection.jsx'
+import { isSectionDrag, useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
 import { RichEditor, RichLine } from '../lib/rich.jsx'
 import { cls } from './ui.jsx'
@@ -118,11 +118,17 @@ export default function TaskRow({
   onNest,
   onDropTask,
   onAddChild,
+  // Move or copy this task to another day. The server does it, because either
+  // way the task's section has to be found or made on the far side.
+  onReschedule,
   showProject = true,
   draggable = true,
   depth = 0,
   listIds = [],
-  autoEdit = false,
+  // The id of the row that was just created, if any. One value handed down the
+  // whole tree, rather than a boolean that only ever reached the top level —
+  // which is why a new SUBTASK never opened ready to type.
+  autoEditId = null,
   // A routine item is a template: it has no day of its own, so every entry
   // that schedules something is hidden rather than left to fail quietly.
   dateless = false,
@@ -161,8 +167,13 @@ export default function TaskRow({
     }
     // mousedown, not click: a click that starts inside and ends outside (a
     // drag, or a select that runs past the edge) should not count as leaving.
-    document.addEventListener('mousedown', away)
-    return () => document.removeEventListener('mousedown', away)
+    //
+    // Capture phase, so this runs BEFORE the button that was pressed. Pressing
+    // another row's clock used to close this panel and stop there — the close
+    // re-rendered the list, the press never reached its own handler, and it
+    // took two clicks to move between two tasks' time panels.
+    document.addEventListener('mousedown', away, true)
+    return () => document.removeEventListener('mousedown', away, true)
   }, [details])
 
   /**
@@ -259,6 +270,7 @@ export default function TaskRow({
         onNest={onNest}
         onDelete={onDelete}
         onAddChild={onAddChild}
+        onReschedule={onReschedule}
         notesShown={notesShown}
         /* Whatever the bar dropped for want of room reappears in here, so
            nothing becomes unreachable on a nested row. */
@@ -299,14 +311,18 @@ export default function TaskRow({
           e.dataTransfer.effectAllowed = 'move'
         }}
         onDragOver={(e) => {
-          if (!accepts) return
+          // A section being carried is not a task and must not be offered a
+          // place among them: without this every row lit up its own drop zones
+          // and the section tried to nest itself into one, which is why moving
+          // a section around felt like it was latching on to things.
+          if (!accepts || isSectionDrag(e)) return
           e.preventDefault()
           e.stopPropagation()
           setZone(zoneFor(e))
         }}
         onDragLeave={() => setZone(null)}
         onDrop={(e) => {
-          if (!accepts) return
+          if (!accepts || isSectionDrag(e)) return
           const id = Number(e.dataTransfer.getData('text/task-id'))
           const dropped = zone || zoneFor(e)
           setZone(null)
@@ -391,7 +407,7 @@ export default function TaskRow({
                 value={task.title}
                 onChange={(title) => title.trim() && onChange({ title })}
                 placeholder="Task"
-                autoEdit={autoEdit}
+                autoEdit={autoEditId === task.id}
                 onEditing={setTexting}
               />
             </div>
@@ -552,7 +568,9 @@ export default function TaskRow({
           onNest={onNest}
           onDropTask={onDropTask}
           onAddChild={onAddChild}
+          onReschedule={onReschedule}
           showProject={showProject}
+          autoEditId={autoEditId}
           // Forwarded, not defaulted: a list that does not accept drops turns
           // dragging off, and a child left draggable there is an affordance
           // that leads nowhere.
@@ -743,7 +761,8 @@ function TaskDetails({ task, derived, onChange, onDone }) {
 }
 
 function Menu({
-  task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow, dateless,
+  task, isNote, onChange, onNest, onDelete, onAddChild, onReschedule,
+  notesShown, overflow, dateless,
 }) {
   return (
     <Popover
@@ -764,6 +783,7 @@ function Menu({
           onNest={onNest}
           onDelete={onDelete}
           onAddChild={onAddChild}
+          onReschedule={onReschedule}
           notesShown={notesShown}
           overflow={overflow}
           close={close}
@@ -778,16 +798,15 @@ function Menu({
  * its content while open, so this state resets itself.
  */
 function MenuItems({
-  task, isNote, onChange, onNest, onDelete, onAddChild, notesShown, overflow, dateless, close,
+  task, isNote, onChange, onNest, onDelete, onAddChild, onReschedule,
+  notesShown, overflow, dateless, close,
 }) {
-  const [moving, setMoving] = useState(false)
+  // Which of the two date pickers is open, if either.
+  const [sub, setSub] = useState(null)
 
   const item = (label, fn) => (
     <button className="menu-item" onClick={() => { fn(); close() }}>{label}</button>
   )
-
-  /** Moving records where the task went, so the old day can still show the trail. */
-  const moveTo = (date) => onChange({ scheduled_date: date, status: 'moved', moved_to_date: date })
 
   return (
     <>
@@ -831,25 +850,50 @@ function MenuItems({
 
       {!dateless && (
         <>
-      {task.scheduled_date && item('Move to tomorrow', () => moveTo(addDays(task.scheduled_date, 1)))}
+      {/* One entry that opens onto the two ways of naming a day, rather than
+          two entries saying the same verb. Copy sits beside it, because "put
+          this on tomorrow as well" is the same decision with a different answer
+          to "and take it off today?". */}
+      {['move', 'copy'].map((how) => {
+        const open = sub === how
+        // The server does both: either way the task's section has to be found
+        // or made on the far day, and a plain date patch would drop it into
+        // that day's loose list and lose the band it belonged to.
+        const go = (date) => { onReschedule?.(task, date, how === 'copy'); close() }
 
-      {moving ? (
-        <div className="menu-move">
-          <input
-            className="input"
-            type="date"
-            autoFocus
-            defaultValue={task.scheduled_date || today()}
-            onChange={(e) => {
-              if (!e.target.value) return
-              moveTo(e.target.value)
-              close()
-            }}
-          />
-        </div>
-      ) : (
-        <button className="menu-item" onClick={() => setMoving(true)}>Move to…</button>
-      )}
+        return (
+          <div key={how} className="menu-sub">
+            <button
+              className={`menu-item ${open ? 'is-open' : ''}`}
+              aria-expanded={open}
+              onClick={() => setSub(open ? null : how)}
+            >
+              {how === 'move' ? 'Move to' : 'Copy to'}…
+              <Icon name={open ? 'chevronDown' : 'right'} size={11} />
+            </button>
+
+            {open && (
+              <div className="menu-sub-body">
+                <button
+                  className="menu-item"
+                  onClick={() => go(addDays(task.scheduled_date || today(), 1))}
+                >
+                  Tomorrow
+                </button>
+                <div className="menu-move">
+                  <input
+                    className="input"
+                    type="date"
+                    autoFocus
+                    defaultValue={task.scheduled_date || today()}
+                    onChange={(e) => { if (e.target.value) go(e.target.value) }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       {task.scheduled_date
         ? item('Send to backlog', () => onChange({ scheduled_date: null, status: 'todo', moved_to_date: null }))

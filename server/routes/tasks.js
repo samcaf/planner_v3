@@ -442,6 +442,76 @@ r.post('/:id/schedule', h((req) => {
   return readTask(id)
 }))
 
+/**
+ * Move a task to another day — or leave it where it is and put a copy there.
+ *
+ * A task that lives in a section belongs to that band, not just to that date,
+ * so the band has to exist on the far side or the task lands loose and the
+ * grouping it was part of is quietly lost. A section of the same name on the
+ * target day is reused; otherwise one is made in its image.
+ *
+ * A copy takes the whole subtree, because half a branch is not a copy of it.
+ */
+r.post('/:id/move', h((req) => {
+  const id = Number(req.params.id)
+  const { date, copy = false } = req.body || {}
+  if (!date) throw badRequest('date is required')
+
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id)
+  if (!task) return undefined
+
+  let landing = null
+
+  const result = db.transaction(() => {
+    if (task.section_id) {
+      const from = db.prepare('SELECT * FROM sections WHERE id = ?').get(task.section_id)
+      if (from) {
+        const there = db.prepare('SELECT * FROM sections WHERE date = ? AND name = ?').get(date, from.name)
+        landing = there?.id ?? db.prepare(`
+          INSERT INTO sections (date, name, color, layout, sort, project_id, routine_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(date, from.name, from.color, from.layout,
+          nextSort('sections', 'WHERE date = ?', [date]), from.project_id, from.routine_id
+        ).lastInsertRowid
+      }
+    }
+
+    if (!copy) {
+      db.prepare(`
+        UPDATE tasks SET scheduled_date = ?, section_id = ?, status = 'moved', moved_to_date = ?
+        WHERE id = ?
+      `).run(date, landing, date, id)
+      db.prepare(`UPDATE tasks SET scheduled_date = ? WHERE id IN (${DESCENDANTS})`).run(date, id)
+      return id
+    }
+
+    // Copy the branch, parents before children so each child has somewhere to
+    // hang. `moved_to_date` is deliberately not carried: a copy was not pushed
+    // on from anywhere, it was made here.
+    const copyOne = (row, parentId, sectionId) => {
+      const made = db.prepare(`
+        INSERT INTO tasks (title, notes, project_id, milestone_id, status, priority,
+                           scheduled_date, due_date, estimate_min, sort, parent_id,
+                           start_time, end_time, col_index, section_id, kind,
+                           notes_hidden, intensity, optional, url, location, subsection)
+        VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(row.title, row.notes, row.project_id, row.milestone_id, row.priority,
+        date, row.due_date, row.estimate_min,
+        nextSort('tasks', 'WHERE scheduled_date = ?', [date]), parentId,
+        row.start_time, row.end_time, row.col_index, sectionId, row.kind,
+        row.notes_hidden, row.intensity, row.optional, row.url, row.location, row.subsection)
+
+      const kids = db.prepare('SELECT * FROM tasks WHERE parent_id = ? ORDER BY sort, id').all(row.id)
+      for (const kid of kids) copyOne(kid, made.lastInsertRowid, null)
+      return made.lastInsertRowid
+    }
+
+    return copyOne(task, null, landing)
+  })()
+
+  return readTask(result)
+}))
+
 r.post('/rollover', h((req) => {
   const { from, to } = req.body || {}
   if (!from || !to) throw badRequest('from and to are required')

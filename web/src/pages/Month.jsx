@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useArrowNav } from '../lib/keys.js'
 import Icon from '../components/Icon.jsx'
 import Progress, { OPEN, tally } from '../components/Progress.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
@@ -21,6 +22,7 @@ const isOpen = (t) => t.kind === 'note' || OPEN.includes(t.status)
 export default function Month() {
   const { date } = useParams()
   const navigate = useNavigate()
+  useArrowNav(useCallback((by) => navigate(`/month/${addMonths(date, by)}`), [date, navigate]))
   const grid = monthGrid(date)
   const range = useApi(`/days/range/${grid[0]}/${grid[41]}`, [date])
   const [dragOver, setDragOver] = useState(null)

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useArrowNav } from '../lib/keys.js'
 import Icon from '../components/Icon.jsx'
 import Progress, { OPEN, tally } from '../components/Progress.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
@@ -116,6 +117,7 @@ function useExpanded() {
 export default function Week() {
   const { date } = useParams()
   const navigate = useNavigate()
+  useArrowNav(useCallback((by) => navigate(`/week/${addDays(date, by * 7)}`), [date, navigate]))
   const days = weekDays(date)
   const range = useApi(`/days/range/${days[0]}/${days[6]}`, [date])
   const sections = useSections(days[0])

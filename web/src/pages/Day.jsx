@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import TaskRow, { branchMinutes, nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
@@ -16,6 +16,7 @@ import { RichEditor } from '../lib/rich.jsx'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
+import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 
 const UNSECTIONED = 'loose'
@@ -36,11 +37,7 @@ const PRI_RANK = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4 }
 const byPriority = (a, b) =>
   (PRI_RANK[a.priority] ?? 2) - (PRI_RANK[b.priority] ?? 2) || a.sort - b.sort || a.id - b.id
 
-/**
- * Which of the three boxes a task belongs in. An explicit col_index wins;
- * otherwise it falls out of the duration, so tasks land somewhere sensible
- * without the user placing every one by hand.
- */
+/** Where a duration falls among the three boxes. 30m is the top of the middle. */
 function columnByMinutes(m) {
   if (!m) return 0
   if (m <= 10) return 0
@@ -103,6 +100,7 @@ export default function Day() {
     }
   }, [dragSection, sectionDropAt])
   const [backlogBy, setBacklogBy] = useState(() => localStorage.getItem('backlog_by') || 'priority')
+  useArrowNav(useCallback((by) => navigate(`/day/${addDays(date, by)}`), [date, navigate]))
   const undo = useUndo()
   const toast = useToast()
 
@@ -135,6 +133,13 @@ export default function Day() {
     day.reload()
     backlog.reload()
     doing.reload()
+  }
+
+  /** A day either side, in this tab or a new one. */
+  const step = (e, by) => {
+    const to = `/day/${addDays(date, by)}`
+    if (e?.ctrlKey || e?.metaKey) window.open(to, '_blank', 'noopener')
+    else navigate(to)
   }
 
   const ops = taskOps(undo, refresh)
@@ -313,6 +318,33 @@ export default function Day() {
     refresh()
   }
 
+  /**
+   * Move a task to another day, or leave it and put a copy there. Undoable
+   * either way: a move goes back to the day and section it came from, and a
+   * copy is simply removed again.
+   */
+  async function reschedule(task, to, copy) {
+    const before = { date: task.scheduled_date, section_id: task.section_id ?? null }
+    const made = await api.post(`/tasks/${task.id}/move`, { date: to, copy })
+
+    undo?.record?.({
+      label: copy ? 'copy' : 'move',
+      undo: async () => {
+        if (copy) await api.del(`/tasks/${made.id}`)
+        else {
+          await api.patch(`/tasks/${task.id}`, {
+            scheduled_date: before.date,
+            section_id: before.section_id,
+            status: 'todo',
+            moved_to_date: null,
+          })
+        }
+      },
+      redo: async () => { await api.post(`/tasks/${task.id}/move`, { date: to, copy }) },
+    })
+    refresh()
+  }
+
   const rowProps = (task) => ({
     task,
     subtasks: task.subtasks || [],
@@ -325,7 +357,8 @@ export default function Day() {
     onDelete: (id = task.id) => removeTask(id),
     onDropTask,
     onAddChild: addChild,
-    autoEdit: task.id === justAdded,
+    autoEditId: justAdded,
+    onReschedule: reschedule,
   })
 
   async function addChild(parent) {
@@ -411,10 +444,13 @@ export default function Day() {
     <div className="day-shell">
       <header className="topbar">
         <div className="daynav">
-          <button className="btn ghost sm" onClick={() => navigate(`/day/${addDays(date, -1)}`)} aria-label="Previous day">
+          {/* Ctrl/Cmd-click opens the day in a new tab, the way it would on any
+              link. These are buttons because they navigate within the app, so
+              the browser does not do this for us. */}
+          <button className="btn ghost sm" onClick={(e) => step(e, -1)} aria-label="Previous day">
             <Icon name="left" size={15} />
           </button>
-          <button className="btn ghost sm" onClick={() => navigate(`/day/${addDays(date, 1)}`)} aria-label="Next day">
+          <button className="btn ghost sm" onClick={(e) => step(e, 1)} aria-label="Next day">
             <Icon name="right" size={15} />
           </button>
         </div>
@@ -1268,7 +1304,12 @@ function SectionPanel({
               <div
                 key={i}
                 className={`box-col${armed === i ? ' is-armed' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); watchColumn(i) }}
+                onDragOver={(e) => {
+                  // A section passing over is not looking for a column.
+                  if (isSectionDrag(e)) return
+                  e.preventDefault()
+                  watchColumn(i)
+                }}
                 onDragLeave={(e) => {
                   // Only when the pointer has actually left this column, not
                   // when it crosses one of the rows inside it.

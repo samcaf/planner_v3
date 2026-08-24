@@ -77,7 +77,9 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
 
   const W = Math.max(cellsW, quarter ? DOTS_W : 0)
   const pad = cellsH ? DOTS_PAD : 0
-  const H = cellsH + (quarter ? pad + DOTS_H : 0)
+  const H = many
+    ? BOX + (quarter ? pad + DOTS_H : 0)
+    : cellsH + (quarter ? pad + DOTS_H : 0)
   const cellsX = (W - cellsW) / 2
 
   const title = rounded
@@ -92,28 +94,34 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
       aria-pressed={selected}
       onClick={onSelect}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
-        {/* An untimed task still needs somewhere to click, so it keeps a faint
-            outline rather than becoming an invisible hit target. */}
-        {rounded === 0 && (
-          <rect className="tg-ghost" x={cellsX} y="0" width={BOX} height={BOX} rx="1.8" />
-        )}
+      {many ? (
+        // The count is HTML, not an SVG label: inside the drawing it renders at
+        // about seven pixels, which is not a number anyone can read. Out here it
+        // is ordinary page text at ordinary page size.
+        <span className="tg-many">
+          <span className="tg-count">{halves}×</span>
+          <svg viewBox={`0 0 ${BOX} ${H}`} width={BOX} height={H} aria-hidden="true">
+            <Cell x={0} y={0} />
+            {quarter === 1 && <Therefore cx={BOX / 2} y={BOX + pad + 1.7} />}
+          </svg>
+        </span>
+      ) : (
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+          {/* An untimed task still needs somewhere to click, so it keeps a faint
+              outline rather than becoming an invisible hit target. */}
+          {rounded === 0 && (
+            <rect className="tg-ghost" x={cellsX} y="0" width={BOX} height={BOX} rx="1.8" />
+          )}
 
-        {many ? (
-          <>
-            <text className="tg-count" x={cellsX} y={BOX - 0.6}>{halves}×</text>
-            <Cell x={cellsX + cellsW - BOX} y={0} />
-          </>
-        ) : (
-          shape.flatMap((len, r) =>
+          {shape.flatMap((len, r) =>
             Array.from({ length: len }, (_, c) => (
               <Cell key={`${r}-${c}`} x={cellsX + c * (BOX + GAP)} y={r * (BOX + GAP)} />
             ))
-          )
-        )}
+          )}
 
-        {quarter === 1 && <Therefore cx={W / 2} y={cellsH + pad + 1.7} />}
-      </svg>
+          {quarter === 1 && <Therefore cx={W / 2} y={cellsH + pad + 1.7} />}
+        </svg>
+      )}
     </button>
   )
 }
