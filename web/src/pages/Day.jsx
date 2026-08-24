@@ -89,6 +89,19 @@ export default function Day() {
   const [justAdded, setJustAdded] = useState(null)
   const [dragSection, setDragSection] = useState(null)
   const [sectionDropAt, setSectionDropAt] = useState(null)
+
+  // A section being carried leaves the same kind of stale marker if the drag
+  // ends anywhere that does not handle it.
+  useEffect(() => {
+    if (dragSection === null && sectionDropAt === null) return
+    const clear = () => { setDragSection(null); setSectionDropAt(null) }
+    document.addEventListener('dragend', clear)
+    document.addEventListener('drop', clear)
+    return () => {
+      document.removeEventListener('dragend', clear)
+      document.removeEventListener('drop', clear)
+    }
+  }, [dragSection, sectionDropAt])
   const [backlogBy, setBacklogBy] = useState(() => localStorage.getItem('backlog_by') || 'priority')
   const undo = useUndo()
   const toast = useToast()
@@ -323,6 +336,14 @@ export default function Day() {
       section_id: parent.section_id,
     })
     await api.post(`/tasks/${created.id}/nest`, { parent_id: parent.id })
+
+    // Above the others, not below. A subtask you are adding now is the one you
+    // are thinking about, and a list that grows downward buries it under work
+    // you wrote days ago and pushes it off the bottom of a long parent.
+    const siblings = d.tasks.filter((t) => t.parent_id === parent.id)
+    const first = Math.min(...siblings.map((t) => t.sort), 0)
+    await api.patch(`/tasks/${created.id}`, { sort: first - 1 })
+
     setJustAdded(created.id)
     refresh()
   }
@@ -1057,6 +1078,19 @@ function SectionPanel({
   }
 
   useEffect(() => () => clearTimeout(dwell.current.timer), [])
+
+  // Same reason as the row markers: an armed column must not stay lit once the
+  // drag is over, however it ended.
+  useEffect(() => {
+    if (armed === null && !over) return
+    const clear = () => { stopWatching(); setOver(false) }
+    document.addEventListener('dragend', clear)
+    document.addEventListener('drop', clear)
+    return () => {
+      document.removeEventListener('dragend', clear)
+      document.removeEventListener('drop', clear)
+    }
+  })
 
   // The header takes drops as well as the body, so a collapsed section is still
   // somewhere to put a task. A section being dragged past is a different gesture

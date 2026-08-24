@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import Icon from './components/Icon.jsx'
 import Wordmark from './components/Wordmark.jsx'
 import DayNight from './components/DayNight.jsx'
+import Crash from './components/Crash.jsx'
 import { Modal } from './components/ui.jsx'
 import { ToastHost } from './components/Toast.jsx'
 import { UndoButtons, UndoProvider } from './lib/undo.jsx'
@@ -40,6 +41,9 @@ const NAV_2 = [
 ]
 
 export default function App() {
+  // App sits inside the BrowserRouter, so this is safe here — and it is what
+  // lets the error boundary below reset itself when you navigate away.
+  const location = useLocation()
   const [accent, setAccent] = useState(() => localStorage.getItem('accent') || 'blue')
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system')
   // What the theme actually resolved to. `theme` may be 'system', and the
@@ -99,6 +103,9 @@ export default function App() {
       <main className="main">
         <Shortcuts />
         <InternalLinks />
+        {/* Keyed on the path so leaving a broken page clears the error: without
+            that, one crash would hold the message up over every later view. */}
+        <Crash key={location.pathname}>
         <Routes>
           <Route path="/" element={<Navigate to={`/day/${today()}`} replace />} />
           <Route path="/day" element={<Navigate to={`/day/${today()}`} replace />} />
@@ -136,6 +143,7 @@ export default function App() {
           <Route path="/go/:kind/:value" element={<Resolver />} />
           <Route path="*" element={<div className="page"><p className="muted">Not found.</p></div>} />
         </Routes>
+        </Crash>
       </main>
     </div>
     </ToastHost>

@@ -165,6 +165,27 @@ export default function TaskRow({
     return () => document.removeEventListener('mousedown', away)
   }, [details])
 
+  /**
+   * A drop marker has to be cleared by the END of the drag, not only by leaving
+   * the row. `dragleave` is missed whenever the pointer goes straight from a
+   * row onto one of its own children, or the drag is abandoned with Escape, or
+   * it ends over something that never handles it — and the line then sits there
+   * pointing at a move that is not going to happen.
+   *
+   * `dragend` and `drop` both bubble to the document, so one pair of listeners
+   * catches every ending, and they are only attached while a marker is up.
+   */
+  useEffect(() => {
+    if (!zone) return
+    const clear = () => setZone(null)
+    document.addEventListener('dragend', clear)
+    document.addEventListener('drop', clear)
+    return () => {
+      document.removeEventListener('dragend', clear)
+      document.removeEventListener('drop', clear)
+    }
+  }, [zone])
+
   const picked = !!sel?.has(task.id)
   const isNote = task.kind === 'note'
   const isMeeting = task.kind === 'meeting'

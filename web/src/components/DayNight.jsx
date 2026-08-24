@@ -77,18 +77,18 @@ const SPARKS = [
 
 /**
  * Each face is drawn against the same 40-unit square and the same centre, then
- * shown through a smaller window — which magnifies it about that centre without
+ * shown through a smaller viewport — which magnifies it about that centre without
  * touching the button's own size, so the mark above it never moves and the two
  * faces stay concentric with each other.
  */
-function window(scale) {
+function viewWindow(scale) {
   const side = 40 / scale
   const off = 20 - side / 2
   return `${off.toFixed(2)} ${off.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`
 }
 
-const SUN_VIEW = window(1.1)
-const MOON_VIEW = window(1.2)
+const SUN_VIEW = viewWindow(1.1)
+const MOON_VIEW = viewWindow(1.2)
 
 export default function DayNight({ dark, onToggle }) {
   const label = dark ? 'Switch to day' : 'Switch to night'

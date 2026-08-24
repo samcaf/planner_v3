@@ -805,6 +805,22 @@ kbd {
   margin-left: -4px;
 }
 
+.crash { max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
+.crash h1 { margin: 0; font-size: 20px; }
+
+.crash-msg {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ------------------------------------------- group selection and backlog */
 
 /* Sized and offset to sit with the row's own boxes rather than beside them. */
