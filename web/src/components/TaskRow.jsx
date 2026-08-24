@@ -20,7 +20,7 @@ const STATUS_LABEL = {
   maybe: 'Might do', moved: 'Moved', dropped: 'Dropped',
 }
 
-const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240]
+const DURATIONS = [5, 15, 30, 45, 60, 90, 180]
 
 const FINISHED = ['done', 'dropped', 'moved']
 
@@ -404,7 +404,8 @@ export default function TaskRow({
             />
           )}
 
-          {/* Notes are visible by default — hiding is the deliberate act. */}
+          {/* Notes are visible by default — hiding is the deliberate act, and
+              the menu is where you do it. */}
           {!isNote && notesShown && (
             <div className="task-notes">
               <RichEditor
@@ -416,6 +417,22 @@ export default function TaskRow({
                 onEditing={setTexting}
               />
             </div>
+          )}
+
+          {/* A task with nothing written keeps a sliver of reserved space rather
+              than nothing at all: somewhere to aim at, and a standing invitation
+              to write. It is deliberately shorter than a line of text, so a list
+              of empty tasks does not read as double-spaced. Hiding notes from
+              the menu takes even this away. */}
+          {!isNote && !notesShown && !task.notes_hidden && (
+            <button
+              type="button"
+              className="task-notes-stub"
+              title="Add a note"
+              onClick={() => onChange({ notes: ' ', notes_hidden: 0 })}
+            >
+              <span />
+            </button>
           )}
         </div>
 
@@ -511,7 +528,9 @@ export default function TaskRow({
  * Editing is local until blur or Enter; the value from the server is only
  * adopted while the field is not being edited.
  */
-function CommittedField({ value, onCommit, onDone, parse = (v) => v || null, ...rest }) {
+function CommittedField({
+  value, onCommit, onDone, className = '', parse = (v) => v || null, ...rest
+}) {
   const [draft, setDraft] = useState(value ?? '')
   const [editing, setEditing] = useState(false)
 
@@ -531,7 +550,7 @@ function CommittedField({ value, onCommit, onDone, parse = (v) => v || null, ...
 
   return (
     <input
-      className="input"
+      className={`input ${className}`.trim()}
       value={draft}
       onChange={(e) => { setEditing(true); setDraft(e.target.value) }}
       onBlur={commit}
@@ -555,6 +574,24 @@ function CommittedField({ value, onCommit, onDone, parse = (v) => v || null, ...
  *
  * Anything that is not a time at all clears the field rather than guessing.
  */
+/**
+ * A duration written the way it is spoken: "2h", "2h30m", "90", "45m", "1h5".
+ * A bare number is minutes, since that is what the box is for; anything with an
+ * `h` in it splits there. Nonsense clears the field rather than guessing.
+ */
+export function parseDuration(raw) {
+  const s = String(raw ?? '').trim().toLowerCase().replace(/\s+/g, '')
+  if (!s) return null
+
+  const hm = s.match(/^(\d+)h(?:(\d+)m?)?$/)
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2] || 0)
+
+  const m = s.match(/^(\d+)m?$/)
+  if (m) return Number(m[1])
+
+  return null
+}
+
 export function parseTime(raw) {
   const s = String(raw ?? '').trim().toLowerCase()
   if (!s) return null
@@ -603,7 +640,7 @@ function TaskDetails({ task, derived, onChange, onDone }) {
             no notion of "9 means nine o'clock", and forces four keystrokes and
             a segment jump for every entry. */}
         <CommittedField
-          type="text" inputMode="numeric" placeholder="9 or 9:30" style={{ width: 92 }}
+          type="text" inputMode="numeric" placeholder="9 or 9:30" className="td-time"
           value={task.start_time}
           parse={parseTime}
           onCommit={(start_time) => reflow({ start_time })}
@@ -613,7 +650,7 @@ function TaskDetails({ task, derived, onChange, onDone }) {
       <label>
         <span>End</span>
         <CommittedField
-          type="text" inputMode="numeric" placeholder="—" style={{ width: 92 }}
+          type="text" inputMode="numeric" placeholder="—" className="td-time"
           value={task.end_time}
           parse={parseTime}
           onCommit={(end_time) => reflow({ end_time })}
@@ -634,9 +671,9 @@ function TaskDetails({ task, derived, onChange, onDone }) {
             </button>
           ))}
           <CommittedField
-            type="number" min="0" step="5" style={{ width: 78 }} placeholder="min"
+            type="text" inputMode="text" className="td-mins" placeholder="90 or 2h30m"
             value={task.estimate_min}
-            parse={(v) => (v === '' ? null : Number(v))}
+            parse={parseDuration}
             onCommit={(estimate_min) => reflow({ estimate_min })}
             onDone={onDone}
           />
@@ -700,17 +737,22 @@ function MenuItems({
 
   return (
     <>
+      {/* The notes toggle is here on every row, not only on the narrow ones
+          that lost their hover bar: it is the way to put the stub away as well
+          as the editor, and hunting for a hover-only control to do that is not
+          a thing anyone should have to do. */}
+      {!isNote && item(notesShown || !task.notes_hidden ? 'Hide notes' : 'Show notes', () => onChange({
+        notes_hidden: notesShown || !task.notes_hidden ? 1 : 0,
+        ...(task.notes ? {} : { notes: ' ' }),
+      }))}
+
       {overflow && (
         <>
-          {!isNote && item(notesShown ? 'Hide notes' : 'Show notes', () => onChange({
-            notes_hidden: notesShown ? 1 : 0,
-            ...(task.notes ? {} : { notes: ' ' }),
-          }))}
           {!isNote && onAddChild && item('Add subtask', () => onAddChild(task))}
           {item('Delete', () => onDelete())}
-          <div className="menu-sep" />
         </>
       )}
+      <div className="menu-sep" />
       {/* Only a task with no parent of its own: a sub-section is a heading band
           across the whole width, and a nested one has nowhere to span. */}
       {!isNote && !dateless && !task.parent_id && (

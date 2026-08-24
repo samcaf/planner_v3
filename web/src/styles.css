@@ -721,6 +721,30 @@ kbd {
 
 .task-notes { margin-top: 6px; }
 
+/* A held-open sliver where a note would go. Shorter than a line of text on
+   purpose: it should read as room left for something, not as an empty row. */
+.task-notes-stub {
+  display: block;
+  width: 100%;
+  height: 11px;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: text;
+}
+
+.task-notes-stub > span {
+  display: block;
+  height: 1px;
+  margin-top: 5px;
+  border-radius: 1px;
+  background: var(--line-soft);
+  transition: background .12s;
+}
+
+.task-notes-stub:hover > span { background: var(--accent); }
+
 /* ------------------------------------------- group selection and backlog */
 
 /* Sized and offset to sit with the row's own boxes rather than beside them. */
@@ -762,7 +786,7 @@ kbd {
    alignment it sits next to. */
 .time-glyph {
   flex: none;
-  width: 40px;
+  width: 48px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1113,6 +1137,8 @@ kbd {
 .task-details {
   display: flex;
   align-items: flex-end;
+  max-width: 100%;
+  min-width: 0;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 8px;
@@ -1125,9 +1151,17 @@ kbd {
 .task-details > label { display: flex; flex-direction: column; gap: 3px; }
 .task-details > label > span,
 .task-durations > span { font-size: 11px; color: var(--ink-2); font-weight: 550; }
-.task-details input[type="time"],
-.task-details input[type="date"] { width: 128px; }
-.task-durations { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 240px; }
+.task-details input[type="date"] { width: 128px; max-width: 100%; }
+
+/* Both fields shrink rather than overflow. The basis is what they want; the
+   min-width is what they will settle for when the column is narrow. */
+.task-details .td-time { width: 92px; min-width: 62px; flex: 0 1 92px; }
+.task-details .td-mins { width: 108px; min-width: 74px; flex: 0 1 108px; }
+.task-details > label { min-width: 0; }
+/* min-width used to be 240px, which forced the whole panel wider than a
+   three-column box and pushed the buttons out through its edge. Nothing in here
+   has a floor now; the button row wraps instead. */
+.task-durations { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 
 .btn.is-on { background: var(--accent-soft); color: var(--accent); }
 

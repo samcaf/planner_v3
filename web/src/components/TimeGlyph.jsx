@@ -20,7 +20,9 @@
  * re-renders instead of twitching every time the row updates.
  */
 
-const BOX = 5
+const BOX = 7.5
+// Unchanged: the gap reads as a line between the cells, and widening the
+// cells rather than the spacing is what makes the stack easier to count.
 const GAP = 1.6
 const PER_ROW = 3
 const MAX_BOXES = 6
@@ -43,7 +45,7 @@ const TILT = [-6, 4, -3, 7, -5, 2, -4, 5]
 function Cell({ i, x, y }) {
   return (
     <rect
-      x={x} y={y} width={BOX} height={BOX} rx="1.2"
+      x={x} y={y} width={BOX} height={BOX} rx="1.8"
       transform={`rotate(${TILT[i % TILT.length]} ${x + BOX / 2} ${y + BOX / 2})`}
     />
   )
@@ -51,12 +53,12 @@ function Cell({ i, x, y }) {
 
 /** The ∴, as three dots: two below, one above and centred. */
 function Therefore({ x, y }) {
-  const r = 1.35
+  const r = 1.7
   return (
     <g className="tg-dots">
-      <circle cx={x + 3} cy={y} r={r} />
-      <circle cx={x} cy={y + 5} r={r} />
-      <circle cx={x + 6} cy={y + 5} r={r} />
+      <circle cx={x + 3.6} cy={y} r={r} />
+      <circle cx={x} cy={y + 6.2} r={r} />
+      <circle cx={x + 7.2} cy={y + 6.2} r={r} />
     </g>
   )
 }
@@ -68,10 +70,10 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
   const shape = many ? [1] : rows(halves)
   const width = many ? PER_ROW * (BOX + GAP) : Math.max(1, shape[0] || 1) * (BOX + GAP)
   const height = Math.max(1, shape.length) * (BOX + GAP)
-  const dotsX = width + 2
+  const dotsX = width + 2.5
 
-  const H = 13
-  const W = dotsX + (quarter ? 9 : 0)
+  const H = 19
+  const W = dotsX + (quarter ? 11 : 0)
   const dy = (H - height) / 2
 
   const title = rounded
@@ -90,12 +92,12 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
         {/* An untimed task still needs somewhere to click, so it keeps a faint
             outline rather than becoming an invisible hit target. */}
         {rounded === 0 && (
-          <rect className="tg-ghost" x="0" y={(H - BOX) / 2} width={BOX} height={BOX} rx="1.2" />
+          <rect className="tg-ghost" x="0" y={(H - BOX) / 2} width={BOX} height={BOX} rx="1.8" />
         )}
 
         {many ? (
           <>
-            <text className="tg-count" x="0" y={H / 2 + 3.2}>{halves}×</text>
+            <text className="tg-count" x="0" y={H / 2 + 3.6}>{halves}×</text>
             <Cell i={0} x={width - BOX} y={(H - BOX) / 2} />
           </>
         ) : (
@@ -106,7 +108,7 @@ export default function TimeGlyph({ minutes = 0, selected = false, onSelect, lab
           )
         )}
 
-        {quarter === 1 && <Therefore x={dotsX} y={H / 2 - 2.5} />}
+        {quarter === 1 && <Therefore x={dotsX} y={H / 2 - 3.1} />}
       </svg>
     </button>
   )
