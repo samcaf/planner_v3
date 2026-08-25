@@ -104,4 +104,6 @@ try {
     await del(`/api/tasks/${x.id}`)
   }
   console.log(`cleanup: ${(await json(`/api/days/${DAY}`)).tasks.length} tasks left`)
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

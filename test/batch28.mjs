@@ -196,4 +196,6 @@ try {
   for (const id of madeTasks) await del(`/api/tasks/${id}`)
   for (const id of madeProjects) await del(`/api/projects/${id}`)
   console.log('cleanup: probe tasks and projects removed')
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

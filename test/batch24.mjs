@@ -41,7 +41,16 @@ try {
   const raw = readdirSync('web/dist/assets')
     .filter((f) => /\.(css|js)$/.test(f))
     .map((f) => readFileSync(`web/dist/assets/${f}`, 'utf8')).join('\n')
-  const css = raw.replace(/\s+/g, '')
+  // Spacing is written as scale tokens now. Resolving them back to pixels keeps
+  // these checks about the value the user sees — six pixels of padding — rather
+  // than about which token happens to carry it, so renaming a token does not
+  // fail a test that is really about the look of the rail.
+  const scale = new Map(
+    [...raw.matchAll(/(--space-\d+):\s*(\d+px)/g)].map((m) => [m[1], m[2]])
+  )
+  const css = raw
+    .replace(/var\((--space-\d+)\)/g, (whole, name) => scale.get(name) ?? whole)
+    .replace(/\s+/g, '')
 
   check('a line separates them', /\.sb-undo\{[^}]*border-bottom:1pxsolid/.test(css))
   check('the gap below undo is small', /\.sb-undo\{[^}]*padding-bottom:5px/.test(css))
@@ -74,4 +83,6 @@ try {
   }
   console.log(bad ? `\n${bad} failed` : '\nall checks passed')
   dom?.window?.close()
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

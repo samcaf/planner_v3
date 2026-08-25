@@ -57,7 +57,11 @@ const failed = []
 try {
   for (const suite of suites) {
     console.log(`\n── ${suite} ${'─'.repeat(Math.max(0, 56 - suite.length))}`)
-    if (node(suite).status !== 0) failed.push(suite)
+    // A suite reports by exit code. It is worth being paranoid about that: for
+    // a while these all exited 0 whatever happened, and the runner cheerfully
+    // said everything passed while checks were failing in its own output.
+    const { status, signal } = node(suite)
+    if (status !== 0 || signal) failed.push(suite)
   }
 } finally {
   // Always: leaving the IIFE bundle in place would ship a debug build.

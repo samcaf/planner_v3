@@ -1,12 +1,12 @@
-.db-page { max-width: 1180px; display: flex; flex-direction: column; gap: 16px; }
+.db-page { max-width: 1180px; display: flex; flex-direction: column; gap: var(--space-8); }
 
 /* The one thing gets a whole band to itself — it is the only item on this page
    that is meant to be read rather than scanned. */
 .db-focus {
-  padding: 18px 20px;
+  padding: 18px var(--space-10);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
   border-left: 4px solid var(--c, var(--accent));
 }
 
@@ -39,7 +39,7 @@
 
 .db-progress .panel-h { font-size: 13.5px; }
 
-.db-progress-b { padding: 10px 8px 8px; }
+.db-progress-b { padding: var(--space-5) var(--space-4) var(--space-4); }
 
 /* Long units of work scroll inside the box rather than pushing the grid off the
    bottom of the screen — a dashboard that has to be scrolled past to reach the
@@ -48,7 +48,7 @@
 .db-progress-list {
   max-height: 46vh;
   overflow-y: auto;
-  padding: 0 2px;
+  padding: 0 var(--space-1);
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
 }
@@ -56,7 +56,7 @@
 .db-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 16px;
+  gap: var(--space-8);
   align-items: start;
 }
 
@@ -65,17 +65,17 @@
 .db-hint {
   font-size: 11.5px;
   color: var(--ink-3);
-  margin: 0 0 6px;
-  padding: 0 4px;
+  margin: 0 0 var(--space-3);
+  padding: 0 var(--space-2);
 }
 
-.db-list { padding: 10px 10px 12px; }
+.db-list { padding: var(--space-5) var(--space-5) var(--space-6); }
 
 .db-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
+  gap: var(--space-4);
+  padding: 5px var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--ink);
   font-size: 13px;
@@ -107,7 +107,7 @@
   align-items: flex-end;
   gap: 5px;
   height: 96px;
-  padding: 4px 2px 0;
+  padding: var(--space-2) var(--space-1) 0;
 }
 
 .db-bar {
@@ -136,5 +136,5 @@
   display: flex;
   font-size: 10.5px;
   color: var(--ink-3);
-  padding: 6px 2px 0;
+  padding: var(--space-3) var(--space-1) 0;
 }

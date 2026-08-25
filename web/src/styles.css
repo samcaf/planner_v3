@@ -31,6 +31,38 @@
 
   --shadow: 0 1px 2px rgba(16, 22, 40, .05), 0 1px 3px rgba(16, 22, 40, .04);
   --shadow-pop: 0 8px 28px rgba(16, 22, 40, .16);
+
+  /* Surfaces that react to the pointer, or sit behind the current view.
+   * These used to be written twice — a light value at the rule, and a dark one
+   * in a block of duplicated selectors near the top of the file — so every new
+   * hoverable thing had to be remembered in two places or it glowed white in
+   * dark mode. --hover-soft is two units off --hover for no reason anyone
+   * intended; see DESIGN.md, it wants collapsing. */
+  --hover: #fafbfc;
+  --hover-soft: #fcfcfd;
+  --sunken: #fbfbfc;
+
+  /* The spacing scale.
+   *
+   * Two-pixel steps, because that is the rhythm this interface was actually
+   * built on — the four commonest gaps in it are 6, 8, 4 and 10. A scale
+   * invented from a book would have meant rewriting every panel to adopt it.
+   *
+   * These are the density lever: making the whole app tighter or airier is
+   * editing the ten values below, not hunting four hundred literals. Odd
+   * values (1, 3, 5, 7, 9, 11) are deliberately absent — those are optical
+   * nudges on individual controls, not rhythm, and putting them on the scale
+   * would mean a density change silently moved them too. See DESIGN.md. */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-12: 24px;
 }
 
 /* Accent themes, set on <html data-accent="…">. */
@@ -85,6 +117,11 @@
   --accent-soft: #232a44;
   --accent-ink: #10131a;
 
+  /* The same two values the duplicated dark override block used to carry. */
+  --hover: #1f2431;
+  --hover-soft: #1f2431;
+  --sunken: #161a22;
+
   --sb-bg: #0e1117;
   --sb-hi: #191e29;
   --sb-act: #232a3a;
@@ -108,11 +145,6 @@
 
 [data-theme="dark"] .topbar { background: rgba(18, 21, 28, .88); }
 [data-theme="dark"] .panel { background: var(--panel); }
-[data-theme="dark"] .wday.other,
-[data-theme="dark"] .mday.other { background: #161a22; }
-[data-theme="dark"] .task:hover,
-[data-theme="dark"] .ptable tbody tr:hover,
-[data-theme="dark"] .rich-view:hover { background: #1f2431; }
 [data-theme="dark"] .modal-back { background: rgba(0, 0, 0, .62); }
 [data-theme="dark"] .toast { background: #2b3141; }
 [data-theme="dark"] img { opacity: .94; }
@@ -152,8 +184,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   flex-direction: column;
   /* Barely any at the top: undo is the first thing in the rail and should sit
      against its edge rather than floating below it. */
-  padding: 4px 10px 14px;
-  gap: 2px;
+  padding: var(--space-2) var(--space-5) var(--space-7);
+  gap: var(--space-1);
   overflow-y: auto;
 }
 
@@ -161,7 +193,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
    scrolling away with whichever section you happen to be looking at. */
 .sb-undo {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   padding-bottom: 5px;
   border-bottom: 1px solid rgba(255, 255, 255, .09);
 }
@@ -174,7 +206,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   flex: 6 6 0;
   height: 26px;
   min-height: 0;
-  padding: 0 6px;
+  padding: 0 var(--space-3);
   color: var(--sb-ink);
   justify-content: center;
 }
@@ -207,7 +239,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
      aspect ratio comes from a padding-bottom percentage resolved against the
      same width — so insetting here scales the whole thing without the height
      needing to be restated. The bottom value is clearance from the rail's edge. */
-  padding: 12px 15px 10px;
+  padding: var(--space-6) 15px var(--space-5);
   color: #fff;
   font-weight: 650;
   letter-spacing: -.01em;
@@ -242,13 +274,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
   text-transform: uppercase;
   letter-spacing: .07em;
   color: #7b85a6;
-  padding: 14px 9px 5px;
+  padding: var(--space-7) 9px 5px;
   font-weight: 600;
 }
 
 /* The rule above already separates the two, so the heading does not also need
    a run-up to it. */
-.sb-undo + .sb-section { padding-top: 6px; }
+.sb-undo + .sb-section { padding-top: var(--space-3); }
 
 .sb-link {
   display: flex;
@@ -307,16 +339,16 @@ button, input, textarea, select { font: inherit; color: inherit; }
   background: rgba(247, 248, 250, .88);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
-  padding: 12px 24px;
+  padding: var(--space-6) var(--space-12);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-6);
 }
 
 .topbar h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
 .topbar .sub { color: var(--ink-3); font-size: 13px; }
 
-.page { padding: 20px 24px 64px; max-width: 1240px; }
+.page { padding: var(--space-10) var(--space-12) 64px; max-width: 1240px; }
 
 /* --------------------------------------------------------------- widgets */
 
@@ -330,25 +362,25 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .panel-h {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
+  gap: var(--space-4);
+  padding: 11px var(--space-7);
   border-bottom: 1px solid var(--line-soft);
   font-weight: 600;
   font-size: 13px;
 }
 
-.panel-b { padding: 12px 14px; }
+.panel-b { padding: var(--space-6) var(--space-7); }
 
 .btn {
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: var(--radius-sm);
-  padding: 6px 11px;
+  padding: var(--space-3) 11px;
   cursor: pointer;
   font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   white-space: nowrap;
 }
 
@@ -357,7 +389,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .btn.primary:hover { filter: brightness(1.07); }
 .btn.ghost { border-color: transparent; background: none; color: var(--ink-2); }
 .btn.ghost:hover { background: var(--line-soft); color: var(--ink); }
-.btn.sm { padding: 3px 8px; font-size: 12px; }
+.btn.sm { padding: 3px var(--space-4); font-size: 12px; }
 .btn.danger { color: var(--red); }
 .btn.danger:hover { background: var(--red-soft); }
 .btn:disabled { opacity: .5; cursor: default; }
@@ -366,7 +398,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: var(--radius-sm);
-  padding: 6px 9px;
+  padding: var(--space-3) 9px;
   width: 100%;
   outline: none;
 }
@@ -376,11 +408,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.row { display: flex; align-items: center; gap: 8px; }
-.col { display: flex; flex-direction: column; gap: 8px; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row { display: flex; align-items: center; gap: var(--space-4); }
+.col { display: flex; flex-direction: column; gap: var(--space-4); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 
-.field { display: flex; flex-direction: column; gap: 4px; }
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
 .field > span { font-size: 11.5px; color: var(--ink-2); font-weight: 550; }
 
 .chip {
@@ -388,7 +420,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   align-items: center;
   gap: 5px;
   border-radius: 99px;
-  padding: 2px 9px;
+  padding: var(--space-1) 9px;
   font-size: 11.5px;
   font-weight: 550;
   background: var(--gray-soft);
@@ -399,13 +431,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
 
 .empty {
-  padding: 28px 16px;
+  padding: 28px var(--space-8);
   text-align: center;
   color: var(--ink-3);
   font-size: 13px;
 }
 
-.hr { height: 1px; background: var(--line-soft); margin: 10px 0; }
+.hr { height: 1px; background: var(--line-soft); margin: var(--space-5) 0; }
 
 /* Project colour swatches, shared by chips, dots and left borders. */
 .c-blue   { --c: var(--blue);   --c-soft: var(--blue-soft); }
@@ -429,41 +461,41 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .rich { overflow-wrap: anywhere; }
 .rich > *:first-child { margin-top: 0; }
 .rich > *:last-child { margin-bottom: 0; }
-.rich p { margin: 0 0 8px; }
-.rich ul, .rich ol { margin: 0 0 8px; padding-left: 20px; }
-.rich h1, .rich h2, .rich h3 { margin: 12px 0 6px; font-size: 14.5px; font-weight: 650; }
+.rich p { margin: 0 0 var(--space-4); }
+.rich ul, .rich ol { margin: 0 0 var(--space-4); padding-left: var(--space-10); }
+.rich h1, .rich h2, .rich h3 { margin: var(--space-6) 0 var(--space-3); font-size: 14.5px; font-weight: 650; }
 .rich code {
   background: var(--line-soft);
-  padding: 1px 4px;
+  padding: 1px var(--space-2);
   border-radius: 4px;
   font-size: 12.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .rich pre {
   background: var(--line-soft);
-  padding: 10px;
+  padding: var(--space-5);
   border-radius: var(--radius-sm);
   overflow-x: auto;
 }
 .rich pre code { background: none; padding: 0; }
 .rich blockquote {
-  margin: 0 0 8px;
-  padding-left: 10px;
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
   border-left: 3px solid var(--line);
   color: var(--ink-2);
 }
-.rich table { border-collapse: collapse; margin-bottom: 8px; }
-.rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; }
+.rich table { border-collapse: collapse; margin-bottom: var(--space-4); }
+.rich th, .rich td { border: 1px solid var(--line); padding: var(--space-2) var(--space-4); }
 .rich img {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   display: block;
-  margin: 8px 0;
+  margin: var(--space-4) 0;
 }
 
-.rich .katex-display { margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
+.rich .katex-display { margin: var(--space-5) 0; overflow-x: auto; overflow-y: hidden; }
 .math-error { color: var(--red); }
 
 .rich-view {
@@ -474,7 +506,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   min-height: 36px;
 }
 
-.rich-view:hover { border-color: var(--line); background: #fcfcfd; }
+.rich-view:hover { border-color: var(--line); background: var(--hover-soft); }
 .rich-view.is-empty { color: var(--ink-3); }
 
 .rich-edit textarea {
@@ -493,10 +525,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .rich-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   font-size: 11px;
   color: var(--ink-3);
-  padding: 4px 2px 0;
+  padding: var(--space-2) var(--space-1) 0;
 }
 
 .rich-hint code {
@@ -511,7 +543,7 @@ kbd {
   border: 1px solid var(--line);
   border-bottom-width: 2px;
   border-radius: 4px;
-  padding: 0 4px;
+  padding: 0 var(--space-2);
   font-size: 10.5px;
   font-family: inherit;
 }
@@ -524,7 +556,7 @@ kbd {
   border: 1px solid var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
   border-radius: var(--radius-sm);
-  padding: 3px 6px;
+  padding: 3px var(--space-3);
   outline: none;
   width: 100%;
 }
@@ -550,8 +582,8 @@ kbd {
   /* Overridden inline from the stored width; this is the fallback, and the
      middle track is the drag handle between the two columns. */
   grid-template-columns: minmax(0, 1fr) 4px 340px;
-  gap: 16px;
-  padding: 16px 24px 0;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12) 0;
   overflow: hidden;
 }
 
@@ -562,9 +594,9 @@ kbd {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-8);
   padding-bottom: 40px;
-  padding-right: 4px;
+  padding-right: var(--space-2);
 }
 
 .day-col::-webkit-scrollbar, .day-aside::-webkit-scrollbar { width: 9px; }
@@ -589,7 +621,7 @@ kbd {
   flex: none;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  padding: 10px 24px 9px;
+  padding: var(--space-5) var(--space-12) 9px;
 }
 
 .daybar-bar {
@@ -637,7 +669,7 @@ kbd {
 .daybar-stats {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   font-size: 12.5px;
   flex-wrap: wrap;
 }
@@ -662,7 +694,7 @@ kbd {
 .pri-filter {
   display: grid;
   grid-template-columns: repeat(5, auto);
-  gap: 2px;
+  gap: var(--space-1);
   justify-items: center;
 }
 
@@ -699,7 +731,7 @@ kbd {
   background: none;
   color: var(--ink-3);
   border-radius: var(--radius-sm);
-  padding: 2px 8px;
+  padding: var(--space-1) var(--space-4);
   font-size: 11.5px;
   cursor: pointer;
   display: inline-flex;
@@ -709,21 +741,21 @@ kbd {
 
 .daybar-target:hover { border-color: var(--accent); color: var(--accent); }
 
-.daynav { display: flex; align-items: center; gap: 6px; }
+.daynav { display: flex; align-items: center; gap: var(--space-3); }
 
 .task {
   display: flex;
   align-items: flex-start;
   /* Tight: the boxes at the head of a row are a cluster, not a series of
      separate controls, and every pixel between them is width the title loses. */
-  gap: 4px;
-  padding: 7px 8px;
+  gap: var(--space-2);
+  padding: 7px var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: grab;
 }
 
-.task:hover { background: #fafbfc; border-color: var(--line); }
+.task:hover { background: var(--hover); border-color: var(--line); }
 .task.dragging { opacity: .4; }
 .task.done .task-title { color: var(--ink-3); text-decoration: line-through; }
 .task.dropped .task-title { color: var(--ink-3); text-decoration: line-through; opacity: .7; }
@@ -731,7 +763,7 @@ kbd {
 .task-check {
   width: 16px; height: 16px;
   flex: 0 0 16px;
-  margin-top: 2px;
+  margin-top: var(--space-1);
   border: 1.5px solid var(--ink-3);
   border-radius: 4px;
   background: none;
@@ -810,7 +842,7 @@ kbd {
 .task.maybe .task-title { color: var(--ink-2); font-style: italic; }
 .task.moved .task-title { color: var(--ink-3); }
 
-.task-notes { margin-top: 6px; }
+.task-notes { margin-top: var(--space-3); }
 
 /* A held-open sliver where a note would go. Shorter than a line of text on
    purpose: it should read as room left for something, not as an empty row. */
@@ -848,7 +880,7 @@ kbd {
 .daynight {
   width: 42px;
   height: 42px;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-5);
   margin-right: 5px;
   padding: 0;
   border: 0;
@@ -881,16 +913,16 @@ kbd {
    children is the one most likely to have a long title, and the hover bar was
    taking that width from exactly the row that could least spare it. */
 .task-body > .task-actions {
-  margin-top: 4px;
+  margin-top: var(--space-2);
   margin-left: -4px;
 }
 
-.crash { max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
+.crash { max-width: 760px; display: flex; flex-direction: column; gap: var(--space-6); }
 .crash h1 { margin: 0; font-size: 20px; }
 
 .crash-msg {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--space-5) var(--space-6);
   background: var(--red-soft);
   color: var(--red);
   border-radius: var(--radius-sm);
@@ -915,16 +947,16 @@ kbd {
 
 /* ------------------------------------------------------- task timer */
 
-.td-fixed { display: flex; flex-direction: row !important; align-items: center; gap: 6px; font-size: 12px; }
+.td-fixed { display: flex; flex-direction: row !important; align-items: center; gap: var(--space-3); font-size: 12px; }
 .td-fixed input { width: auto; }
 
 .tt {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex: 1 1 100%;
   min-width: 0;
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--panel);
@@ -962,14 +994,14 @@ kbd {
    from the nav, and one below from the mark, so it reads as its own thing
    rather than as the tail of the list or the top of the signature. */
 .pomo {
-  margin-top: 16px;
-  padding: 14px 8px 12px;
+  margin-top: var(--space-8);
+  padding: var(--space-7) var(--space-4) var(--space-6);
   border-top: 1px solid rgba(255, 255, 255, .09);
   border-bottom: 1px solid rgba(255, 255, 255, .09);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   color: var(--sb-ink);
 }
 
@@ -1012,11 +1044,11 @@ kbd {
   line-height: 1.1;
 }
 
-.pomo-keys { display: flex; gap: 4px; margin-top: 2px; }
+.pomo-keys { display: flex; gap: var(--space-2); margin-top: var(--space-1); }
 
 .pomo-keys .btn {
   color: var(--pomo-ink);
-  padding: 5px 8px;
+  padding: 5px var(--space-4);
   opacity: .8;
 }
 
@@ -1058,7 +1090,7 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-5);
   padding: 32px;
   cursor: zoom-out;
 }
@@ -1097,7 +1129,7 @@ kbd {
 .sel-all.is-some { border-color: var(--accent); }
 .sel-all-dash { width: 7px; height: 2px; border-radius: 1px; background: var(--accent); }
 
-.box-col-h { display: flex; align-items: center; gap: 6px; }
+.box-col-h { display: flex; align-items: center; gap: var(--space-3); }
 
 .bl-row { align-items: flex-start; }
 
@@ -1118,7 +1150,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 4px 0 0;
+  padding: 0 var(--space-2) 0 0;
   background: none;
   border: 0;
   cursor: pointer;
@@ -1152,7 +1184,7 @@ kbd {
   letter-spacing: -.02em;
 }
 
-.time-glyph .tg-many { display: flex; align-items: center; gap: 2px; }
+.time-glyph .tg-many { display: flex; align-items: center; gap: var(--space-1); }
 
 .time-glyph:hover { opacity: 1; color: var(--accent); }
 
@@ -1189,8 +1221,8 @@ kbd {
 
 .subsec-twist {
   flex: none;
-  margin-top: 10px;
-  margin-left: 2px;
+  margin-top: var(--space-5);
+  margin-left: var(--space-1);
 }
 
 /* The head row reads as the heading it is: a shade heavier than the children
@@ -1199,7 +1231,7 @@ kbd {
 
 .subsec-empty {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--space-5) var(--space-6);
   font-size: 12px;
   color: var(--ink-3);
 }
@@ -1255,7 +1287,7 @@ kbd {
    with the project colour already in the chips. */
 .task.is-meeting {
   border-left: 2px solid var(--blue);
-  padding-left: 6px;
+  padding-left: var(--space-3);
   background: color-mix(in srgb, var(--blue) 3.5%, transparent);
 }
 
@@ -1266,7 +1298,7 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
+  gap: var(--space-2) var(--space-5);
   margin-top: 3px;
   font-size: 11.5px;
   color: var(--ink-3);
@@ -1297,7 +1329,7 @@ kbd {
 
 /* Positioning belongs to Popover, which sets it inline; this is just surface. */
 .menu {
-  padding: 4px;
+  padding: var(--space-2);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1313,22 +1345,22 @@ kbd {
   color: var(--ink);
   font: inherit;
   font-size: 13px;
-  padding: 6px 9px;
+  padding: var(--space-3) 9px;
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .menu-item:hover { background: var(--line-soft); }
-.menu-sep { height: 1px; background: var(--line-soft); margin: 4px 0; }
+.menu-sep { height: 1px; background: var(--line-soft); margin: var(--space-2) 0; }
 
 /* One entry that opens onto its own choices, rather than a flat list repeating
    the same verb. The body is inset so the nesting is legible without a rule. */
-.menu-sub .menu-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.menu-sub .menu-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .menu-sub .menu-item.is-open { color: var(--accent); font-weight: 600; }
-.menu-sub-body { padding-left: 10px; border-left: 2px solid var(--line-soft); margin: 2px 0 4px 8px; }
+.menu-sub-body { padding-left: var(--space-5); border-left: 2px solid var(--line-soft); margin: var(--space-1) 0 var(--space-2) var(--space-4); }
 
 
-.menu-move { padding: 4px; }
+.menu-move { padding: var(--space-2); }
 
 /* --------------------------------------------------------------- toasts */
 
@@ -1339,17 +1371,17 @@ kbd {
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
   z-index: 80;
 }
 
 .toast {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-6);
   background: var(--ink);
   color: var(--panel);
-  padding: 9px 10px 9px 16px;
+  padding: 9px var(--space-5) 9px var(--space-8);
   border-radius: 99px;
   font-size: 13px;
   box-shadow: var(--shadow-pop);
@@ -1365,7 +1397,7 @@ kbd {
   font: inherit;
   font-weight: 650;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 var(--space-1);
 }
 
 .toast-action:hover { text-decoration: underline; }
@@ -1378,14 +1410,14 @@ kbd {
   cursor: pointer;
   display: grid;
   place-items: center;
-  padding: 2px;
+  padding: var(--space-1);
 }
 
 .toast-x:hover { opacity: 1; }
 
 /* ------------------------------------------------------------- progress */
 
-.prog { display: flex; align-items: center; gap: 8px; }
+.prog { display: flex; align-items: center; gap: var(--space-4); }
 .prog.is-compact { gap: 0; }
 
 .prog-bar {
@@ -1436,7 +1468,7 @@ kbd {
 .task-note-mark {
   width: 3px;
   flex: 0 0 3px;
-  margin: 2px 0 2px 6px;
+  margin: var(--space-1) 0 var(--space-1) var(--space-3);
   border-radius: 2px;
   background: var(--line);
 }
@@ -1454,7 +1486,7 @@ kbd {
   flex: 0 0 34px;
 }
 
-.section-notes { padding: 6px 6px 0; }
+.section-notes { padding: var(--space-3) var(--space-3) 0; }
 
 .done-toggle {
   display: flex;
@@ -1466,7 +1498,7 @@ kbd {
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  padding: 3px 10px 5px;
+  padding: 3px var(--space-5) 5px;
   border-radius: 4px;
 }
 
@@ -1475,7 +1507,7 @@ kbd {
 .task-twist {
   width: 16px; height: 16px;
   flex: 0 0 16px;
-  margin-top: 2px;
+  margin-top: var(--space-1);
   border: 0;
   background: none;
   color: var(--ink-3);
@@ -1492,10 +1524,10 @@ kbd {
   align-items: flex-end;
   max-width: 100%;
   min-width: 0;
-  gap: 10px;
+  gap: var(--space-5);
   flex-wrap: wrap;
-  margin-top: 8px;
-  padding: 9px 10px;
+  margin-top: var(--space-4);
+  padding: 9px var(--space-5);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--bg);
@@ -1514,7 +1546,7 @@ kbd {
 /* min-width used to be 240px, which forced the whole panel wider than a
    three-column box and pushed the buttons out through its edge. Nothing in here
    has a floor now; the button row wraps instead. */
-.task-durations { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.task-durations { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
 
 .btn.is-on { background: var(--accent-soft); color: var(--accent); }
 
@@ -1523,7 +1555,7 @@ kbd {
 .task-body { flex: 1; min-width: 0; }
 .task-title { font-size: 14.5px; }
 .task-meta { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-top: 3px; flex-wrap: wrap; }
-.task-actions { display: flex; gap: 2px; opacity: 0; }
+.task-actions { display: flex; gap: var(--space-1); opacity: 0; }
 .task:hover .task-actions,
 .task:has(button[aria-expanded="true"]) .task-actions { opacity: 1; }
 
@@ -1532,18 +1564,18 @@ kbd {
 
 .event {
   display: flex;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--c, var(--accent));
   background: var(--c-soft, var(--accent-soft));
-  margin-bottom: 6px;
+  margin-bottom: var(--space-3);
 }
 
 .event .time { font-size: 12px; font-weight: 600; color: var(--c, var(--accent)); white-space: nowrap; }
 .event .etitle { font-size: 13px; font-weight: 550; }
 
-.quick-add { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line-soft); }
+.quick-add { display: flex; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--line-soft); }
 
 /* ------------------------------------------------- three-column task boxes */
 
@@ -1556,15 +1588,15 @@ kbd {
   font-weight: 650;
   color: var(--ink);
   cursor: text;
-  padding: 1px 4px;
+  padding: 1px var(--space-2);
   border-radius: 4px;
 }
 
 .section-name:hover { background: var(--line-soft); }
-.section-prog { max-width: 210px; flex: 1; margin-left: 6px; }
+.section-prog { max-width: 210px; flex: 1; margin-left: var(--space-3); }
 .section .box-cols { border-top: 0; }
 
-.boxes { display: flex; flex-direction: column; gap: 12px; padding: 10px; }
+.boxes { display: flex; flex-direction: column; gap: var(--space-6); padding: var(--space-5); }
 
 .box { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 
@@ -1592,7 +1624,7 @@ kbd {
    drop except at a row. The tail below restores an empty target in every
    column, however full. */
 .box-col {
-  padding: 6px;
+  padding: var(--space-3);
   border-right: 1px solid var(--line-soft);
   min-height: 90px;
   display: flex;
@@ -1616,12 +1648,12 @@ kbd {
   letter-spacing: .06em;
   color: var(--ink-3);
   font-weight: 650;
-  padding: 3px 6px 6px;
+  padding: 3px var(--space-3) var(--space-3);
 }
 
 .box-col-empty {
   margin: 0;
-  padding: 12px 6px;
+  padding: var(--space-6) var(--space-3);
   text-align: center;
   font-size: 11.5px;
   color: var(--ink-3);
@@ -1637,7 +1669,7 @@ kbd {
 .week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-4);
   align-items: start;
 }
 
@@ -1650,27 +1682,27 @@ kbd {
 .wday-b { max-height: 620px; overflow-y: auto; }
 
 .wday-h {
-  padding: 7px 10px;
+  padding: 7px var(--space-5);
   border-bottom: 1px solid var(--line-soft);
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .wday-h .dow { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; }
 .wday-h .dnum { font-size: 15px; font-weight: 650; }
 .wday.today { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .wday.today .dnum { color: var(--accent); }
-.wday.other { background: #fbfbfc; }
-.wday-b { padding: 6px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.wday.other { background: var(--sunken); }
+.wday-b { padding: var(--space-3); flex: 1; display: flex; flex-direction: column; gap: var(--space-1); }
 .wday.drop-target { background: var(--accent-soft); border-color: var(--accent); }
 
 .mini {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   font-size: 12px;
-  padding: 3px 6px;
+  padding: 3px var(--space-3);
   border-radius: 4px;
   cursor: grab;
 }
@@ -1681,10 +1713,10 @@ kbd {
 
 .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .month-dow { background: var(--panel); padding: 7px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; }
-.mday { background: var(--panel); min-height: 104px; padding: 5px 6px; display: flex; flex-direction: column; gap: 2px; }
-.mday.other { background: #fbfbfc; color: var(--ink-3); }
+.mday { background: var(--panel); min-height: 104px; padding: 5px var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+.mday.other { background: var(--sunken); color: var(--ink-3); }
 .mday.today { background: var(--accent-soft); }
-.mday-h { display: flex; align-items: center; gap: 4px; }
+.mday-h { display: flex; align-items: center; gap: var(--space-2); }
 .mday .dnum { font-size: 12px; font-weight: 600; align-self: flex-start; }
 
 .mday-add {
@@ -1693,7 +1725,7 @@ kbd {
   background: none;
   color: var(--ink-3);
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 var(--space-1);
   opacity: 0;
   display: grid;
   place-items: center;
@@ -1714,7 +1746,7 @@ kbd {
 
 .pill {
   font-size: 11px;
-  padding: 1px 6px;
+  padding: 1px var(--space-3);
   border-radius: 4px;
   background: var(--c-soft, var(--gray-soft));
   color: var(--c, var(--ink-2));
@@ -1729,9 +1761,9 @@ kbd {
 
 /* --------------------------------------------------- projects and people */
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-6); }
 
-.pcard { padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.pcard { padding: var(--space-7); display: flex; flex-direction: column; gap: var(--space-4); cursor: pointer; }
 
 /* Reordering: the card being carried fades, and the gap it would land in is
    drawn as a line on that edge — the same "line means between" convention the
@@ -1767,13 +1799,13 @@ kbd {
   letter-spacing: .05em;
   color: var(--ink-3);
   font-weight: 600;
-  padding: 8px 12px;
+  padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--line);
 }
-.ptable td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+.ptable td { padding: 9px var(--space-6); border-bottom: 1px solid var(--line-soft); }
 .ptable tr:last-child td { border-bottom: 0; }
 .ptable tbody tr { cursor: pointer; }
-.ptable tbody tr:hover { background: #fafbfc; }
+.ptable tbody tr:hover { background: var(--hover); }
 
 .avatar {
   width: 30px; height: 30px;
@@ -1789,20 +1821,20 @@ kbd {
 
 .avatar.lg { width: 52px; height: 52px; flex-basis: 52px; font-size: 19px; }
 
-.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-8); align-items: start; }
 
 @media (max-width: 1000px) {
   .detail-grid { grid-template-columns: 1fr; }
 }
 
-.kv { display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; font-size: 13px; align-items: baseline; }
+.kv { display: grid; grid-template-columns: 88px 1fr; gap: var(--space-3) var(--space-5); font-size: 13px; align-items: baseline; }
 .kv dt { color: var(--ink-3); font-size: 12px; }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--line); margin-bottom: var(--space-7); }
 
 .tab {
-  padding: 7px 12px;
+  padding: 7px var(--space-6);
   border: 0;
   background: none;
   cursor: pointer;
@@ -1823,7 +1855,7 @@ kbd {
   display: grid;
   place-items: center;
   z-index: 60;
-  padding: 20px;
+  padding: var(--space-10);
 }
 
 .modal {
@@ -1835,9 +1867,9 @@ kbd {
   overflow-y: auto;
 }
 
-.modal-h { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); font-weight: 650; display: flex; align-items: center; }
-.modal-b { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.modal-f { padding: 12px 16px; border-top: 1px solid var(--line-soft); display: flex; gap: 8px; justify-content: flex-end; }
+.modal-h { padding: var(--space-7) var(--space-8); border-bottom: 1px solid var(--line-soft); font-weight: 650; display: flex; align-items: center; }
+.modal-b { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); }
+.modal-f { padding: var(--space-6) var(--space-8); border-top: 1px solid var(--line-soft); display: flex; gap: var(--space-4); justify-content: flex-end; }
 
 .toast {
   position: fixed;
@@ -1846,7 +1878,7 @@ kbd {
   transform: translateX(-50%);
   background: var(--ink);
   color: #fff;
-  padding: 8px 16px;
+  padding: var(--space-4) var(--space-8);
   border-radius: 99px;
   font-size: 13px;
   box-shadow: var(--shadow-pop);
@@ -1860,8 +1892,8 @@ kbd {
    right for what it does rather than how much of it you can see. */
 .bl-fold {
   display: inline-flex;
-  padding: 2px;
-  margin-right: 2px;
+  padding: var(--space-1);
+  margin-right: var(--space-1);
   vertical-align: middle;
 }
 
@@ -1880,7 +1912,7 @@ kbd {
   display: inline-flex;
   align-items: center;
   flex: none;
-  margin-top: 10px;
+  margin-top: var(--space-5);
   color: var(--ink-3);
   cursor: grab;
 }

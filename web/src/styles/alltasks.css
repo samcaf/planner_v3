@@ -10,9 +10,9 @@
 .at-filters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: var(--space-5) var(--space-6);
 }
 
 .at-search { position: relative; flex: 1 1 220px; min-width: 170px; }
@@ -40,7 +40,7 @@
 
 .at-count {
   min-width: 16px;
-  padding: 0 4px;
+  padding: 0 var(--space-2);
   border-radius: 99px;
   background: var(--accent);
   color: var(--accent-ink);
@@ -56,14 +56,14 @@
    how the panel looks, not where it is. */
 .at-pop {
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: var(--space-6) var(--space-7);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-6);
   box-shadow: var(--shadow-pop);
 }
 
-.at-group { display: flex; flex-direction: column; gap: 6px; }
+.at-group { display: flex; flex-direction: column; gap: var(--space-3); }
 
 .at-group-h {
   font-size: 10.5px;
@@ -73,7 +73,7 @@
   font-weight: 650;
 }
 
-.at-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.at-chips { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
 /* Chip toggles rather than checkboxes: the whole set has to be readable at a
    glance, and a pressed chip carries its own state without a second glyph. */
@@ -100,7 +100,7 @@
   color: var(--accent);
 }
 
-.at-pop-f { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.at-pop-f { display: flex; align-items: center; gap: var(--space-4); border-top: 1px solid var(--line-soft); padding-top: var(--space-5); }
 
 /* --------------------------------------------------------- active filters */
 
@@ -108,8 +108,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px 10px;
+  gap: var(--space-3);
+  padding: 0 var(--space-6) var(--space-5);
 }
 
 .at-removable .at-chip-scope { color: var(--ink-3); font-weight: 500; }
@@ -121,11 +121,11 @@
 .at-summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px 10px;
+  gap: var(--space-5);
+  padding: 0 var(--space-6) var(--space-5);
 }
 
-.at-groupbar { padding: 4px 6px 2px; }
+.at-groupbar { padding: var(--space-2) var(--space-3) var(--space-1); }
 .at-groupbar:empty { display: none; }
 .at-prog { flex: 1 1 180px; min-width: 120px; max-width: 340px; }
 
@@ -144,7 +144,7 @@
 
 /* ---------------------------------------------------------------- rows */
 
-.at-body { padding: 6px; }
+.at-body { padding: var(--space-3); }
 .at-rows { min-height: 40px; }
 .at-static .task { cursor: default; }
 
@@ -153,7 +153,7 @@
 .at-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-4);
   border-top: 2px solid transparent;
   border-bottom: 2px solid transparent;
 }
@@ -174,15 +174,15 @@
   width: 138px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
   font-size: 12px;
 }
 
 .at-when-link {
   border: 0;
   background: none;
-  padding: 1px 4px;
+  padding: 1px var(--space-2);
   margin: -1px 0;
   border-radius: 4px;
   font: inherit;
@@ -199,7 +199,7 @@
   background: none;
   color: var(--ink-3);
   cursor: pointer;
-  padding: 2px;
+  padding: var(--space-1);
   border-radius: 4px;
   display: grid;
   place-items: center;
@@ -213,7 +213,7 @@
 .at-moved {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   font-size: 11px;
   color: var(--ink-3);
 }
@@ -221,7 +221,7 @@
 .at-when-input {
   flex: 0 0 138px;
   width: 138px;
-  margin-top: 6px;
+  margin-top: var(--space-3);
   font-size: 12px;
   color: var(--ink-2);
 }
@@ -231,6 +231,6 @@
   .at-filter { flex-basis: 100%; width: 100%; }
   .at-row { flex-wrap: wrap; }
   .at-when,
-  .at-when-input { flex-basis: auto; width: auto; margin: 0 0 6px 25px; }
+  .at-when-input { flex-basis: auto; width: auto; margin: 0 0 var(--space-3) 25px; }
   .at-when-edit { opacity: 1; }
 }

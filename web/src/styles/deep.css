@@ -74,7 +74,7 @@
 .deepbar-label {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-3);
   font-size: 11px;
   color: var(--ink-3);
   white-space: nowrap;

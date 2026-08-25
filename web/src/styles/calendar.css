@@ -4,7 +4,7 @@
 
 /* ------------------------------------------------------------- day totals */
 
-.cal-prog { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cal-prog { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 
 .cal-prog .prog-bar {
   flex: 1;
@@ -34,7 +34,7 @@
 .cal-wday-h { flex-wrap: wrap; }
 .cal-wday-h .cal-prog { flex: 1 0 100%; margin-top: 3px; }
 
-.cal-mday-prog { margin: 1px 0 2px; }
+.cal-mday-prog { margin: 1px 0 var(--space-1); }
 
 .cal-mday-load {
   margin-left: auto;
@@ -46,7 +46,7 @@
 
 /* --------------------------------------------------- week column grouping */
 
-.cal-groups { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.cal-groups { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-2); }
 
 .cal-group {
   border: 1px solid var(--line-soft);
@@ -54,16 +54,16 @@
   /* Fallback first: browsers without color-mix keep the flat soft tint. */
   background: var(--c-soft, var(--gray-soft));
   background: color-mix(in srgb, var(--c, var(--gray)) 18%, var(--panel));
-  padding: 2px;
+  padding: var(--space-1);
 }
 
 /* A week column is ~130px wide, so every gap here is spent on the name. */
 .cal-group-h {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 2px 3px;
+  padding: var(--space-1) 3px;
   border: 0;
   background: none;
   border-radius: 4px;
@@ -82,7 +82,7 @@
 
 .cal-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.cal-group-sum { display: flex; align-items: center; gap: 5px; padding: 0 4px 2px; }
+.cal-group-sum { display: flex; align-items: center; gap: 5px; padding: 0 var(--space-2) var(--space-1); }
 .cal-group-sum .cal-prog { flex: 1; min-width: 0; }
 
 .cal-group-n {
@@ -92,7 +92,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cal-group-b { display: flex; flex-direction: column; gap: 1px; padding-top: 2px; }
+.cal-group-b { display: flex; flex-direction: column; gap: 1px; padding-top: var(--space-1); }
 
 /* Inside a tinted group the plain hover would read as a second tint, so it
    leans on the group's own colour instead. */

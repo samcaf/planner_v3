@@ -11,7 +11,7 @@
 .pj-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--ink-3);
@@ -22,9 +22,9 @@
 .pj-type {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
   margin-top: auto;
-  padding-top: 2px;
+  padding-top: var(--space-1);
 }
 
 .pj-hint {
@@ -39,7 +39,7 @@
 /* The cards are a grid with no margin below it, so the digest that follows them
    has to supply the gap itself. Capped because it is a list of names: run the
    full width of the page and the count drifts a screen away from what it counts. */
-.pj-backlogs { margin-top: 16px; max-width: 520px; }
+.pj-backlogs { margin-top: var(--space-8); max-width: 520px; }
 
 /* --------------------------------------------------------------- detail */
 
@@ -70,9 +70,9 @@
 .pj-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -80,31 +80,31 @@
 
 /* The chip row only appears once something is filtered, so its padding has to
    collapse with it rather than leave a gap under the toolbar. */
-.pj-toolbar + .at-active { padding-top: 10px; }
+.pj-toolbar + .at-active { padding-top: var(--space-5); }
 
-.pj-tasks { padding: 6px; }
+.pj-tasks { padding: var(--space-3); }
 
 .pj-colour {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .pj-colour .pj-hint { flex: 1 1 140px; }
 
 /* ----------------------------------------------------------- notes tab */
 
-.pj-captured-note { margin-bottom: 10px; align-items: flex-start; }
+.pj-captured-note { margin-bottom: var(--space-5); align-items: flex-start; }
 
 /* The date is a fixed rail down the left so a run of captured notes reads as a
    chronology rather than as a stack of unrelated blocks. */
 .pj-captured {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding-bottom: 10px;
+  gap: var(--space-5);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -127,7 +127,7 @@
   top: 4px;
   right: 6px;
   z-index: 2;
-  padding: 1px 2px;
+  padding: 1px var(--space-1);
   border-radius: var(--radius-sm);
   background: var(--panel);
   box-shadow: var(--shadow);
@@ -157,13 +157,13 @@
  * Scoped to `.rich` rather than to this page: a heading means the same thing in
  * a day note, a task note and a project section.
  */
-.rich h1, .rich h2, .rich h3, .rich h4 { margin: 14px 0 6px; line-height: 1.3; }
+.rich h1, .rich h2, .rich h3, .rich h4 { margin: var(--space-7) 0 var(--space-3); line-height: 1.3; }
 
 .rich h1 {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -.015em;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -180,7 +180,7 @@
 .pj-note-grip {
   display: inline-flex;
   align-items: center;
-  margin-right: 4px;
+  margin-right: var(--space-2);
   color: var(--ink-3);
   cursor: grab;
 }

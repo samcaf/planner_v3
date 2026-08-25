@@ -197,4 +197,6 @@ try {
   }
   for (const id of madeNotes) await del(`/api/notebook/${id}`)
   console.log(`cleanup: ${(await json(`/api/days/${DAY}`)).tasks.length} tasks, ${(await json('/api/notebook')).filter((n) => n.title.startsWith('ZZ-')).length} probe notes left`)
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

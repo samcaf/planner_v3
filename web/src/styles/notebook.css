@@ -2,7 +2,7 @@
 .nb-page {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-8);
   align-items: start;
 }
 
@@ -10,15 +10,15 @@
   .nb-page { grid-template-columns: 1fr; }
 }
 
-.nb-list { display: flex; flex-direction: column; gap: 2px; }
+.nb-list { display: flex; flex-direction: column; gap: var(--space-1); }
 
 .nb-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
   text-align: left;
-  padding: 7px 10px;
+  padding: 7px var(--space-5);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: none;

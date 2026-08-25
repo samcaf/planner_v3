@@ -190,4 +190,6 @@ try {
   for (const t of day.tasks) await del(`/api/tasks/${t.id}`)
   for (const s of day.sections) await del(`/api/sections/${s.id}`)
   console.log('cleanup: probe day cleared')
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

@@ -245,4 +245,6 @@ try {
     await del(`/api/projects/${projectId}`)
   }
   console.log('cleanup: probe rows removed')
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

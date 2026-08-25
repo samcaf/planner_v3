@@ -164,4 +164,6 @@ try {
   }
   if (uploaded?.name) await del(`/api/uploads/${uploaded.name}`)
   console.log('cleanup: probe task and upload removed')
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }

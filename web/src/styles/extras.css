@@ -13,7 +13,7 @@
   flex-direction: column;
   gap: 1px;
   margin: 0;
-  padding: 6px;
+  padding: var(--space-3);
   list-style: none;
 }
 
@@ -21,7 +21,7 @@
   display: flex;
   align-items: baseline;
   gap: 9px;
-  padding: 5px 8px;
+  padding: 5px var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--ink);
 }
@@ -56,12 +56,12 @@
 
 /* Full width on purpose: a measure-width column here is a tall block sitting
    between the topbar and the grid, which is the thing worth looking at. */
-.ex-intro { margin: 0 0 14px; font-size: 12px; color: var(--ink-3); }
+.ex-intro { margin: 0 0 var(--space-7); font-size: 12px; color: var(--ink-3); }
 
 .ex-uploads {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 12px;
+  gap: var(--space-6);
 }
 
 .ex-up { display: flex; flex-direction: column; margin: 0; overflow: hidden; }
@@ -88,7 +88,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
   height: 100%;
   color: var(--ink-3);
@@ -104,7 +104,7 @@
 
 .ex-up:hover .ex-up-file { color: var(--accent); }
 
-.ex-up-b { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; }
+.ex-up-b { display: flex; flex-direction: column; gap: 5px; padding: var(--space-4) var(--space-5); }
 
 /* An original filename can be long and has no spaces to break on, and a file
    with no recorded name falls back to its hex hash — both need to break anywhere. */
@@ -113,7 +113,7 @@
   overflow-wrap: anywhere;
 }
 
-.ex-up-meta { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-3); }
+.ex-up-meta { display: flex; align-items: center; gap: var(--space-4); font-size: 11.5px; color: var(--ink-3); }
 
 .ex-up-preview {
   display: block;
@@ -144,7 +144,7 @@ p.ex-up-preview { display: flex; height: 92px; }
 .ex-up-warn {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-4);
   margin: 0;
   padding: 9px 11px;
   border: 1px solid var(--red);

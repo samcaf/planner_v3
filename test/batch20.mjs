@@ -182,4 +182,6 @@ try {
     for (const s of day.sections) await del(`/api/sections/${s.id}`)
   }
   console.log(`cleanup: ${(await json(`/api/days/${DAY}`)).tasks.length} + ${(await json(`/api/days/${NEXT}`)).tasks.length} tasks left`)
+  // Non-zero so the runner, and CI, can tell a red suite from a green one.
+  process.exit(bad ? 1 : 0)
 }
