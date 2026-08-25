@@ -120,7 +120,7 @@ every token back gave byte-identical CSS. Any mechanical refactor here should be
 able to make the same claim.
 
 **Test before and after.** `npm test` drives the built app in jsdom against the
-real API — 14 suites. It will not catch a colour, but it will catch a layout
+real API — 15 suites. It will not catch a colour, but it will catch a layout
 change that breaks a drag target or hides a control, which is how visual
 refactors usually break things.
 

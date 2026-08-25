@@ -192,3 +192,9 @@
 
 /* The bar marks where the dragged section will land. */
 .pj-note-sec.is-over { box-shadow: inset 0 3px 0 var(--accent); }
+
+/* An archived section is kept, not discarded, so it is dimmed rather than
+   struck through — still readable at a glance while plainly filed away. */
+.pj-note-sec.is-archived { opacity: .6; }
+.pj-note-sec.is-archived:hover,
+.pj-note-sec.is-archived:focus-within { opacity: 1; }

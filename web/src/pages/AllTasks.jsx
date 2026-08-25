@@ -80,7 +80,12 @@ export default function AllTasks() {
 
   // Routine chores and prose notes are noise in a cross-cutting task list, so
   // both are out until asked for. See `hidesRoutine` for the caveat.
-  const included = (t) => (showNotes || t.kind !== 'note') && (showRoutine || !t.hide_from_all_tasks)
+  // Archived rows are out everywhere. A project note section that has been
+  // filed away should not come back through a cross-cutting list — that would
+  // make archiving mean "hidden on one page" rather than "put away".
+  const included = (t) => !t.archived
+    && (showNotes || t.kind !== 'note')
+    && (showRoutine || !t.hide_from_all_tasks)
 
   // The status group is already in the query string above, so re-applying it
   // here changes nothing — the shared predicate simply owns every group.

@@ -78,6 +78,7 @@ export default function ProjectDetail() {
   // The board is the point of the tab, so it is what you get first; the list is
   // there for when you want to read titles rather than weigh them.
   const [board, setBoard] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
   const [noteDrag, setNoteDrag] = useState(null)
   const [noteOver, setNoteOver] = useState(null)
   const [draft, setDraft] = useState('')
@@ -113,8 +114,13 @@ export default function ProjectDetail() {
 
   // A note with no day is one of this project's own sections; a dated one was
   // written on that day and merely tagged with the project.
-  const sections = notes.filter((n) => !n.scheduled_date)
+  const allSections = notes.filter((n) => !n.scheduled_date)
+  const sections = allSections.filter((n) => showArchived || !n.archived)
+  const archivedCount = allSections.filter((n) => n.archived).length
   const captured = notes.filter((n) => n.scheduled_date)
+  // What the tab badge counts. An archived section is put away, so counting it
+  // would mean the number never went down when you filed one.
+  const liveNotes = notes.filter((n) => !n.archived)
 
   const shown = tasks.filter(taskFilter(filters))
   const chips = filterChips(filters)
@@ -184,7 +190,11 @@ export default function ProjectDetail() {
    */
   async function reorderNotes(fromId, toId) {
     if (!fromId || !toId || fromId === toId) return
-    const ids = sections.map((n) => n.id)
+    // Every section, not just the visible ones. The drag can only be between
+    // two that are on screen, but renumbering the visible ones alone would
+    // leave the archived ones holding stale positions among them — and they
+    // would surface somewhere arbitrary the moment they were brought back.
+    const ids = allSections.map((n) => n.id)
     const from = ids.indexOf(fromId)
     const to = ids.indexOf(toId)
     if (from < 0 || to < 0) return
@@ -259,7 +269,9 @@ export default function ProjectDetail() {
                 {t === 'backlog' && backlogTasks.length > 0 && (
                   <span className="muted"> {backlogTasks.length}</span>
                 )}
-                {t === 'notes' && notes.length > 0 && <span className="muted"> {notes.length}</span>}
+                {t === 'notes' && liveNotes.length > 0 && (
+                  <span className="muted"> {liveNotes.length}</span>
+                )}
               </button>
             ))}
           </div>
@@ -455,9 +467,26 @@ export default function ProjectDetail() {
                 />
               ))}
 
-              <button className="btn ghost" onClick={addNoteSection}>
-                <Icon name="plus" size={14} /> Add a note section
-              </button>
+              <div className="row" style={{ gap: 'var(--space-4)' }}>
+                <button className="btn ghost" onClick={addNoteSection}>
+                  <Icon name="plus" size={14} /> Add a note section
+                </button>
+                {/* Only when there is something to show. A switch for an empty
+                    archive is a control that does nothing. */}
+                {archivedCount > 0 && (
+                  <button
+                    className={`btn ghost sm ${showArchived ? 'is-on' : ''}`}
+                    aria-pressed={showArchived}
+                    title={showArchived
+                      ? 'Hide archived sections'
+                      : 'Show archived sections as well'}
+                    onClick={() => setShowArchived(!showArchived)}
+                  >
+                    <Icon name="templates" size={13} /> Archived
+                    <span className="muted"> {archivedCount}</span>
+                  </button>
+                )}
+              </div>
 
               {captured.length > 0 && (
                 <Panel
@@ -663,7 +692,12 @@ function NoteSection({
 
   return (
     <Panel
-      className={`pj-note-sec${dragging ? ' is-dragging' : ''}${over ? ' is-over' : ''}`}
+      className={[
+        'pj-note-sec',
+        dragging ? 'is-dragging' : '',
+        over ? 'is-over' : '',
+        note.archived ? 'is-archived' : '',
+      ].filter(Boolean).join(' ')}
       draggable={armed}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -694,9 +728,22 @@ function NoteSection({
         </span>
       }
       actions={
-        <button className="btn ghost sm danger" title="Delete this section" onClick={onDelete}>
-          <Icon name="trash" size={13} />
-        </button>
+        <>
+          {/* Before delete, and beside it: a section stops being current long
+              before it stops being worth keeping, and deleting one takes its
+              prose with it. */}
+          <button
+            className={`btn ghost sm ${note.archived ? 'is-on' : ''}`}
+            aria-pressed={!!note.archived}
+            title={note.archived ? 'Bring this section back out of the archive' : 'Archive this section'}
+            onClick={() => onChange({ archived: note.archived ? 0 : 1 })}
+          >
+            <Icon name="templates" size={13} />
+          </button>
+          <button className="btn ghost sm danger" title="Delete this section" onClick={onDelete}>
+            <Icon name="trash" size={13} />
+          </button>
+        </>
       }
     >
       <RichEditor

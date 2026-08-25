@@ -67,6 +67,10 @@ addColumn('tasks', 'fixed_time', 'INTEGER NOT NULL DEFAULT 0')
 // `elapsed_ms` carries everything banked before the current run.
 addColumn('tasks', 'timer_started_at', 'TEXT')
 addColumn('tasks', 'timer_elapsed_ms', 'INTEGER NOT NULL DEFAULT 0')
+// Filed away rather than deleted. A project's note section stops being current
+// long before it stops being worth keeping, and deleting it — which takes its
+// prose with it — was the only other way to get it out of the way.
+addColumn('tasks', 'archived', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('tasks', 'url', "TEXT NOT NULL DEFAULT ''")
 addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // Which routine item produced this task. Top-up needs a stable identity for
