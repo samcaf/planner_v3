@@ -188,22 +188,40 @@ const rowsFor = (ids, known) =>
  * A batch of PATCHes under ONE undo entry — recording one per row would make
  * Ctrl-Z walk the batch back a task at a time. `changes` must never carry
  * `parent_id`: PATCH rejects it, re-parenting goes through /nest.
+ *
+ * Pass `parent` when the batch also re-parents. It is deliberately separate
+ * from `changes` for the reason above, and `undefined` rather than `null` means
+ * "leave the parent alone" — `null` is the real instruction to detach.
  */
-export async function bulkPatch(ids, changes, { known = [], label, undo } = {}) {
+export async function bulkPatch(ids, changes, { known = [], label, undo, parent } = {}) {
   if (!ids.length) return 0
 
+  const reparent = parent !== undefined
   const rows = await rowsFor(ids, known)
   const before = rows.map((row) => [
     row.id,
     Object.fromEntries(Object.keys(changes).map((k) => [k, row[k] ?? null])),
+    row.parent_id ?? null,
   ])
-  const apply = async () => { for (const id of ids) await api.patch(`/tasks/${id}`, changes) }
+  // /nest first: it stamps the new parent's date onto the child, so a patch
+  // carrying a date of its own has to come after it to win.
+  const apply = async () => {
+    for (const id of ids) {
+      if (reparent) await api.post(`/tasks/${id}/nest`, { parent_id: parent })
+      await api.patch(`/tasks/${id}`, changes)
+    }
+  }
 
   await apply()
 
   undo?.record?.({
     label: label || `change ${ids.length} tasks`,
-    undo: async () => { for (const [id, patch] of before) await api.patch(`/tasks/${id}`, patch) },
+    undo: async () => {
+      for (const [id, patch, wasParent] of before) {
+        if (reparent) await api.post(`/tasks/${id}/nest`, { parent_id: wasParent })
+        await api.patch(`/tasks/${id}`, patch)
+      }
+    },
     redo: apply,
   })
 

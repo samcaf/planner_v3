@@ -18,9 +18,12 @@ export function initials(name = '') {
 
 // bodyClass defaults to the padded body, but an explicit "" opts out of padding
 // entirely — which `?? ` preserves and `|| ` would silently ignore.
-export function Panel({ title, actions, children, className = '', bodyClass }) {
+// `...rest` reaches the <section>: a panel that can be dragged, or that needs a
+// ref or an aria attribute, would otherwise have those props silently dropped —
+// which nothing in a build or a type check would catch.
+export function Panel({ title, actions, children, className = '', bodyClass, ...rest }) {
   return (
-    <section className={`panel ${className}`}>
+    <section className={`panel ${className}`} {...rest}>
       {(title || actions) && (
         <header className="panel-h">
           {title}

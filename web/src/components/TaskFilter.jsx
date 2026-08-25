@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
+import Popover from './Popover.jsx'
 import { CLOSED } from './Progress.jsx'
 import { addDays, startOfWeek, today } from '../lib/dates.js'
 // The chip and popover rules live with the view that grew them; importing them
@@ -174,54 +174,44 @@ export function ActiveChips({ chips, onRemove, onClear }) {
  * that belong in the same badge.
  */
 export default function TaskFilter({ filters, count = 0, onToggle, onClear, extras, note }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    const away = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('mousedown', away)
-    window.addEventListener('keydown', esc)
-    return () => {
-      window.removeEventListener('mousedown', away)
-      window.removeEventListener('keydown', esc)
-    }
-  }, [open])
-
   return (
-    <span className="at-pop-wrap" ref={ref}>
-      <button
-        className={`btn sm ${count ? 'is-on' : ''}`}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <Icon name="list" size={13} /> Filters
-        {count > 0 && <span className="at-count">{count}</span>}
-        <Icon name="chevronDown" size={12} />
-      </button>
-
-      {open && (
-        <div className="panel at-pop" role="dialog" aria-label="Filters">
-          {ALL_GROUPS.filter((g) => filters[g]).map((g) => (
-            <ChipGroup key={g} label={GROUP_LABELS[g]}>
-              {OPTIONS[g].map(([value, label]) => (
-                <Chip key={value} on={filters[g].includes(value)} onClick={() => onToggle(g, value)}>
-                  {label}
-                </Chip>
-              ))}
-            </ChipGroup>
-          ))}
-
-          {extras}
-
-          <div className="at-pop-f">
-            <span className="muted at-note">{note}</span>
-            <span className="spacer" />
-            <button className="btn ghost sm" onClick={onClear}>Clear all</button>
-          </div>
-        </div>
+    // Popover rather than a panel positioned by this component: it portals to
+    // <body> and measures itself against the viewport. The hand-rolled version
+    // was anchored to the trigger's RIGHT edge, which suits the all-tasks
+    // toolbar — the button sits far right there — but on the projects page the
+    // same button sits near the left, so 420px of panel opened leftward and
+    // went under the sidebar. Anchoring left and clamping to the viewport is
+    // right in both places, and drops the overflow clipping as well.
+    <Popover
+      className="panel at-pop"
+      role="dialog"
+      label="Filters"
+      width="min(420px, calc(100vw - 40px))"
+      trigger={(props) => (
+        <button className={`btn sm ${count ? 'is-on' : ''}`} {...props}>
+          <Icon name="list" size={13} /> Filters
+          {count > 0 && <span className="at-count">{count}</span>}
+          <Icon name="chevronDown" size={12} />
+        </button>
       )}
-    </span>
+    >
+      {ALL_GROUPS.filter((g) => filters[g]).map((g) => (
+        <ChipGroup key={g} label={GROUP_LABELS[g]}>
+          {OPTIONS[g].map(([value, label]) => (
+            <Chip key={value} on={filters[g].includes(value)} onClick={() => onToggle(g, value)}>
+              {label}
+            </Chip>
+          ))}
+        </ChipGroup>
+      ))}
+
+      {extras}
+
+      <div className="at-pop-f">
+        <span className="muted at-note">{note}</span>
+        <span className="spacer" />
+        <button className="btn ghost sm" onClick={onClear}>Clear all</button>
+      </div>
+    </Popover>
   )
 }

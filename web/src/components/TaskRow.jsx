@@ -123,6 +123,11 @@ export default function TaskRow({
   // way the task's section has to be found or made on the far side.
   onReschedule,
   showProject = true,
+  // Whether the subtree is drawn here. A sub-section band already lays its
+  // children out beneath the heading, so the heading itself must not repeat
+  // them — but it still needs them, because its time and its column are the
+  // sum of the whole branch.
+  renderChildren = true,
   draggable = true,
   depth = 0,
   listIds = [],
@@ -139,6 +144,10 @@ export default function TaskRow({
   rowExtras = null,
 }) {
   const [details, setDetails] = useState(false)
+  // Set only when the panel was opened by Tab, so the time box grabs the caret
+  // then and not when the panel is opened by clicking the clock — a click has
+  // already said where the user wants to be.
+  const [tabbed, setTabbed] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const [zone, setZone] = useState(null)
   // True while a title or the notes box in this row has focus. A `draggable`
@@ -164,7 +173,7 @@ export default function TaskRow({
   useEffect(() => {
     if (!details) return
     function away(e) {
-      if (!rowRef.current?.contains(e.target)) setDetails(false)
+      if (!rowRef.current?.contains(e.target)) { setDetails(false); setTabbed(false) }
     }
     // mousedown, not click: a click that starts inside and ends outside (a
     // drag, or a select that runs past the edge) should not count as leaving.
@@ -236,7 +245,7 @@ export default function TaskRow({
         <button
           className={`btn ghost sm ${details ? 'is-on' : ''}`}
           title="Time and duration"
-          onClick={() => setDetails(!details)}
+          onClick={() => { setTabbed(false); setDetails(!details) }}
         >
           <Icon name="clock" size={13} />
         </button>
@@ -401,6 +410,17 @@ export default function TaskRow({
                 e.preventDefault()
                 onChange({ optional: task.optional ? 0 : 1 })
               }}
+              // Tab out of the title goes to the timing panel rather than to
+              // whatever control the DOM happens to have next. Naming a task
+              // and saying how long it takes is one thought, and this is the
+              // keystroke that already means "next field".
+              onKeyDown={(e) => {
+                if (e.key !== 'Tab' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return
+                e.preventDefault()
+                e.stopPropagation()
+                setTabbed(true)
+                setDetails(true)
+              }}
               title={task.optional ? 'Right-click to make it committed' : 'Right-click to make it optional'}
             >
               <RichLine
@@ -513,7 +533,8 @@ export default function TaskRow({
               task={task}
               derived={derived}
               onChange={onChange}
-              onDone={() => setDetails(false)}
+              onDone={() => { setDetails(false); setTabbed(false) }}
+              focusTime={tabbed}
             />
           )}
 
@@ -555,7 +576,7 @@ export default function TaskRow({
         {!isParent && actions}
       </div>
 
-      {expanded && subtasks.map((child) => (
+      {renderChildren && expanded && subtasks.map((child) => (
         <TaskRow
           key={child.id}
           task={child}
@@ -601,10 +622,22 @@ export default function TaskRow({
  * adopted while the field is not being edited.
  */
 function CommittedField({
-  value, onCommit, onDone, className = '', parse = (v) => v || null, ...rest
+  value, onCommit, onDone, className = '', parse = (v) => v || null,
+  selectOnMount = false, ...rest
 }) {
   const [draft, setDraft] = useState(value ?? '')
   const [editing, setEditing] = useState(false)
+  const ref = useRef(null)
+
+  // Focus AND select, not just focus: arriving here by Tab means the next thing
+  // typed is the new time, so whatever is already in the box should be replaced
+  // rather than appended to. Done with a ref rather than `autoFocus` because
+  // autoFocus does not select, and only fires on the very first mount.
+  useEffect(() => {
+    if (!selectOnMount) return
+    ref.current?.focus()
+    ref.current?.select()
+  }, [selectOnMount])
 
   // Follow the task while idle, but never yank the field out from under a
   // half-finished entry.
@@ -622,6 +655,7 @@ function CommittedField({
 
   return (
     <input
+      ref={ref}
       className={`input ${className}`.trim()}
       value={draft}
       onChange={(e) => { setEditing(true); setDraft(e.target.value) }}
@@ -697,7 +731,7 @@ export function parseTime(raw) {
   return `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`
 }
 
-function TaskDetails({ task, derived, onChange, onDone }) {
+function TaskDetails({ task, derived, onChange, onDone, focusTime = false }) {
   // Changing how long something takes should move it to the column for that
   // length. A drag pins a task with an explicit col_index, which would other-
   // wise outrank the new duration forever and leave a 90-minute task sitting in
@@ -717,6 +751,7 @@ function TaskDetails({ task, derived, onChange, onDone }) {
           parse={parseTime}
           onCommit={(start_time) => reflow({ start_time })}
           onDone={onDone}
+          selectOnMount={focusTime}
         />
       </label>
       <label>

@@ -17,8 +17,11 @@ import '../styles/notebook.css'
  * notes has no other order that means anything.
  */
 export default function Notebook() {
-  const notes = useApi('/notebook')
+  const [showArchived, setShowArchived] = useState(false)
+  const notes = useApi(`/notebook${showArchived ? '?archived=1' : ''}`, [showArchived])
   const [openId, setOpenId] = useState(null)
+  const [drag, setDrag] = useState(null)
+  const [over, setOver] = useState(null)
 
   if (notes.error) return <div className="page"><p className="muted">{notes.error.message}</p></div>
   if (!notes.data) return <div className="page"><p className="muted">Loading…</p></div>
@@ -31,6 +34,22 @@ export default function Notebook() {
   const add = async () => {
     const made = await api.post('/notebook', { title: 'Untitled', body: '' })
     setOpenId(made.id)
+    notes.reload()
+  }
+
+  /**
+   * Reorder by dropping one note onto another. The whole list is renumbered
+   * from the array it draws, rather than nudging one row's sort, because
+   * anything else drifts once two notes end up sharing a position.
+   */
+  const reorder = async (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return
+    const ids = list.map((n) => n.id)
+    const from = ids.indexOf(fromId)
+    const to = ids.indexOf(toId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ...ids.splice(from, 1))
+    await api.post('/notebook/reorder', { ids })
     notes.reload()
   }
 
@@ -50,6 +69,14 @@ export default function Notebook() {
           {list.length === 1 ? '1 note' : `${list.length} notes`} · not tied to a day or a project
         </span>
         <span className="spacer" />
+        <button
+          className={`btn ghost sm ${showArchived ? 'is-on' : ''}`}
+          aria-pressed={showArchived}
+          title={showArchived ? 'Hide archived notes' : 'Show archived notes as well'}
+          onClick={() => setShowArchived(!showArchived)}
+        >
+          <Icon name="templates" size={13} /> Archived
+        </button>
         <button className="btn primary" onClick={add}>
           <Icon name="plus" size={14} /> New note
         </button>
@@ -63,10 +90,35 @@ export default function Notebook() {
             list.map((n) => (
               <button
                 key={n.id}
-                className={`nb-item ${open?.id === n.id ? 'is-on' : ''}`}
+                className={[
+                  'nb-item',
+                  open?.id === n.id ? 'is-on' : '',
+                  n.archived ? 'is-archived' : '',
+                  drag === n.id ? 'is-dragging' : '',
+                  over === n.id ? 'is-over' : '',
+                ].filter(Boolean).join(' ')}
+                draggable
                 onClick={() => setOpenId(n.id)}
+                onDragStart={(e) => {
+                  setDrag(n.id)
+                  e.dataTransfer.setData('text/notebook-id', String(n.id))
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragEnd={() => { setDrag(null); setOver(null) }}
+                onDragOver={(e) => { e.preventDefault(); setOver(n.id) }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) setOver(null)
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const from = Number(e.dataTransfer.getData('text/notebook-id')) || drag
+                  setDrag(null)
+                  setOver(null)
+                  reorder(from, n.id)
+                }}
               >
                 <span className="nb-item-title">{n.title?.trim() || 'Untitled'}</span>
+                {!!n.archived && <Icon name="templates" size={11} />}
                 {!!n.pinned && <Icon name="flag" size={11} />}
               </button>
             ))
@@ -91,6 +143,16 @@ export default function Notebook() {
                   onClick={() => save(open.id, { pinned: open.pinned ? 0 : 1 })}
                 >
                   <Icon name="flag" size={13} />
+                </button>
+                {/* Archiving before deleting: a note stops being current long
+                    before it stops being worth keeping. */}
+                <button
+                  className={`btn ghost sm ${open.archived ? 'is-on' : ''}`}
+                  aria-pressed={!!open.archived}
+                  title={open.archived ? 'Bring back out of the archive' : 'Archive this note'}
+                  onClick={() => save(open.id, { archived: open.archived ? 0 : 1 })}
+                >
+                  <Icon name="templates" size={13} />
                 </button>
                 <button className="btn ghost sm danger" title="Delete" onClick={() => remove(open)}>
                   <Icon name="trash" size={13} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import Progress, { CLOSED, tally } from '../components/Progress.jsx'
 import TaskFilter, {
@@ -15,6 +15,8 @@ import { ColorPicker, Empty, Field, Panel, cls, initials } from '../components/u
 import { Rich, RichEditor, RichLine } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
+import ColumnBoard from '../components/ColumnBoard.jsx'
+import { columnLabels as labelsFor } from '../lib/columns.js'
 import { useUndo } from '../lib/undo.jsx'
 import { relative, shortDate } from '../lib/dates.js'
 import '../styles/projects.css'
@@ -60,7 +62,24 @@ export default function ProjectDetail() {
   // panel and the day view's backlog are answering the same question of the
   // same table — see lib/backlog.js.
   const backlog = useApi(`/tasks?${BACKLOG_QUERY}&project_id=${id}`, [id])
-  const [tab, setTab] = useState('tasks')
+  // In the URL, not in state: a refresh on the Notes tab used to come back on
+  // Tasks, and a link to a project's backlog needs somewhere to point.
+  const [params, setParams] = useSearchParams()
+  const TABS = ['tasks', 'backlog', 'milestones', 'notes']
+  const wanted = params.get('tab')
+  const tab = TABS.includes(wanted) ? wanted : 'tasks'
+  const setTab = (t) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    if (t === 'tasks') next.delete('tab')
+    else next.set('tab', t)
+    return next
+  }, { replace: true })
+  const settings = useApi('/settings')
+  // The board is the point of the tab, so it is what you get first; the list is
+  // there for when you want to read titles rather than weigh them.
+  const [board, setBoard] = useState(true)
+  const [noteDrag, setNoteDrag] = useState(null)
+  const [noteOver, setNoteOver] = useState(null)
   const [draft, setDraft] = useState('')
   const [mDraft, setMDraft] = useState('')
   const [filters, setFilters] = useState(NO_FILTERS)
@@ -114,7 +133,35 @@ export default function ProjectDetail() {
     showProject: false,
     onChange: (body, taskId = t.id) => saveTask(taskId, body),
     onDelete: (taskId = t.id) => removeTask(taskId),
+    onReschedule: reschedule,
   })
+
+  /**
+   * Give a dateless task a day, or put a copy of it on one. The server does the
+   * work: either way the task's section has to be found or made on the far day,
+   * and a plain date patch would drop it into that day's loose list.
+   */
+  async function reschedule(task, to, copy) {
+    const before = { date: task.scheduled_date, section_id: task.section_id ?? null }
+    const made = await api.post(`/tasks/${task.id}/move`, { date: to, copy })
+
+    undo?.record?.({
+      label: copy ? 'copy to a day' : 'move to a day',
+      undo: async () => {
+        if (copy) await api.del(`/tasks/${made.id}`)
+        else {
+          await api.patch(`/tasks/${task.id}`, {
+            scheduled_date: before.date,
+            section_id: before.section_id,
+            status: 'todo',
+            moved_to_date: null,
+          })
+        }
+      },
+      redo: async () => { await api.post(`/tasks/${task.id}/move`, { date: to, copy }) },
+    })
+    reload()
+  }
 
   /**
    * Dropping on the heading files tasks here. The day they are scheduled on is
@@ -125,6 +172,27 @@ export default function ProjectDetail() {
     await bulkPatch(ids, { project_id: p.id }, { known: tasks, label: `file ${ids.length} tasks`, undo })
     reload()
     toast({ message: `Filed ${ids.length} task${ids.length === 1 ? '' : 's'} under ${p.name}` })
+  }
+
+  /**
+   * Move one note section above or below another.
+   *
+   * The whole run is renumbered from the order it is drawn in, rather than
+   * nudging one row's `sort`: the sections already come back ordered by `sort`,
+   * so writing positions for all of them is what makes the new order the one
+   * that survives a reload.
+   */
+  async function reorderNotes(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return
+    const ids = sections.map((n) => n.id)
+    const from = ids.indexOf(fromId)
+    const to = ids.indexOf(toId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ...ids.splice(from, 1))
+    // ids alone: /tasks/reorder only writes date/section/parent when it is
+    // given them, so this cannot move a note off the project by accident.
+    await api.post('/tasks/reorder', { ids })
+    reload()
   }
 
   async function addTask(e) {
@@ -184,10 +252,13 @@ export default function ProjectDetail() {
       <div className="page detail-grid">
         <div className="col" style={{ gap: 16 }}>
           <div className="tabs">
-            {['tasks', 'milestones', 'notes'].map((t) => (
+            {TABS.map((t) => (
               <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
                 {t === 'tasks' && counts.openCount > 0 && <span className="muted"> {counts.openCount}</span>}
+                {t === 'backlog' && backlogTasks.length > 0 && (
+                  <span className="muted"> {backlogTasks.length}</span>
+                )}
                 {t === 'notes' && notes.length > 0 && <span className="muted"> {notes.length}</span>}
               </button>
             ))}
@@ -232,6 +303,53 @@ export default function ProjectDetail() {
                 <input
                   className="input"
                   placeholder="Add a task to this project…"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+                <button className="btn primary" type="submit"><Icon name="plus" size={14} /> Add</button>
+              </form>
+            </Panel>
+          )}
+
+          {tab === 'backlog' && (
+            <Panel bodyClass="">
+              <div className="pj-toolbar">
+                <span className="muted at-note">
+                  {backlogTasks.length === 0
+                    ? 'Nothing waiting'
+                    : `${backlogTasks.length} task${backlogTasks.length === 1 ? '' : 's'} without a day`}
+                </span>
+                <span className="spacer" />
+                <button className="btn ghost sm" onClick={() => setBoard(!board)}>
+                  <Icon name={board ? 'list' : 'columns'} size={12} />
+                  {board ? ' As a list' : ' As a board'}
+                </button>
+              </div>
+
+              <div className="pj-tasks">
+                {backlogTasks.length === 0 ? (
+                  <Empty>Nothing waiting. Every open task here has a day.</Empty>
+                ) : board ? (
+                  <ColumnBoard
+                    tasks={backlogTasks}
+                    labels={labelsFor(settings.data)}
+                    rowProps={rowProps}
+                    onMoveToColumn={(ids, col) => bulkPatch(
+                      ids, { col_index: col },
+                      { known: backlogTasks, label: 'move between columns', undo },
+                    ).then(reload)}
+                  />
+                ) : (
+                  <TaskList tasks={backlogTasks} rowProps={rowProps} />
+                )}
+              </div>
+
+              {/* The same add as the Tasks tab: a new task is created without
+                  a date, so it is already a backlog task. */}
+              <form className="quick-add" onSubmit={addTask}>
+                <input
+                  className="input"
+                  placeholder="Add a task with no day yet…"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
@@ -314,6 +432,21 @@ export default function ProjectDetail() {
                 <NoteSection
                   key={note.id}
                   note={note}
+                  dragging={noteDrag === note.id}
+                  over={noteOver === note.id}
+                  onDragStart={() => setNoteDrag(note.id)}
+                  onDragEnd={() => { setNoteDrag(null); setNoteOver(null) }}
+                  onDragOver={() => setNoteOver(note.id)}
+                  // The id comes off the dataTransfer, not off `noteDrag`.
+                  // dragstart only *asks* React to store the id; if the drop
+                  // lands before that render commits, the state read here is
+                  // still null and the reorder is silently dropped. The
+                  // dataTransfer is written synchronously and always has it.
+                  onDropOn={(from) => {
+                    setNoteDrag(null)
+                    setNoteOver(null)
+                    reorderNotes(from ?? noteDrag, note.id)
+                  }}
                   onChange={(body) => saveTask(note.id, body)}
                   onDelete={async () => {
                     if (!confirm(`Delete the section "${note.title || 'Untitled'}" and its notes?`)) return
@@ -520,11 +653,39 @@ function BacklogPanel({ tasks, rowProps }) {
  * `kind='note'` row — `title` is the heading and `notes` the prose, the same
  * two columns every other note in the app uses.
  */
-function NoteSection({ note, onChange, onDelete }) {
+function NoteSection({
+  note, onChange, onDelete,
+  dragging, over, onDragStart, onDragEnd, onDragOver, onDropOn,
+}) {
+  // Draggable only while the grip is held. The body is a text editor, and a
+  // panel that is draggable everywhere cannot have its prose selected.
+  const [armed, setArmed] = useState(false)
+
   return (
     <Panel
+      className={`pj-note-sec${dragging ? ' is-dragging' : ''}${over ? ' is-over' : ''}`}
+      draggable={armed}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/note-section-id', String(note.id))
+        onDragStart?.()
+      }}
+      onDragEnd={() => { setArmed(false); onDragEnd?.() }}
+      onDragOver={(e) => { e.preventDefault(); onDragOver?.() }}
+      onDrop={(e) => {
+        e.preventDefault()
+        onDropOn?.(Number(e.dataTransfer.getData('text/note-section-id')) || null)
+      }}
       title={
         <span className="pj-title pj-section-title">
+          <span
+            className="pj-note-grip"
+            title="Drag to reorder this section"
+            onMouseDown={() => setArmed(true)}
+            onMouseUp={() => setArmed(false)}
+          >
+            <Icon name="grip" size={13} />
+          </span>
           <RichLine
             value={note.title}
             onChange={(title) => onChange({ title })}

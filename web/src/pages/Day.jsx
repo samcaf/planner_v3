@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import TaskRow, { branchMinutes, nestTasks, spanMinutes, visibleIds } from '../components/TaskRow.jsx'
+import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
   SelectAllBox, SelectionBar, SelectionProvider, bulkPatch, draggedIds,
@@ -18,6 +18,9 @@ import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
+import {
+  COLUMN_MINUTES, columnFor, columnLabels as labelsFor, ownMinutes,
+} from '../lib/columns.js'
 
 const UNSECTIONED = 'loose'
 
@@ -27,7 +30,6 @@ const UNSECTIONED = 'loose'
  * for rather than its boundary — a task dragged into "quick" is a five-minute
  * job, not a ten-minute one.
  */
-const COLUMN_MINUTES = [5, 15, 60]
 
 /** How long a task must be held over a column before its time is rewritten. */
 const RETIME_DWELL = 900
@@ -40,30 +42,6 @@ const PRI_RANK = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4 }
 const byPriority = (a, b) =>
   (PRI_RANK[a.priority] ?? 2) - (PRI_RANK[b.priority] ?? 2) || a.sort - b.sort || a.id - b.id
 
-/** Where a duration falls among the three boxes. 30m is the top of the middle. */
-function columnByMinutes(m) {
-  if (!m) return 0
-  if (m <= 10) return 0
-  if (m <= 30) return 1
-  return 2
-}
-
-/** A task's own time: an explicit estimate, else the span between its clock times. */
-const ownMinutes = (t) => t.estimate_min || spanMinutes(t.start_time, t.end_time) || 0
-
-/**
- * Which of the three boxes a task belongs in. An explicit col_index wins;
- * otherwise it falls out of the duration, so tasks land somewhere sensible
- * without the user placing every one by hand.
- *
- * A parent is sized by its whole subtree, not by its own estimate. A ten-minute
- * task carrying two hours of children is a two-hour commitment, and filing it
- * under "quick" misrepresents the day.
- */
-function columnFor(task) {
-  if (task.col_index != null) return Math.min(2, Math.max(0, task.col_index))
-  return columnByMinutes(ownMinutes(task) + branchMinutes(task.subtasks || []))
-}
 
 export default function Day() {
   const { date } = useParams()
@@ -103,6 +81,9 @@ export default function Day() {
     }
   }, [dragSection, sectionDropAt])
   const [backlogBy, setBacklogBy] = useState(() => localStorage.getItem('backlog_by') || 'priority')
+  const [foldRoutines, setFoldRoutines] = useState(() => localStorage.getItem('fold_routines') === '1')
+  const [foldBacklog, setFoldBacklog] = useState(() => localStorage.getItem('fold_backlog') === '1')
+  const fold = (key, on, set) => { set(on); localStorage.setItem(key, on ? '1' : '0') }
   const [asideWidth, setAsideWidth] = useState(
     () => clampAside(Number(localStorage.getItem('day_aside_width')) || 340)
   )
@@ -131,12 +112,7 @@ export default function Day() {
   const raw = settings.data?.daily_capacity_min
   const capacity = raw === undefined ? 330 : Number(raw)
 
-  const columnLabels = (() => {
-    try {
-      const parsed = JSON.parse(settings.data?.column_labels || '[]')
-      return parsed.length === 3 ? parsed : ['Quick', 'Focused', 'Deep']
-    } catch { return ['Quick', 'Focused', 'Deep'] }
-  })()
+  const columnLabels = labelsFor(settings.data)
 
   function refresh() {
     day.reload()
@@ -164,7 +140,7 @@ export default function Day() {
   const known = [...d.tasks, ...(backlog.data || []), ...(doing.data || [])]
 
   /** A drop moves whatever the drag carries — one row, or the whole selection. */
-  const dropTasks = async (ids, patch, label) => {
+  const dropTasks = async (ids, patch, label, parent) => {
     if (!ids.length) return
 
     // A row arriving from the backlog is not just a date change: it carries a
@@ -179,7 +155,7 @@ export default function Day() {
       await api.post(`/tasks/${id}/schedule`, { date, section_id: patch.section_id ?? null })
     }
     const rest = ids.filter((id) => !returning.includes(id))
-    if (rest.length) await bulkPatch(rest, patch, { known, label, undo })
+    if (rest.length) await bulkPatch(rest, patch, { known, label, undo, parent })
     refresh()
   }
 
@@ -351,6 +327,100 @@ export default function Day() {
       },
       redo: async () => { await api.post(`/tasks/${task.id}/move`, { date: to, copy }) },
     })
+    refresh()
+  }
+
+  /**
+   * Drop into one of a section's three columns.
+   *
+   * `under` is what makes a sub-section band work in both directions: a drop
+   * into the band's own columns re-parents onto its heading, and a drop into
+   * the section's columns detaches. Without writing the parent at all — which
+   * is what this used to do — a child dropped into the main grid kept pointing
+   * at the heading and stayed in the band, which is why band children could
+   * not be dragged out of one.
+   *
+   * `section_id` is written in BOTH cases, never cleared for a child. The day
+   * builds its tree from a list already filtered by section, so a child whose
+   * section is null under a parent whose section is set is not in the list its
+   * parent is nested from, and disappears from the day entirely.
+   */
+  const moveToColumn = (ids, col, retime, under, section, labels) => dropTasks(
+    ids,
+    {
+      col_index: col,
+      section_id: section.id,
+      scheduled_date: date,
+      // Only when the drag was held there, and only for rows already in this
+      // section: re-timing something arriving from elsewhere would overwrite
+      // an estimate you had just made somewhere else.
+      ...(retime ? { estimate_min: COLUMN_MINUTES[col] } : {}),
+    },
+    retime ? `re-time to ${labels[col]}` : `move to ${labels[col]}`,
+    under,
+  )
+
+  /**
+   * Put one or more top-level rows at a new position in a section.
+   *
+   * Every gesture in a columns section ends here: a band dropped on a band, a
+   * band dropped on a run of tasks, a task dropped on a band's top or bottom
+   * edge. They differ only in what moves and what it lands next to, so they
+   * share one implementation and one undo entry.
+   *
+   * The whole top level is renumbered rather than nudging one row's `sort`.
+   * Bands and ordinary tasks share a single sequence — that shared order is
+   * exactly what makes them interleave — so writing positions for part of it
+   * would renumber those rows into the range the rest is already using.
+   *
+   * `where` is 'auto' unless a caller is specific. Auto follows the ordinary
+   * list-drag rule: dragging something DOWN onto a row lands it after that row,
+   * dragging UP lands it before. Landing before the target unconditionally
+   * reads fine until you try to move a band to the very end and find there is
+   * no row past the last one to aim at. The band edges pass 'before'/'after'
+   * outright, because there the user has aimed at a side already.
+   */
+  const placeInSection = async (moved, targetId, where = 'auto') => {
+    const ids = Array.isArray(moved) ? moved : [moved]
+    if (!ids.length || !targetId || ids.includes(targetId)) return
+
+    const target = d.tasks.find((t) => t.id === targetId)
+    if (!target) return
+    const sectionId = target.section_id ?? null
+
+    // Top level only: a child's position is decided by its parent, and pulling
+    // one into this list would silently un-nest it.
+    const order = d.tasks
+      .filter((t) => (t.section_id ?? null) === sectionId && t.parent_id == null && t.kind !== 'note')
+      .sort((a, b) => a.sort - b.sort || a.id - b.id)
+      .map((t) => t.id)
+
+    const moving = ids.filter((id) => order.includes(id))
+    const arriving = ids.filter((id) => !order.includes(id))
+    const rest = order.filter((id) => !moving.includes(id))
+    let at = rest.indexOf(targetId)
+    if (at < 0) return
+
+    const side = where === 'auto'
+      // Compared in the ORIGINAL order: `rest` has the moved rows taken out
+      // already, so it can no longer say which way the drag went.
+      ? (moving.length && order.indexOf(moving[0]) < order.indexOf(targetId) ? 'after' : 'before')
+      : where
+    if (side === 'after') at += 1
+    rest.splice(at, 0, ...moving, ...arriving)
+
+    const before = snapshot([...rest, ...arriving])
+    const apply = async () => {
+      // Anything arriving from elsewhere needs the section and the date as well
+      // as a position; a row already here needs only the position.
+      for (const id of arriving) {
+        await api.post(`/tasks/${id}/nest`, { parent_id: null })
+        await api.patch(`/tasks/${id}`, { section_id: sectionId, scheduled_date: date })
+      }
+      await api.post('/tasks/reorder', { ids: rest })
+    }
+    await apply()
+    undo?.record?.({ label: 'reorder', undo: restoreAll(before), redo: apply })
     refresh()
   }
 
@@ -549,19 +619,10 @@ export default function Day() {
               onDelete={async () => { await api.del(`/sections/${section.id}`); refresh() }}
               onDropLoose={(ids) =>
                 dropTasks(ids, { section_id: section.id, scheduled_date: date }, `move to ${section.name}`)}
-              onMoveToColumn={(ids, col, retime) => dropTasks(
-                ids,
-                {
-                  col_index: col,
-                  section_id: section.id,
-                  scheduled_date: date,
-                  // Only when the drag was held there, and only for rows already
-                  // in this section: re-timing something arriving from elsewhere
-                  // would overwrite an estimate you had just made somewhere else.
-                  ...(retime ? { estimate_min: COLUMN_MINUTES[col] } : {}),
-                },
-                retime ? `re-time to ${columnLabels[col]}` : `move to ${columnLabels[col]}`,
+              onMoveToColumn={(ids, col, retime, under = null) => moveToColumn(
+                ids, col, retime, under, section, columnLabels,
               )}
+              onPlace={placeInSection}
             />
           ))}
 
@@ -673,8 +734,23 @@ export default function Day() {
 
         <aside className="day-aside">
           {d.routines.length > 0 && (
-            <Panel title={<><Icon name="today" size={14} /> Routines</>}>
-              <div className="col" style={{ gap: 6 }}>
+            <Panel
+              title={
+                <>
+                  <button
+                    className="done-toggle bl-fold"
+                    aria-expanded={!foldRoutines}
+                    title={foldRoutines ? 'Show routines' : 'Minimise routines'}
+                    onClick={() => fold('fold_routines', !foldRoutines, setFoldRoutines)}
+                  >
+                    <Icon name={foldRoutines ? 'right' : 'chevronDown'} size={12} />
+                  </button>
+                  <Icon name="today" size={14} /> Routines
+                  {foldRoutines && <span className="muted"> ({d.routines.length})</span>}
+                </>
+              }
+            >
+              <div className="col" style={{ gap: 6, display: foldRoutines ? 'none' : undefined }}>
                 {d.routines.map((rt) => {
                   const already = d.sections.some((s) => s.name === rt.name)
                   return (
@@ -745,9 +821,21 @@ export default function Day() {
           )}
 
           <Panel
-            title={<>Backlog <span className="muted">({backlogTasks.length})</span></>}
+            title={
+              <>
+                <button
+                  className="done-toggle bl-fold"
+                  aria-expanded={!foldBacklog}
+                  title={foldBacklog ? 'Show the backlog' : 'Minimise the backlog'}
+                  onClick={() => fold('fold_backlog', !foldBacklog, setFoldBacklog)}
+                >
+                  <Icon name={foldBacklog ? 'right' : 'chevronDown'} size={12} />
+                </button>
+                Backlog <span className="muted">({backlogTasks.length})</span>
+              </>
+            }
             bodyClass=""
-            actions={
+            actions={!foldBacklog && (
               <>
                 <button
                   className="btn ghost sm"
@@ -760,12 +848,18 @@ export default function Day() {
                 >
                   {backlogBy === 'priority' ? 'By priority' : 'By project'}
                 </button>
-                <Link className="btn ghost sm" to="/tasks">All</Link>
+                {/* The whole backlog, grouped by project and gradeable in the
+                    day's own three columns. */}
+                <Link className="btn ghost sm" to="/tasks?view=backlog" title="See the whole backlog by project">
+                  All
+                </Link>
               </>
-            }
+            )}
           >
             <div
-              style={{ padding: 6, minHeight: 60 }}
+              // Still a drop target when folded: dragging work off the day and
+              // into a shut backlog is the whole reason to shut it.
+              style={{ padding: 6, minHeight: 60, ...(foldBacklog ? { minHeight: 0, padding: 0 } : {}) }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={async (e) => {
                 const ids = draggedIds(e)
@@ -774,7 +868,7 @@ export default function Day() {
                 refresh()
               }}
             >
-              {backlogTasks.length === 0 ? (
+              {foldBacklog ? null : backlogTasks.length === 0 ? (
                 <Empty>Empty. Drag a task here to unschedule it.</Empty>
               ) : (
                 nestTasks(backlogTasks).map((t) => (
@@ -988,16 +1082,145 @@ function DayBucket({ label, hint, tasks, rowProps, defaultOpen = false }) {
 }
 
 /**
- * A top-level task promoted to a heading for the work under it. The parent sits
- * in the column matching its OWN time — it is the heading, and grading it by the
- * subtree it already visibly contains would say the same thing twice — while its
- * immediate children each grade by their own total, exactly as they would out in
- * the grid. Rules above, between and below make the band read as one unit.
+ * Cut a section's top-level rows into the blocks it is drawn as.
+ *
+ * A run of ordinary tasks becomes one three-column grid; a sub-section becomes
+ * a band of its own. They alternate in `sort` order, so a section reads top to
+ * bottom the way it was arranged — tasks, a sub-section, more tasks — and a
+ * task genuinely has a position above or below a band. Collecting every
+ * non-band row into a single grid, which is what this replaced, made that
+ * position impossible to express.
  */
-function SubSection({ task, columnLabels, rowProps }) {
+function blocksOf(tree) {
+  const blocks = []
+  for (const t of tree) {
+    if (t.kind === 'note') continue
+    if (t.subsection) { blocks.push({ kind: 'band', task: t }); continue }
+    const last = blocks[blocks.length - 1]
+    if (last?.kind === 'grid') last.tasks.push(t)
+    else blocks.push({ kind: 'grid', tasks: [t] })
+  }
+  // A section with nothing but bands still needs one place to drop a task that
+  // is not going into any of them.
+  if (!blocks.some((b) => b.kind === 'grid')) blocks.push({ kind: 'grid', tasks: [] })
+  return blocks
+}
+
+/**
+ * One run of ordinary tasks, graded into the three boxes.
+ *
+ * Split out of the section so a section can hold several — one per run between
+ * sub-sections — rather than the single grid it used to have.
+ */
+function ColumnGrid({
+  tasks, columnLabels, rowProps, armed, watchColumn, stopWatching,
+  inSection, onMoveToColumn, onSettle, onPlaceBand,
+}) {
+  const [bandOver, setBandOver] = useState(false)
+  const cols = [[], [], []]
+  for (const t of tasks) cols[columnFor(t)].push(t)
+  const colIds = cols.map(visibleIds)
+
+  return (
+    <div
+      className={`box-cols${bandOver ? ' is-band-over' : ''}`}
+      // A band being dragged past is looking for a position, not a column, so
+      // it is caught here before it reaches one.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('text/band-id')) return
+        e.preventDefault()
+        e.stopPropagation()
+        setBandOver(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setBandOver(false)
+      }}
+      onDrop={(e) => {
+        const bandId = Number(e.dataTransfer.getData('text/band-id')) || null
+        if (!bandId) return
+        e.preventDefault()
+        e.stopPropagation()
+        setBandOver(false)
+        onPlaceBand?.(bandId)
+      }}
+    >
+      {cols.map((colTasks, i) => (
+        <div
+          key={i}
+          className={`box-col${armed === i ? ' is-armed' : ''}`}
+          onDragOver={(e) => {
+            // A section passing over is not looking for a column, and neither
+            // is a band hunting for a position.
+            if (isSectionDrag(e)) return
+            if (e.dataTransfer.types.includes('text/band-id')) return
+            e.preventDefault()
+            watchColumn(i)
+          }}
+          onDragLeave={(e) => {
+            // Only when the pointer has actually left this column, not when it
+            // crosses one of the rows inside it.
+            if (!e.currentTarget.contains(e.relatedTarget)) stopWatching()
+          }}
+          onDrop={(e) => {
+            if (e.dataTransfer.types.includes('text/band-id')) return
+            const ids = draggedIds(e)
+            if (!ids.length) return
+            e.stopPropagation()
+            onSettle?.()
+            const held = armed === i
+            stopWatching()
+            // Only rows already in this section are re-timed; one arriving from
+            // elsewhere keeps whatever it was given there.
+            const here = inSection(ids)
+            // Explicitly null, not omitted: this is the section's own grid, so
+            // landing here means "no longer inside a band".
+            onMoveToColumn(ids, i, held && here, null)
+          }}
+        >
+          <div className="box-col-h">
+            <SelectAllBox ids={colIds[i]} label={`the ${columnLabels[i]} column`} />
+            {columnLabels[i]}
+          </div>
+          {colTasks.length === 0
+            ? <p className="box-col-empty">Drop here</p>
+            : colTasks.map((t) => (
+              <TaskRow key={t.id} {...rowProps(t)} showProject={false} listIds={colIds[i]} />
+            ))}
+          {/* Soaks up the leftover height so even a column filled to its
+              section's bottom edge keeps somewhere to drop onto. */}
+          <div className="box-col-tail" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A top-level task promoted to a heading for the work under it. The heading is
+ * graded by its WHOLE branch — a heading over two hours of work belongs in the
+ * long column and should say two hours — while each child below grades by its
+ * own total, exactly as it would out in the grid. The heading counts its
+ * subtree without drawing it, because the band below IS that subtree; the rows
+ * in the band draw theirs normally, which is how a grandchild stays visible.
+ * Rules above, between and below make the band read as one unit.
+ */
+function SubSection({
+  task, columnLabels, rowProps, onMoveToColumn,
+  onPlace, dragging, over, onDragState,
+}) {
+  // Which edge a task is hovering over, so the strip it will land on lights up.
+  const [edge, setEdge] = useState(null)
+  const [open, setOpen] = useState(true)
+  // Armed by the grip only. The head row carries editable titles and time
+  // boxes, and a heading draggable everywhere cannot have its text selected.
+  const [armed, setArmed] = useState(false)
   const children = task.subtasks || []
+
+  // Graded by the whole branch, like any other parent. The heading is not drawn
+  // with its subtree — the band below is that — but it is still the sum of it,
+  // so a heading over two hours of work reads as two hours.
   const head = [[], [], []]
-  head[columnByMinutes(ownMinutes(task))].push(task)
+  head[columnFor(task)].push(task)
 
   const kids = [[], [], []]
   for (const c of children) kids[columnFor(c)].push(c)
@@ -1005,14 +1228,30 @@ function SubSection({ task, columnLabels, rowProps }) {
   const row = (groups, opts = {}) => (
     <div className="box-cols">
       {groups.map((group, i) => (
-        <div className="box-col" key={i}>
+        <div
+          className="box-col"
+          key={i}
+          // Columns inside the band take drops too, or a child could be moved
+          // between the band's own columns only by luck.
+          onDragOver={(e) => { if (!isSectionDrag(e)) e.preventDefault() }}
+          onDrop={(e) => {
+            // The heading cannot go inside itself, and /nest rejects the cycle
+            // with a 400 rather than ignoring it, so drop it from the gesture
+            // instead of sending a request that is known to fail.
+            const ids = draggedIds(e).filter((id) => id !== task.id)
+            if (!ids.length) return
+            e.stopPropagation()
+            onMoveToColumn?.(ids, i, false, task.id)
+          }}
+        >
           {group.map((t) => (
             <TaskRow
               key={t.id}
               {...rowProps(t)}
-              // The band already states the grouping, so repeating the parent's
-              // subtasks beneath it would show every child twice.
-              subtasks={opts.flat ? [] : (t.subtasks || [])}
+              subtasks={t.subtasks || []}
+              // The heading counts its branch but does not draw it; the rows
+              // below draw theirs, which is how a grandchild becomes visible.
+              renderChildren={!opts.head}
               showProject={false}
               listIds={group.map((x) => x.id)}
             />
@@ -1023,15 +1262,119 @@ function SubSection({ task, columnLabels, rowProps }) {
   )
 
   return (
-    <div className="subsec">
+    <div
+      className={[
+        'subsec',
+        dragging ? 'is-dragging' : '',
+        over ? 'is-over' : '',
+      ].filter(Boolean).join(' ')}
+      draggable={armed}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        // The id rides on the dataTransfer rather than in React state: a drop
+        // can land before the dragstart's state update has committed, and the
+        // reorder would then be silently dropped.
+        e.dataTransfer.setData('text/band-id', String(task.id))
+        onDragState?.('drag', task.id)
+      }}
+      onDragEnd={() => { setArmed(false); onDragState?.('end', null) }}
+      onDragOver={(e) => {
+        // Only for another band. A task being dragged into this band's columns
+        // is a different gesture, handled by the columns themselves.
+        if (!e.dataTransfer.types.includes('text/band-id')) return
+        e.preventDefault()
+        e.stopPropagation()
+        onDragState?.('over', task.id)
+      }}
+      onDrop={(e) => {
+        const from = Number(e.dataTransfer.getData('text/band-id')) || null
+        if (!from) return
+        e.preventDefault()
+        e.stopPropagation()
+        onDragState?.('end', null)
+        onPlace?.(from, task.id)
+      }}
+    >
+      {/* The two strips are what give a task a position outside this band.
+          Dropping on the top strip puts it immediately before the heading, on
+          the bottom strip immediately after — which is the run of ordinary
+          tasks above or below, creating one if there is none. */}
+      <EdgeStrip
+        side="top"
+        lit={edge === 'top'}
+        onOver={() => setEdge('top')}
+        onLeave={() => setEdge(null)}
+        onDropTask={(ids) => { setEdge(null); onPlace?.(ids, task.id) }}
+      />
       <div className="subsec-rule" />
-      {row(head, { flat: true })}
+      <div className="subsec-head">
+        <span
+          className="subsec-grip"
+          title="Drag to reorder this sub-section"
+          onMouseDown={() => setArmed(true)}
+          onMouseUp={() => setArmed(false)}
+        >
+          <Icon name="grip" size={13} />
+        </span>
+        <button
+          className="task-twist subsec-twist"
+          title={open ? 'Minimise what is under this' : 'Show what is under this'}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <Icon name={open ? 'chevronDown' : 'right'} size={12} />
+        </button>
+        {row(head, { head: true })}
+      </div>
+
+      {open && (
+        <>
+          <div className="subsec-rule" />
+          {children.length > 0
+            ? row(kids)
+            : <p className="subsec-empty">Nothing under this yet — add a subtask.</p>}
+        </>
+      )}
       <div className="subsec-rule" />
-      {children.length > 0
-        ? row(kids, { flat: true })
-        : <p className="subsec-empty">Nothing under this yet — add a subtask.</p>}
-      <div className="subsec-rule" />
+      <EdgeStrip
+        side="bottom"
+        lit={edge === 'bottom'}
+        onOver={() => setEdge('bottom')}
+        onLeave={() => setEdge(null)}
+        onDropTask={(ids) => { setEdge(null); onPlace?.(ids, task.id, 'after') }}
+      />
     </div>
+  )
+}
+
+/**
+ * A thin band-edge target for a task being placed outside a sub-section.
+ *
+ * It only accepts task drags: a band being dragged is looking for a position
+ * among the blocks, which the sub-section itself handles, and letting both
+ * through here would make the two gestures fight over the same few pixels.
+ */
+function EdgeStrip({ side, lit, onOver, onLeave, onDropTask }) {
+  return (
+    <div
+      className={`subsec-edge is-${side}${lit ? ' is-lit' : ''}`}
+      onDragOver={(e) => {
+        if (isSectionDrag(e) || e.dataTransfer.types.includes('text/band-id')) return
+        if (!isTaskDrag(e)) return
+        e.preventDefault()
+        e.stopPropagation()
+        onOver()
+      }}
+      onDragLeave={onLeave}
+      onDrop={(e) => {
+        if (e.dataTransfer.types.includes('text/band-id')) return
+        const ids = draggedIds(e)
+        if (!ids.length) return
+        e.preventDefault()
+        e.stopPropagation()
+        onDropTask(ids)
+      }}
+    />
   )
 }
 
@@ -1117,7 +1460,7 @@ function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
 
 function SectionPanel({
   section, tasks, projects, columnLabels, rowProps,
-  onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn,
+  onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn, onPlace,
   dragging, dropAt, onDragSection, onDragSectionEnd, onDragOverSection, onDropSection,
 }) {
   const [renaming, setRenaming] = useState(false)
@@ -1128,6 +1471,8 @@ function SectionPanel({
   // task, and only a deliberate pause changes what it says about itself.
   const [armed, setArmed] = useState(null)
   const dwell = useRef({ col: null, timer: null })
+  const [bandDrag, setBandDrag] = useState(null)
+  const [bandOver, setBandOver] = useState(null)
 
   // Folded away once nothing in it is left to do, and only on the transition —
   // so opening a finished band to look at it stays open, and it only folds
@@ -1224,19 +1569,16 @@ function SectionPanel({
   const bands = isColumns
     ? tree.filter((t) => t.subsection && t.kind !== 'note')
     : []
-  const banded = new Set(bands.map((t) => t.id))
 
-  const cols = [[], [], []]
-  if (isColumns) {
-    for (const t of tree) {
-      if (t.kind === 'note' || banded.has(t.id)) continue
-      cols[columnFor(t)].push(t)
-    }
-  }
+  // Bands and ordinary work interleave in one `sort` order, so a section reads
+  // top to bottom as it was arranged: a run of tasks, a sub-section, more
+  // tasks. Grouping every non-band row into one grid regardless of position —
+  // which is what this used to do — left no place to put a task above a band.
+  const blocks = isColumns ? blocksOf(tree) : []
 
   // Each column is its own list, so a range never jumps between them.
   const noteIds = visibleIds(notes)
-  const colIds = cols.map(visibleIds)
+
 
   return (
     <section
@@ -1348,59 +1690,43 @@ function SectionPanel({
       <div {...dropZone}>
         {isColumns ? (
           <>
-          {bands.map((band) => (
+          {blocks.map((block) => (block.kind === 'band' ? (
             <SubSection
-              key={band.id}
-              task={band}
+              key={`band-${block.task.id}`}
+              task={block.task}
               columnLabels={columnLabels}
               rowProps={rowProps}
+              dragging={bandDrag === block.task.id}
+              over={bandOver === block.task.id}
+              onDragState={(what, id) => {
+                if (what === 'drag') setBandDrag(id)
+                else if (what === 'over') setBandOver(id)
+                else { setBandDrag(null); setBandOver(null) }
+              }}
+              // Both gestures end in the same place: a new position in the
+              // section's one top-level order. A band dropped on a band lands
+              // before it; a task dropped on a band's edge lands just outside
+              // it, which is what puts a task above or below a sub-section.
+              onPlace={(movedId, targetId, where) => onPlace?.(movedId, targetId, where)}
+              onMoveToColumn={(ids, col, retime, under) =>
+                onMoveToColumn(ids, col, retime, under)}
             />
-          ))}
-
-          <div className="box-cols">
-            {cols.map((colTasks, i) => (
-              <div
-                key={i}
-                className={`box-col${armed === i ? ' is-armed' : ''}`}
-                onDragOver={(e) => {
-                  // A section passing over is not looking for a column.
-                  if (isSectionDrag(e)) return
-                  e.preventDefault()
-                  watchColumn(i)
-                }}
-                onDragLeave={(e) => {
-                  // Only when the pointer has actually left this column, not
-                  // when it crosses one of the rows inside it.
-                  if (!e.currentTarget.contains(e.relatedTarget)) stopWatching()
-                }}
-                onDrop={(e) => {
-                  const ids = draggedIds(e)
-                  if (!ids.length) return
-                  e.stopPropagation()
-                  setOver(false)
-                  const held = armed === i
-                  stopWatching()
-                  // Only rows already in this section are re-timed; one arriving
-                  // from elsewhere keeps whatever it was given there.
-                  const inHere = ids.every((id) => tasks.some((t) => t.id === id))
-                  onMoveToColumn(ids, i, held && inHere)
-                }}
-              >
-                <div className="box-col-h">
-                  <SelectAllBox ids={colIds[i]} label={`the ${columnLabels[i]} column`} />
-                  {columnLabels[i]}
-                </div>
-                {colTasks.length === 0
-                  ? <p className="box-col-empty">Drop here</p>
-                  : colTasks.map((t) => (
-                    <TaskRow key={t.id} {...rowProps(t)} showProject={false} listIds={colIds[i]} />
-                  ))}
-                {/* Soaks up the leftover height so even a column filled to its
-                    section's bottom edge keeps somewhere to drop onto. */}
-                <div className="box-col-tail" />
-              </div>
-            ))}
-          </div>
+          ) : (
+            <ColumnGrid
+              key={`grid-${block.tasks[0]?.id ?? 'empty'}`}
+              tasks={block.tasks}
+              columnLabels={columnLabels}
+              rowProps={rowProps}
+              armed={armed}
+              watchColumn={watchColumn}
+              stopWatching={stopWatching}
+              inSection={(ids) => ids.every((id) => tasks.some((t) => t.id === id))}
+              onMoveToColumn={onMoveToColumn}
+              onSettle={() => setOver(false)}
+              // A band dragged onto a run of ordinary tasks lands above it.
+              onPlaceBand={(bandId) => onPlace?.(bandId, block.tasks[0]?.id ?? null)}
+            />
+          )))}
 
           {/* Under the grid, not above it. A loose note is commentary on the
               section, and putting it first pushed the actual work down the

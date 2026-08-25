@@ -117,6 +117,20 @@ export function UndoButtons() {
  * to overwrite so the inverse is exact, and `remove` reinstates the whole row —
  * including its id, so anything nested under it still points at the right parent.
  */
+/**
+ * Which field of a patch, if any, should carry down the subtree.
+ *
+ * Only on the way IN. Ticking a parent means its work is finished, so what is
+ * under it is finished too; UN-ticking it means there is more to do, which says
+ * nothing about the children that genuinely were done. Same for optional. So a
+ * cascade fires on done and on optional, and never on their opposites.
+ */
+function cascadeField(changes) {
+  if (changes.status === 'done') return 'status'
+  if (changes.optional === 1) return 'optional'
+  return null
+}
+
 export function taskOps(undoCtx, refresh) {
   const record = undoCtx?.record
 
@@ -126,13 +140,37 @@ export function taskOps(undoCtx, refresh) {
       for (const k of Object.keys(changes)) before[k] = task[k] ?? null
 
       await api.patch(`/tasks/${task.id}`, changes)
-      refresh()
 
+      // Recorded BEFORE the cascade, so it sits UNDER it on the stack. The
+      // stack is last-in-first-out, and the point of splitting the two is that
+      // the first Ctrl-Z takes back the children and the second takes back the
+      // task itself — which only works in this order.
       record?.({
         label: label || 'change',
         undo: async () => { await api.patch(`/tasks/${task.id}`, before) },
         redo: async () => { await api.patch(`/tasks/${task.id}`, changes) },
       })
+
+      const field = cascadeField(changes)
+      if (field) {
+        const value = changes[field]
+        const { changed = [] } = await api.post(`/tasks/${task.id}/cascade`, { field, value })
+        // Nothing to record when nothing moved — an entry that undoes nothing
+        // would still cost a Ctrl-Z, and the keypress would look ignored.
+        if (changed.length) {
+          record?.({
+            label: `${label || 'change'} — everything under it`,
+            // One entry for the whole subtree, not one per row: the user asked
+            // for a single undo of the children, however deep they go.
+            undo: async () => {
+              for (const c of changed) await api.patch(`/tasks/${c.id}`, { [field]: c.was })
+            },
+            redo: async () => { await api.post(`/tasks/${task.id}/cascade`, { field, value }) },
+          })
+        }
+      }
+
+      refresh()
     },
 
     async remove(task, label = 'delete') {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import Progress, { CLOSED, OPEN } from '../components/Progress.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
@@ -8,6 +8,11 @@ import TaskFilter, {
 } from '../components/TaskFilter.jsx'
 import TaskRow from '../components/TaskRow.jsx'
 import { Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
+import BacklogBoards from '../components/BacklogBoards.jsx'
+import { bulkPatch } from '../components/Selection.jsx'
+import { isBacklogTask } from '../lib/backlog.js'
+import { columnLabels as labelsFor } from '../lib/columns.js'
+import { useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { longDate, relative, shortDate } from '../lib/dates.js'
 import '../styles/alltasks.css'
@@ -30,6 +35,18 @@ export default function AllTasks() {
   const [showRoutine, setShowRoutine] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [groupBy, setGroupBy] = useState('none')
+  // In the URL so the day's backlog panel can link straight here, and so the
+  // view survives a refresh the way the grouping in a bookmarked link would.
+  const [urlParams, setUrlParams] = useSearchParams()
+  const backlogView = urlParams.get('view') === 'backlog'
+  const setBacklogView = (on) => setUrlParams((prev) => {
+    const next = new URLSearchParams(prev)
+    if (on) next.set('view', 'backlog'); else next.delete('view')
+    return next
+  }, { replace: true })
+  const [board, setBoard] = useState(true)
+  const undo = useUndo()
+  const settings = useApi('/settings')
   const [drag, setDrag] = useState(null)
   const [over, setOver] = useState(null)
   const [draft, setDraft] = useState('')
@@ -72,6 +89,9 @@ export default function AllTasks() {
   const all = tasks.data || []
   const list = all.filter((t) => included(t) && keep(t))
   const groups = tasks.data ? buildGroups(list, groupBy) : []
+  // The same definition the day's aside and each project's panel use: open work
+  // that has never been given a day. See lib/backlog.js.
+  const backlogTasks = list.filter((t) => isBacklogTask(t) && t.scheduled_date == null)
   const inProgress = (doing.data || []).filter((t) => t.kind !== 'note' && (showRoutine || !t.hide_from_all_tasks))
 
   const active = activeChips(filters, { search, projectId, projects: projects.data, showNotes, showRoutine })
@@ -95,6 +115,33 @@ export default function AllTasks() {
 
   async function remove(id) {
     await api.del(`/tasks/${id}`)
+    reload()
+  }
+
+  /**
+   * Give a backlogged task a day, or put a copy of it on one. /move is the
+   * server's job because the task's section has to be found or made on the far
+   * day; a plain date patch drops it into that day's loose list instead.
+   */
+  async function reschedule(task, to, copy) {
+    const before = { date: task.scheduled_date, section_id: task.section_id ?? null }
+    const made = await api.post(`/tasks/${task.id}/move`, { date: to, copy })
+
+    undo?.record?.({
+      label: copy ? 'copy to a day' : 'move to a day',
+      undo: async () => {
+        if (copy) await api.del(`/tasks/${made.id}`)
+        else {
+          await api.patch(`/tasks/${task.id}`, {
+            scheduled_date: before.date,
+            section_id: before.section_id,
+            status: 'todo',
+            moved_to_date: null,
+          })
+        }
+      },
+      redo: async () => { await api.post(`/tasks/${task.id}/move`, { date: to, copy }) },
+    })
     reload()
   }
 
@@ -208,14 +255,39 @@ export default function AllTasks() {
               />
             </div>
 
-            <select
-              className="input select at-filter"
-              title="Grouping"
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value)}
+            {!backlogView && (
+              <select
+                className="input select at-filter"
+                title="Grouping"
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value)}
+              >
+                {GROUPINGS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            )}
+
+            {/* The backlog is grouped by project by construction, so the
+                grouping picker steps aside while it is showing. */}
+            <button
+              className={`btn ghost sm${backlogView ? ' is-on' : ''}`}
+              title="Show only work that has never been given a day, grouped by project"
+              aria-pressed={backlogView}
+              onClick={() => setBacklogView(!backlogView)}
             >
-              {GROUPINGS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
+              <Icon name="templates" size={12} /> Backlog
+              {backlogTasks.length > 0 && <span className="muted"> {backlogTasks.length}</span>}
+            </button>
+
+            {backlogView && (
+              <button
+                className="btn ghost sm"
+                title={board ? 'Show as a plain list' : 'Show in the day view\u2019s three columns'}
+                onClick={() => setBoard(!board)}
+              >
+                <Icon name={board ? 'list' : 'columns'} size={12} />
+                {board ? ' As a list' : ' As a board'}
+              </button>
+            )}
 
             <TaskFilter
               filters={filters}
@@ -275,6 +347,25 @@ export default function AllTasks() {
 
         {tasks.error ? (
           <Panel><Empty>{tasks.error.message}</Empty></Panel>
+        ) : backlogView ? (
+          <BacklogBoards
+            tasks={backlogTasks}
+            projects={projects.data || []}
+            labels={labelsFor(settings.data)}
+            board={board}
+            rowProps={(t) => ({
+              task: t,
+              subtasks: t.subtasks || [],
+              showProject: false,
+              onChange: (patch, id = t.id) => save(id, patch),
+              onDelete: (id = t.id) => remove(id),
+              onReschedule: reschedule,
+            })}
+            onMoveToColumn={(ids, col, known) => bulkPatch(
+              ids, { col_index: col },
+              { known, label: 'move between columns', undo },
+            ).then(() => tasks.reload())}
+          />
         ) : groups.length === 0 ? (
           <Panel><Empty>{tasks.data ? 'Nothing matches these filters.' : 'Loading…'}</Empty></Panel>
         ) : (

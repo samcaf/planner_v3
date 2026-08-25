@@ -335,6 +335,58 @@ const DESCENDANTS = `
   SELECT id FROM below
 `
 
+/**
+ * Apply one field to a task's whole subtree, and say what it changed.
+ *
+ * Ticking a parent should tick what is under it — a parent is done when its
+ * work is — but the two are separate decisions to take back, so this deals only
+ * with the descendants and leaves the task itself to the caller's own patch.
+ *
+ * The reply carries each row's previous value so undo can restore exactly what
+ * was there. Rows already in the target state are skipped rather than recorded:
+ * a child you had ticked yourself must not come back un-ticked because a parent
+ * was ticked over the top of it later.
+ *
+ * Only `status` and `optional` are cascadable. Anything else is a field where
+ * "and everything under it" is not implied by the gesture.
+ */
+const CASCADE_FIELDS = new Set(['status', 'optional'])
+
+r.post('/:id/cascade', h((req) => {
+  const id = Number(req.params.id)
+  const field = String(req.body?.field || '')
+  const value = req.body?.value
+
+  if (!CASCADE_FIELDS.has(field)) throw badRequest(`${field} cannot be cascaded`)
+
+  const ids = db.prepare(DESCENDANTS).all(id).map((r2) => r2.id)
+  if (!ids.length) return { changed: [] }
+
+  const rows = db.prepare(
+    `SELECT id, ${field} AS was FROM tasks WHERE id IN (${ids.map(() => '?').join(',')})`
+  ).all(...ids)
+
+  // A note has prose, not a state; sweeping one to 'done' would be meaningless
+  // and would show up as a stray tick in the day.
+  const kinds = new Map(db.prepare(
+    `SELECT id, kind FROM tasks WHERE id IN (${ids.map(() => '?').join(',')})`
+  ).all(...ids).map((k) => [k.id, k.kind]))
+
+  const changed = rows.filter((row) => row.was !== value && kinds.get(row.id) !== 'note')
+
+  db.transaction(() => {
+    for (const row of changed) {
+      db.prepare(`UPDATE tasks SET ${field} = ? WHERE id = ?`).run(value, row.id)
+      if (field === 'status') {
+        db.prepare('UPDATE tasks SET completed_at = ? WHERE id = ?')
+          .run(value === 'done' ? new Date().toISOString() : null, row.id)
+      }
+    }
+  })()
+
+  return { changed: changed.map((row) => ({ id: row.id, was: row.was })) }
+}))
+
 /** The first child of `parentId` (top level when null) carrying this title. */
 function childByTitle(title, parentId, { date = null, backlog = false } = {}) {
   const where = backlog ? 'scheduled_date IS NULL' : 'scheduled_date IS ?'

@@ -172,3 +172,23 @@
 
 /* Past h3 the size race is lost, so rank is carried by weight and colour. */
 .rich h4 { font-size: 13px; font-weight: 650; color: var(--ink-2); }
+
+/* ------------------------------------------------ reordering note sections */
+
+/* The grip is the only draggable part: the body is a text editor, and a panel
+   draggable everywhere cannot have its prose selected with the mouse. */
+.pj-note-grip {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  color: var(--ink-3);
+  cursor: grab;
+}
+
+.pj-note-grip:active { cursor: grabbing; }
+.pj-note-sec:hover .pj-note-grip { color: var(--ink-2); }
+
+.pj-note-sec.is-dragging { opacity: .45; }
+
+/* The bar marks where the dragged section will land. */
+.pj-note-sec.is-over { box-shadow: inset 0 3px 0 var(--accent); }

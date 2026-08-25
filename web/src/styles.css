@@ -759,10 +759,15 @@ kbd {
 .task-check.is-optional {
   border-style: dashed;
   border-color: var(--amber);
+  /* Integer stripe AND integer period, in that order of importance. A 4.5px
+     period starts successive stripes at 0, 4.5, 9, 13.5 — alternating whole
+     and half pixel phases — so every other line antialiases across an extra
+     column and reads visibly fatter than its neighbour. At a 6px period every
+     stripe has the same phase and so the same rendered width. */
   background-image: repeating-linear-gradient(
     45deg,
-    var(--amber) 0 1.5px,
-    transparent 1.5px 4.5px
+    var(--amber) 0 2px,
+    transparent 2px 6px
   );
 }
 
@@ -773,10 +778,13 @@ kbd {
   border-color: var(--green);
   color: #fff;
   background-color: var(--green);
+  /* Same 2px/6px as the un-done state: a 5px period puts the stripes on a
+     different phase again, and the box would change its hatching as it was
+     ticked. */
   background-image: repeating-linear-gradient(
     45deg,
     var(--amber) 0 2px,
-    transparent 2px 5px
+    transparent 2px 6px
   );
 }
 
@@ -1170,11 +1178,24 @@ kbd {
   margin: 0;
 }
 
-.subsec > .box-cols { border: 0; }
+.subsec > .box-cols,
+.subsec-head > .box-cols { border: 0; }
+
+/* The twist sits beside the heading rather than above the band, so collapsing
+   reads as "fold this task away" and not "fold the section away". The head row
+   flexes so the columns keep the full remaining width. */
+.subsec-head { display: flex; align-items: flex-start; gap: 0; }
+.subsec-head > .box-cols { flex: 1; min-width: 0; }
+
+.subsec-twist {
+  flex: none;
+  margin-top: 10px;
+  margin-left: 2px;
+}
 
 /* The head row reads as the heading it is: a shade heavier than the children
    beneath it, without becoming a second kind of task row. */
-.subsec > .box-cols:first-of-type .task-title { font-weight: 620; }
+.subsec-head .task-title { font-weight: 620; }
 
 .subsec-empty {
   margin: 0;
@@ -1831,3 +1852,61 @@ kbd {
   box-shadow: var(--shadow-pop);
   z-index: 80;
 }
+
+/* ------------------------------------------------- folding backlog panels */
+
+/* The fold sits inside the panel heading rather than beside it, so the whole
+   title reads as one control group and the panel keeps its actions on the far
+   right for what it does rather than how much of it you can see. */
+.bl-fold {
+  display: inline-flex;
+  padding: 2px;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+
+/* A pressed ghost button. The backlog view is a mode you are in, not a command
+   you issued, and an unlit button gives no sign of which one you are looking at. */
+.btn.ghost.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* The grip is the only draggable part of a band: the head row carries an
+   editable title and time boxes, and a heading draggable everywhere cannot
+   have its text selected with the mouse. */
+.subsec-grip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-top: 10px;
+  color: var(--ink-3);
+  cursor: grab;
+}
+
+.subsec-grip:active { cursor: grabbing; }
+.subsec:hover .subsec-grip { color: var(--ink-2); }
+
+.subsec.is-dragging { opacity: .45; }
+
+/* The bar marks where the dragged band will land. */
+.subsec.is-over { box-shadow: inset 0 3px 0 var(--accent); }
+
+/* ------------------------------------------- placing work around a band */
+
+/* The strip a task lands on to sit outside a sub-section rather than inside
+   it. Invisible until something is over it: a permanent gap between every band
+   and its neighbours would read as a layout mistake, and it only has to be
+   findable while a drag is looking for it. */
+.subsec-edge {
+  height: 8px;
+  margin: -3px 0;
+  border-radius: 2px;
+  transition: background .12s ease;
+}
+
+.subsec-edge.is-lit { background: var(--accent); }
+
+/* A band being dragged over a run of tasks lands above it. */
+.box-cols.is-band-over { box-shadow: inset 0 3px 0 var(--accent); }

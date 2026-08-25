@@ -137,6 +137,11 @@ db.exec(`
   );
 `)
 
+// Archiving rather than deleting. A reference note stops being current long
+// before it stops being worth keeping, and deletion is the only other way to
+// get it out of the list.
+addColumn('notebook', 'archived', 'INTEGER NOT NULL DEFAULT 0')
+
 export const DEFAULTS = {
   column_labels: JSON.stringify(['Quick', 'Focused', 'Deep']),
   day_layout: 'list',
