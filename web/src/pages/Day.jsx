@@ -18,6 +18,7 @@ import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
 import { tabDate, usePageTitle } from '../lib/title.js'
+import { useVimActions } from '../lib/vim.jsx'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 import {
@@ -114,6 +115,56 @@ function DayView({ date }) {
   useArrowNav(useCallback((by) => navigate(`/day/${addDays(date, by)}`), [date, navigate]))
   const undo = useUndo()
   const toast = useToast()
+
+  /**
+   * Lend the keyboard the handlers the buttons already use, so a keystroke and
+   * the click it replaces do exactly the same thing — including landing on the
+   * undo stack. Nothing here is new behaviour; it is the same four functions
+   * the rows are already wired to.
+   */
+  // ABOVE the early returns below. A hook after one runs on some renders and
+  // not others, and React treats the changing count as a hard error — which
+  // white-screened this whole page the moment it had data to draw.
+  //
+  // Everything inside reads `day.data` when it is called rather than closing
+  // over `d`, because at this point in the render there may not be any yet.
+  useVimActions({
+    date,
+    taskById: (id) => (day.data?.tasks || []).find((t) => t.id === id),
+    patch: (id, body) => patchTask(id, body),
+    remove: (id) => removeTask(id),
+    reschedule,
+    /** A new row beside another, carrying whatever a yank put in the register. */
+    addNear: async (nearId, row, side) => {
+      const near = (day.data?.tasks || []).find((t) => t.id === nearId)
+      const created = await api.post('/tasks', {
+        title: row.title || 'New task',
+        scheduled_date: date,
+        section_id: near?.section_id ?? null,
+        project_id: near?.project_id ?? null,
+        estimate_min: row.estimate_min ?? null,
+        priority: row.priority || 'medium',
+      })
+      if (near?.parent_id) await api.post(`/tasks/${created.id}/nest`, { parent_id: near.parent_id })
+
+      // Placed against the row it was added from rather than at the end, which
+      // is what "below the cursor" has to mean.
+      if (near) {
+        const siblings = (day.data?.tasks || [])
+          .filter((t) => (t.parent_id ?? null) === (near.parent_id ?? null)
+            && (t.section_id ?? null) === (near.section_id ?? null))
+          .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
+          .map((t) => t.id)
+          .filter((id) => id !== created.id)
+        const at = siblings.indexOf(nearId)
+        siblings.splice(side === 'above' ? at : at + 1, 0, created.id)
+        await api.post('/tasks/reorder', { ids: siblings })
+      }
+      setJustAdded(created.id)
+      refresh()
+      return created
+    },
+  })
 
   if (day.error) return <div className="page"><p className="muted">{day.error.message}</p></div>
   if (!day.data) return <div className="page"><p className="muted">Loading…</p></div>
@@ -1023,7 +1074,13 @@ function TaskList({ tasks, rowProps }) {
       {closed.length > 0 && (
         <>
           <div className="hr" />
-          <button className="done-toggle" onClick={() => setShowDone(!showDone)}>
+          {/* aria-expanded because the chevron alone is the only sign of which
+              way this fold is sitting, and a screen reader cannot see it. */}
+          <button
+            className="done-toggle"
+            aria-expanded={showDone}
+            onClick={() => setShowDone(!showDone)}
+          >
             <Icon name={showDone ? 'chevronDown' : 'right'} size={12} />
             {closed.length} done
           </button>

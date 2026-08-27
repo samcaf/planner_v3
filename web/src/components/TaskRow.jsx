@@ -305,6 +305,9 @@ export default function TaskRow({
     <>
       <div
         ref={rowRef}
+        // Keyboard control finds its cursor by reading these off the page, so
+        // every view that draws tasks gets it without knowing that it has.
+        data-task-id={task.id}
         className={[
           'task', task.status, isNote ? 'is-note' : '', isMeeting ? 'is-meeting' : '',
           task.optional ? 'is-optional' : '', zone ? `drop-${zone}` : '',

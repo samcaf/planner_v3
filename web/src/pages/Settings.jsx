@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Empty, Field, Panel } from '../components/ui.jsx'
+import { HELP } from '../components/VimLayer.jsx'
+import { useVim } from '../lib/vim.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
 import '../styles/settings.css'
@@ -187,6 +189,8 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
             </div>
           </Panel>
 
+          <Keys />
+
           <button className="btn ghost sm st-raw-toggle" onClick={() => setShowRaw(!showRaw)}>
             <Icon name={showRaw ? 'chevronDown' : 'right'} size={12} />
             {showRaw ? 'Hide' : 'Show'} everything else
@@ -239,5 +243,101 @@ function DurationField({ label, value, onSave }) {
       </div>
       {error && <span className="st-hint st-error">{error}</span>}
     </Field>
+  )
+}
+
+/**
+ * Every key and gesture the app answers to, in one place.
+ *
+ * The mouse gestures are here because they are as invisible as a keystroke —
+ * nothing on screen says that right-clicking a checkbox makes a task optional —
+ * and a list of shortcuts that covered only the keyboard would leave out the
+ * ones people actually fail to find.
+ *
+ * The vim table is imported from the layer that implements it, so a key cannot
+ * be documented here and bound differently there.
+ */
+function Keys() {
+  const vim = useVim()
+
+  const GENERAL = [
+    ['Everywhere', [
+      ['Ctrl / \u2318 + K', 'search everything'],
+      ['Ctrl / \u2318 + Z', 'undo'],
+      ['Ctrl / \u2318 + Shift + Z', 'redo'],
+      ['Ctrl + Alt + V', 'turn keyboard control on or off'],
+      ['Escape', 'close a menu, or leave a field'],
+    ]],
+    ['Going places', [
+      ['d / w / m / n', 'day, week, month, notes — keeping the date'],
+      ['t', 'jump to today'],
+      ['j / k', 'the next / previous day, week or month'],
+      ['g then p / e / a', 'projects, people, all tasks'],
+      ['?', 'the shortcut list'],
+    ]],
+    ['On a day', [
+      ['\u2190 / \u2192', 'the day before / after'],
+      ['Ctrl-click the arrows', 'open that day in a new tab'],
+    ]],
+    ['On a task', [
+      ['click the checkbox', 'done / not done'],
+      ['right-click the checkbox', 'optional / committed'],
+      ['shift-click the checkbox', 'drop / undrop'],
+      ['Tab in the title', 'jump to the timing panel'],
+      ['Enter', 'commit an edit and close the menu'],
+      ['drag the middle of a row', 'nest it under that row'],
+      ['drag near a row\u2019s edge', 'reorder it there'],
+    ]],
+  ]
+
+  return (
+    <Panel title={<><Icon name="list" size={14} /> Keys and gestures</>}>
+      <div className="st-keys">
+        {GENERAL.map(([group, pairs]) => (
+          <section key={group}>
+            <h4>{group}</h4>
+            <dl>
+              {pairs.map(([keys, what]) => (
+                <div key={keys}><dt>{keys}</dt><dd>{what}</dd></div>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
+
+      <div className="st-vim-head">
+        <label className="st-vim-toggle">
+          <input
+            type="checkbox"
+            checked={!!vim?.enabled}
+            onChange={(e) => vim?.toggle(e.target.checked)}
+          />
+          <span>
+            <strong>Keyboard control</strong>
+            <span className="st-hint">
+              hjkl to move between tasks, one key per action, <code>:</code> for commands.
+              While it is on it takes over the single letters above — <code>j</code> moves down the
+              list rather than on to tomorrow. Ctrl-Alt-V toggles it anywhere; <code>:q</code>
+              turns it off from inside.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {vim?.enabled && (
+        <div className="st-keys">
+          {HELP.map(([group, pairs]) => (
+            <section key={group}>
+              <h4>{group}</h4>
+              <dl>
+                {pairs.map(([keys, what]) => (
+                  <div key={keys}><dt>{keys}</dt><dd>{what}</dd></div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      )}
+    </Panel>
   )
 }

@@ -26,6 +26,8 @@ import Settings from './pages/Settings.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Resolver, { InternalLinks } from './components/Resolver.jsx'
 import Search from './components/Search.jsx'
+import VimLayer from './components/VimLayer.jsx'
+import { VimProvider, useVim } from './lib/vim.jsx'
 
 /** Wide enough for the mark, narrow enough to leave the page most of the screen. */
 const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
@@ -90,6 +92,7 @@ export default function App() {
 
   return (
     <UndoProvider onChange={refreshAll}>
+    <VimProvider>
     <ToastHost>
     <div className="app">
       <nav className="sidebar" style={{ width: railWidth, flexBasis: railWidth }}>
@@ -195,7 +198,9 @@ export default function App() {
         </Crash>
       </main>
     </div>
+    <VimLayer />
     </ToastHost>
+    </VimProvider>
     </UndoProvider>
   )
 }
@@ -220,9 +225,15 @@ function Shortcuts() {
   const location = useLocation()
   const [help, setHelp] = useState(false)
   const [pendingG, setPendingG] = useState(false)
+  const vim = useVim()
 
   useEffect(() => {
     function onKey(e) {
+      // Keyboard control binds most of these letters to something else — j and
+      // k move the cursor between tasks rather than between days — so while it
+      // is on, this layer stands down entirely rather than the two fighting
+      // over the same keys.
+      if (vim?.enabled) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const el = document.activeElement
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
@@ -254,7 +265,7 @@ function Shortcuts() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [location.pathname, navigate, pendingG])
+  }, [location.pathname, navigate, pendingG, vim?.enabled])
 
   if (!help) return null
 
