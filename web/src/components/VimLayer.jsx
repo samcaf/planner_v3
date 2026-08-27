@@ -360,7 +360,11 @@ export default function VimLayer() {
         setMode('insert')
         break
       case 'fold': {
-        const twist = ctrl(id, '.task-twist[aria-expanded]')
+        // A sub-section heading has no twist of its own — the band it heads
+        // carries one, because the band is what draws the children.
+        const row = rowFor(id)
+        const twist = row?.querySelector('.task-twist[aria-expanded]')
+          || (row?.closest('.subsec-head') && row.closest('.subsec')?.querySelector('.subsec-twist'))
         if (twist) click(twist); else say('nothing under this to fold')
         break
       }

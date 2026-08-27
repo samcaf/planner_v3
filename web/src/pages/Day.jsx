@@ -20,6 +20,7 @@ import { makeTaskDnd } from '../lib/taskDnd.js'
 import DayComplete from '../components/DayComplete.jsx'
 import { tabDate, usePageTitle } from '../lib/title.js'
 import { useVimActions } from '../lib/vim.jsx'
+import { makeVimActions } from '../lib/vimActions.js'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 import {
@@ -129,90 +130,21 @@ function DayView({ date }) {
   //
   // Everything inside reads `day.data` when it is called rather than closing
   // over `d`, because at this point in the render there may not be any yet.
-  useVimActions({
+  // The same builder the project and all-tasks pages use, so a key does the
+  // same thing wherever it is pressed. Above the early returns, and reading
+  // day.data when it is called rather than closing over it, because at this
+  // point in the render there may not be any yet.
+  useVimActions(makeVimActions({
+    tasks: day.data?.tasks || [],
+    sections: day.data?.sections || [],
     date,
     undo,
-    taskById: (id) => (day.data?.tasks || []).find((t) => t.id === id),
-    /** A task and everything under it, however deep — what a band amounts to. */
-    branch: (id) => {
-      const all = day.data?.tasks || []
-      const out = []
-      const walk = (parentId) => {
-        for (const t of all.filter((x) => x.parent_id === parentId)) { out.push(t); walk(t.id) }
-      }
-      const head = all.find((t) => t.id === id)
-      if (head) { out.push(head); walk(id) }
-      return out
-    },
-    /** Which band a task sits in, for a markdown yank that keeps its shape. */
-    sectionName: (t) => (day.data?.sections || [])
-      .find((sec) => sec.id === (t.section_id ?? null))?.name || null,
-    /** Move the task itself among its siblings — what J and K do. */
-    shift: async (id, by) => {
-      const all = day.data?.tasks || []
-      const me = all.find((t) => t.id === id)
-      if (!me) return
-      const siblings = all
-        .filter((t) => (t.parent_id ?? null) === (me.parent_id ?? null)
-          && (t.section_id ?? null) === (me.section_id ?? null)
-          && t.kind !== 'note')
-        .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
-        .map((t) => t.id)
-      const at = siblings.indexOf(id)
-      const to = at + by
-      if (at < 0 || to < 0 || to >= siblings.length) return
-      siblings.splice(to, 0, ...siblings.splice(at, 1))
-
-      // The order captured here rather than through the drag helpers: those are
-      // built below the early returns, and a handler lent from a render that
-      // returned early would reach for them before they exist.
-      const wasOrder = all
-        .filter((t) => siblings.includes(t.id))
-        .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
-        .map((t) => t.id)
-      const apply = async () => { await api.post('/tasks/reorder', { ids: siblings }) }
-      await apply()
-      undo?.record?.({
-        label: 'move task',
-        undo: async () => { await api.post('/tasks/reorder', { ids: wasOrder }) },
-        redo: apply,
-      })
-      refresh()
-    },
+    refresh,
     patch: (id, body) => patchTask(id, body),
     remove: (id) => removeTask(id),
     reschedule,
-    /** A new row beside another, carrying whatever a yank put in the register. */
-    addNear: async (nearId, row, side) => {
-      const near = (day.data?.tasks || []).find((t) => t.id === nearId)
-      const created = await api.post('/tasks', {
-        title: row.title || 'New task',
-        scheduled_date: date,
-        section_id: near?.section_id ?? null,
-        project_id: near?.project_id ?? null,
-        estimate_min: row.estimate_min ?? null,
-        priority: row.priority || 'medium',
-      })
-      if (near?.parent_id) await api.post(`/tasks/${created.id}/nest`, { parent_id: near.parent_id })
-
-      // Placed against the row it was added from rather than at the end, which
-      // is what "below the cursor" has to mean.
-      if (near) {
-        const siblings = (day.data?.tasks || [])
-          .filter((t) => (t.parent_id ?? null) === (near.parent_id ?? null)
-            && (t.section_id ?? null) === (near.section_id ?? null))
-          .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
-          .map((t) => t.id)
-          .filter((id) => id !== created.id)
-        const at = siblings.indexOf(nearId)
-        siblings.splice(side === 'above' ? at : at + 1, 0, created.id)
-        await api.post('/tasks/reorder', { ids: siblings })
-      }
-      setJustAdded(created.id)
-      refresh()
-      return created
-    },
-  })
+    onAdded: setJustAdded,
+  }))
 
   if (day.error) return <div className="page"><p className="muted">{day.error.message}</p></div>
   if (!day.data) return <div className="page"><p className="muted">Loading…</p></div>

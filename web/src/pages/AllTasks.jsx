@@ -13,7 +13,9 @@ import { bulkPatch } from '../components/Selection.jsx'
 import { isBacklogTask } from '../lib/backlog.js'
 import { columnLabels as labelsFor } from '../lib/columns.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
-import { useUndo } from '../lib/undo.jsx'
+import { useVimActions } from '../lib/vim.jsx'
+import { makeVimActions } from '../lib/vimActions.js'
+import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { longDate, relative, shortDate } from '../lib/dates.js'
 import '../styles/alltasks.css'
@@ -101,6 +103,13 @@ export default function AllTasks() {
   // that has never been given a day. See lib/backlog.js.
   const backlogTasks = list.filter((t) => isBacklogTask(t) && t.scheduled_date == null)
 
+  // The keyboard gets the same handlers the buttons use, so a key here does
+  // what it does on a day. No date of its own: a task added from this list is
+  // dateless, which is the backlog rather than something filed on today.
+  useVimActions(makeVimActions({
+    tasks: all, date: null, undo, refresh: reload, patch: save, remove, reschedule,
+  }))
+
   // Dateless work laid out in three boxes: no date and no sections travel with
   // a drop, and `columns` is what says this view has boxes at all even though
   // no section here does.
@@ -123,9 +132,16 @@ export default function AllTasks() {
     doing.reload()
   }
 
+  // Through taskOps rather than a bare PATCH: that is what puts the change on
+  // the undo stack and cascades a tick down to a task's children. Editing from
+  // this list was silently outside both — Ctrl-Z did nothing after it, which
+  // reads as undo being broken rather than as this page never recording.
+  const ops = taskOps(undo, reload)
+
   async function save(id, patch) {
-    await api.patch(`/tasks/${id}`, patch)
-    reload()
+    const task = all.find((t) => t.id === id)
+    if (task) await ops.patch(task, patch)
+    else { await api.patch(`/tasks/${id}`, patch); reload() }
   }
 
   async function remove(id) {

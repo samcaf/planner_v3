@@ -394,7 +394,12 @@ export default function TaskRow({
                 out of line with every childless row in the same column, and
                 whether a task happened to have children became a difference
                 in the wrong place. */}
-            {subtasks.length > 0 && (
+            {/* Only where this row is the one drawing the children. A
+                sub-section heading counts its branch but does not draw it — the
+                band below does — so a twist here toggled a list nothing was
+                rendering from. It sat inches from the band's own twist, looked
+                identical, and did nothing at all when clicked. */}
+            {subtasks.length > 0 && renderChildren && (
               <button
                 className="task-twist"
                 title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}

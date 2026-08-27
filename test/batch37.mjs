@@ -14,7 +14,15 @@ const post = (p, b) => json(p, {
 const del = (p) => fetch(BASE + p, { method: 'DELETE' })
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function openPage(url, errors) {
+/**
+ * Pages are loaded twice over: once plain, once with keyboard control on.
+ *
+ * Every page that lends the keyboard its handlers does so through a hook, and a
+ * hook placed after an early return is a hard React error that white-screens
+ * the page. That has happened four times in this codebase and was invisible to
+ * a check that only ever loaded pages with the mode off.
+ */
+function openPage(url, errors, vim = false) {
   const vc = new VirtualConsole()
   vc.on('jsdomError', (e) => errors.push(e.message))
   return JSDOM.fromURL(url, {
@@ -23,6 +31,8 @@ function openPage(url, errors) {
     beforeParse(w) {
       w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
       w.requestAnimationFrame = (fn) => setTimeout(() => fn(Date.now()), 0)
+      w.Element.prototype.scrollIntoView = function () {}
+      if (vim) w.localStorage.setItem('vim_mode', '1')
       w.fetch = (u, o) => fetch(new URL(u, BASE), o)
       const node = () => ({
         connect: (n) => n, start() {}, stop() {}, type: '', frequency: { value: 0 },
@@ -83,6 +93,18 @@ try {
         `"${document.title}" does not start with "${wantTitle}"`)
     }
     dom.window.close()
+
+    // The same page again, with keyboard control on.
+    const vimErrors = []
+    const vimDom = await openPage(BASE + path, vimErrors, true)
+    await wait(2600)
+    const vimDoc = vimDom.window.document
+    check(`${label}: renders with keyboard control on`,
+      !vimDoc.querySelector('.crash') && vimErrors.length === 0,
+      vimDoc.querySelector('.crash')
+        ? 'the error boundary caught something'
+        : vimErrors.slice(0, 1).join(''))
+    vimDom.window.close()
   }
 
   // ------------------------------------------- relative day urls

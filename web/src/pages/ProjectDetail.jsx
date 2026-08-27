@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import Progress, { CLOSED, tally } from '../components/Progress.jsx'
@@ -18,7 +18,7 @@ import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import ColumnBoard from '../components/ColumnBoard.jsx'
 import { columnLabels as labelsFor } from '../lib/columns.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
-import { useUndo } from '../lib/undo.jsx'
+import { taskOps, useUndo } from '../lib/undo.jsx'
 import { relative, shortDate } from '../lib/dates.js'
 import '../styles/projects.css'
 // The Light/Deep control below is the one the Routines page already uses for the
@@ -26,6 +26,8 @@ import '../styles/projects.css'
 // two cannot drift into two slightly different looks for one idea.
 import '../styles/routines.css'
 import { usePageTitle } from '../lib/title.js'
+import { useVimActions } from '../lib/vim.jsx'
+import { makeVimActions } from '../lib/vimActions.js'
 
 const STATUSES = ['active', 'planned', 'done', 'archived']
 
@@ -96,6 +98,25 @@ export default function ProjectDetail() {
   // is exactly how this page would have white-screened the moment it loaded.
   usePageTitle(project.data?.name)
 
+  // Held in a ref so the block below — which runs before `reschedule` is
+  // declared — reaches whatever the latest render defined. Declared HERE, above
+  // the early returns: a hook after one runs on some renders and not others,
+  // which is a hard React error and white-screened this page outright.
+  const rescheduleRef = useRef(null)
+
+  // The same handlers the buttons use, lent to the keyboard. Read from
+  // project.data when called rather than closed over, because this runs on
+  // renders that have no data yet.
+  useVimActions(makeVimActions({
+    tasks: project.data?.tasks || [],
+    date: null,
+    undo,
+    refresh: () => { project.reload(); filed.reload(); backlog.reload() },
+    patch: (id, body) => api.patch(`/tasks/${id}`, body).then(() => project.reload()),
+    remove: (id) => api.del(`/tasks/${id}`).then(() => project.reload()),
+    reschedule: (task, to, copy) => rescheduleRef.current?.(task, to, copy),
+  }))
+
   if (project.error) return <div className="page"><p className="muted">{project.error.message}</p></div>
   if (!project.data) return <div className="page"><p className="muted">Loading…</p></div>
 
@@ -137,7 +158,14 @@ export default function ProjectDetail() {
   const counts = tally(tasks)
   const backlogTasks = (backlog.data || []).filter(isBacklogTask)
 
-  const saveTask = async (taskId, body) => { await api.patch(`/tasks/${taskId}`, body); reload() }
+  // Through taskOps, for the same reason as the all-tasks list: a bare PATCH
+  // records nothing, so Ctrl-Z after editing here did nothing at all.
+  const ops = taskOps(undo, reload)
+  const saveTask = async (taskId, body) => {
+    const task = (project.data?.tasks || []).find((t) => t.id === taskId)
+    if (task) await ops.patch(task, body)
+    else { await api.patch(`/tasks/${taskId}`, body); reload() }
+  }
   const removeTask = async (taskId) => { await api.del(`/tasks/${taskId}`); reload() }
 
   const rowProps = (t) => ({
@@ -165,6 +193,8 @@ export default function ProjectDetail() {
    * work: either way the task's section has to be found or made on the far day,
    * and a plain date patch would drop it into that day's loose list.
    */
+  rescheduleRef.current = reschedule
+
   async function reschedule(task, to, copy) {
     const before = { date: task.scheduled_date, section_id: task.section_id ?? null }
     const made = await api.post(`/tasks/${task.id}/move`, { date: to, copy })
