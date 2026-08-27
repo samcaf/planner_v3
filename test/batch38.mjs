@@ -60,9 +60,9 @@ try {
   check('People is off the rail', !railLinks().includes('/people'), railLinks().join(' '))
   check('Uploads is off the rail', !railLinks().includes('/uploads'), railLinks().join(' '))
   check('the views you plan in are still there',
-    ['/tasks', '/projects', '/notebook', '/routines', '/settings']
-      .every((h) => railLinks().includes(h)),
+    ['/tasks', '/projects', '/routines', '/settings'].every((h) => railLinks().includes(h)),
     railLinks().join(' '))
+  check('the notebook is off it too', !railLinks().includes('/notebook'), railLinks().join(' '))
 
   // ------------------------------------------------- a section takes a colour
   const sec = await post('/api/sections', {
@@ -111,9 +111,11 @@ try {
   check('the band renders', !!band)
   const prog = band?.querySelector('.subsec-prog')
   check('a sub-section has a progress bar', !!prog)
-  check('it sits with the heading, inside the head row',
-    !!band?.querySelector('.subsec-head .subsec-prog'),
-    'the bar is not in the head row')
+  // Under the heading now, not beside it: sharing the row with a title of
+  // unknown length pushed the text out of the box.
+  check('it sits under the heading, not in its row',
+    !band?.querySelector('.subsec-head .subsec-prog') && !!band?.querySelector('.subsec-prog'),
+    'the bar is still in the head row')
   // One of the two children is done, so it must not read as empty or as full.
   const pct = prog?.querySelector('[style*="width"]')?.getAttribute('style') || ''
   check('and it reflects the work under it, not the heading',
@@ -167,13 +169,23 @@ try {
   const css = cssFiles.map((f) => readFileSync(`web/dist/assets/${f}`, 'utf8')).join('\n')
   check('the built styles are on disk', /\.toast-host\{/.test(css),
     `${cssFiles.length} files, no .toast-host rule in them`)
-  check('the toast is bounded by the viewport',
-    /\.toast-host\{[^}]*max-width:\s*min\(560px,\s*calc\(100vw\s*-\s*32px\)\)/.test(css),
-    'no max-width on .toast-host')
+  check('the toast track is a definite width, not sized by its contents',
+    /\.toast-host\{[^}]*[^-]width:\s*min\(560px,\s*calc\(100vw\s*-\s*32px\)\)/.test(css),
+    'no definite width on .toast-host')
   check('and is not a pill that a second line would break',
     /\.toast\{[^}]*border-radius:\s*14px/.test(css), 'still a 99px pill')
-  check('its message is allowed to wrap',
-    /\.toast-msg\{[^}]*overflow-wrap:\s*anywhere/.test(css), 'no wrapping rule')
+  // break-word, not anywhere: `anywhere` also collapses min-content width to a
+  // single character, which is what turned the whole toast into a vertical strip.
+  check('its message wraps without collapsing its own width',
+    /\.toast-msg\{[^}]*overflow-wrap:\s*break-word/.test(css), 'no wrapping rule')
+  // The stale duplicate that caused the vertical strip took the toast out of
+  // its track with `position: fixed` and put the pill back. Counting `.toast{`
+  // rules would flag the legitimate dark-mode background too, so this looks for
+  // the two declarations that rule actually carried.
+  check('no rule takes the toast out of its track',
+    !/\.toast\{[^}]*position:\s*fixed/.test(css), '.toast is positioned fixed again')
+  check('and none puts the pill back',
+    !/\.toast\{[^}]*border-radius:\s*99px/.test(css), '.toast is a 99px pill again')
   check('while the action keeps its width',
     /\.toast \.toast-action\s*\{\s*flex:\s*none/.test(css), 'the action can be squeezed')
 } catch (e) {

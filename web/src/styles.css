@@ -1374,18 +1374,33 @@ kbd {
   align-items: center;
   gap: var(--space-4);
   z-index: 80;
-  /* Bounded, and bounded by the viewport. Undo messages name what they would
-     undo — a task title, a section name — so they are as long as the thing is,
-     and an unbounded pill centred with translateX ran off both edges at once. */
-  max-width: min(560px, calc(100vw - 32px));
+  /* A DEFINITE width, not max-content and not shrink-to-fit.
+     The toast inside carries `max-width: 100%`, so sizing the host from its
+     contents is circular — the host waits on the toast, the toast waits on the
+     host, and the pair collapse to nothing: a 32px column of single characters
+     eight hundred pixels tall. A fixed track that the toast shrink-to-fits
+     inside breaks the loop, and `align-items: center` keeps a short message
+     centred rather than stretched across it. */
+  width: min(560px, calc(100vw - 32px));
+  /* The track is for placement, not a surface. Without this its empty width
+     would swallow every click across the foot of the page. */
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
+  /* Take the width the text wants, up to the track. Left to the flex
+     container's own cross-axis sizing it settled far narrower than the space
+     available and wrapped a message that would have fitted on one line. */
+  width: fit-content;
   display: flex;
   align-items: flex-start;
   gap: var(--space-6);
   background: var(--ink);
-  color: var(--panel);
+  /* Not --panel. The toast's ground is dark in BOTH themes — var(--ink) in
+     light, and an explicit slate in dark — while --panel follows the theme, so
+     in dark mode it painted near-black text on a near-black box. */
+  color: #f4f6fb;
   padding: 9px var(--space-5) 9px var(--space-8);
   /* Not a 99px pill: the moment the text wraps to a second line a pill's ends
      bow around it and the first and last words sit outside the colour. */
@@ -1397,8 +1412,12 @@ kbd {
   transition: opacity .4s ease, transform .4s ease;
 }
 
-/* The message wraps; the action does not shrink to make room for it. */
-.toast-msg { min-width: 0; overflow-wrap: anywhere; }
+/* The message wraps; the action does not shrink to make room for it.
+   `break-word`, NOT `anywhere`: the two wrap identically, but `anywhere` also
+   collapses the element's min-content width to a single character — which,
+   through the shrink-to-fit above, turned the whole toast into a one-character
+   vertical strip of text. That difference is the entire reason to prefer it. */
+.toast-msg { min-width: 0; overflow-wrap: break-word; }
 .toast .toast-action { flex: none; }
 
 .toast.is-leaving { opacity: 0; transform: translateY(6px); }
@@ -1884,19 +1903,6 @@ kbd {
 .modal-b { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); }
 .modal-f { padding: var(--space-6) var(--space-8); border-top: 1px solid var(--line-soft); display: flex; gap: var(--space-4); justify-content: flex-end; }
 
-.toast {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--ink);
-  color: #fff;
-  padding: var(--space-4) var(--space-8);
-  border-radius: 99px;
-  font-size: 13px;
-  box-shadow: var(--shadow-pop);
-  z-index: 80;
-}
 
 /* ------------------------------------------------- folding backlog panels */
 
@@ -1956,11 +1962,57 @@ kbd {
 /* A band being dragged over a run of tasks lands above it. */
 .box-cols.is-band-over { box-shadow: inset 0 3px 0 var(--accent); }
 
-/* The band's progress bar sits with its heading, narrower than a section's so
-   the two read as nested rather than as peers. */
+/* Under the heading and across it, so the heading's own title has the whole
+   row to itself. Inset a little on the left to sit clear of the grip and twist
+   that mark the band's edge. */
 .subsec-prog {
-  flex: none;
-  width: 84px;
-  margin-top: var(--space-5);
-  margin-right: var(--space-3);
+  width: auto;
+  margin: 0 var(--space-4) var(--space-2) 40px;
 }
+
+/* A meeting's attendees are links to the people they name, so they read as
+   links — but quietly, since a row can carry several and a line of blue would
+   compete with the title above it. */
+.task-sub-person {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.task-sub-person:hover {
+  color: var(--accent);
+  border-bottom-color: currentColor;
+  text-decoration: none;
+}
+
+/* ------------------------------------------- nothing scrolls sideways */
+
+/* The day header is a long row — nav, title, chips, a date, the priority
+   filter and four buttons — and it could not wrap, so widening the rail pushed
+   it past the edge and the whole middle column scrolled sideways with it. */
+.topbar { flex-wrap: wrap; row-gap: var(--space-3); }
+.topbar h1 { min-width: 0; overflow-wrap: break-word; }
+
+/* A flex or grid child defaults to min-width:auto, which is its CONTENT's
+   minimum — so one long word anywhere refuses to shrink and drags the page
+   wider than the window. These are the columns work is actually laid out in. */
+.main,
+.day-shell,
+.day-wrap,
+.box-col,
+.section,
+.panel,
+.task-sub { min-width: 0; }
+
+/* And the text itself breaks rather than pushing. A pasted URL in a title is
+   one word as far as wrapping is concerned. */
+.task-title,
+.rich,
+.rich-line,
+.rich-view,
+.sb-res-snip,
+.task-sub { overflow-wrap: break-word; }
+
+/* The last resort. Wide content that genuinely cannot shrink — a table, a code
+   block — scrolls inside its own box; the page itself never does. */
+.main { overflow-x: hidden; }

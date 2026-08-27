@@ -182,7 +182,11 @@ try {
   check('it lists the note', [...d3.querySelectorAll('.nb-item')].some((i) => /ZZ-note/.test(i.textContent)),
     [...d3.querySelectorAll('.nb-item')].map((i) => i.textContent).join(' | '))
   check('and opens one for editing', !!d3.querySelector('.nb-open'))
-  check('the rail links to it', [...d3.querySelectorAll('.sb-link')].some((a) => /Notebook/.test(a.textContent)))
+  // The notebook moved off the rail and onto the dashboard, so that the rail
+  // stops scrolling and the mark at its foot stays visible.
+  check('the rail no longer carries it',
+    ![...d3.querySelectorAll('.sb-link')].some((a) => /Notebook/.test(a.textContent)),
+    'still in the rail')
   dom3.window.close()
 } finally {
   let bad = 0

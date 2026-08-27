@@ -9,11 +9,36 @@ import { addDays, today } from './dates.js'
 
 marked.setOptions({ gfm: true, breaks: true })
 
+/**
+ * Anything that already says where it goes: a scheme, a root-relative path
+ * inside the app, a fragment, or a query.
+ */
+const ADDRESSED = /^([a-z][a-z0-9+.-]*:|\/\/|\/|#|\?)/i
+
+/**
+ * `[Google](google.com)` is a RELATIVE url as far as the browser is concerned,
+ * so it resolved against whatever page you were on — `google.com` typed on a
+ * day opened `/day/google.com`, which is nowhere. Markdown has no way to say
+ * "this is a host", so anything whose first segment carries a dot is treated as
+ * one and given a scheme.
+ *
+ * A first segment without a dot stays relative: `notes/thing` is a path, and
+ * guessing a hostname out of it would break a link that was written correctly.
+ */
+function absolute(href) {
+  if (ADDRESSED.test(href)) return href
+  const [head] = href.split(/[/?#]/, 1)
+  return head.includes('.') ? `https://${href}` : href
+}
+
 // Outbound links should not hijack the current tab. Internal ones are the app
 // itself, so they must stay in it — the router handles them on click.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  const href = node.tagName === 'A' ? node.getAttribute('href') : null
-  if (!href || href.startsWith('/') || href.startsWith('#')) return
+  const raw = node.tagName === 'A' ? node.getAttribute('href') : null
+  if (!raw) return
+  const href = absolute(raw)
+  if (href !== raw) node.setAttribute('href', href)
+  if (href.startsWith('/') || href.startsWith('#')) return
   node.setAttribute('target', '_blank')
   node.setAttribute('rel', 'noopener noreferrer')
 })
@@ -270,7 +295,11 @@ async function loadProjects() {
 }
 
 /** A task title as plain text — the picker has no room for its markdown. */
-const plainTitle = (s) => (s || '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*`_]/g, '')
+/** A markdown title as readable text — for places with no room to render it. */
+export const plainTitle = (s) => (s || '')
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/\[\[(?:day:|project:|task:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label || target)
+  .replace(/[*`_]/g, '')
 
 /** The `[[…` fragment the caret is sitting inside, or null. */
 function wikiFragment(text, caret) {

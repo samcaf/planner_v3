@@ -41,13 +41,13 @@
 
 /* The panel hangs off the rail into the page, wide enough to read a snippet in
    — the rail itself is far too narrow to show a result. */
+/* Portalled to <body> and placed from JS, because the rail scrolls and a
+   scroll container clips its children sideways as well as down. top/left/
+   max-height are set inline; everything here is the surface. */
 .sb-results {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: var(--space-5);
+  position: fixed;
   z-index: 70;
-  width: min(520px, calc(100vw - 80px));
-  max-height: min(70vh, 560px);
+  width: min(520px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-pop);

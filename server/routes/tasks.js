@@ -7,7 +7,7 @@ const FIELDS = [
   'scheduled_date', 'due_date', 'estimate_min', 'sort', 'from_template',
   'parent_id', 'start_time', 'end_time', 'col_index', 'section_id', 'kind',
   'moved_to_date', 'notes_hidden', 'intensity', 'optional', 'url', 'location',
-  'subsection', 'archived',
+  'subsection', 'archived', 'group_id',
   'scaffold', 'fixed_time', 'timer_started_at', 'timer_elapsed_ms',
   // Present so a deleted routine task keeps its link when restored, the same
   // reason from_template is here.
@@ -36,10 +36,12 @@ function detachFromForeignSection(id) {
 const WITH_PROJECT = `
   SELECT t.*, p.name AS project_name, p.color AS project_color,
          s.name AS section_name, s.routine_id AS routine_id,
+         g.name AS group_name, g.meeting_url AS group_meeting_url,
          COALESCE(rt.hide_from_all_tasks, 0) AS hide_from_all_tasks
   FROM tasks t
   LEFT JOIN projects p  ON p.id = t.project_id
   LEFT JOIN sections s  ON s.id = t.section_id
+  LEFT JOIN groups g    ON g.id = t.group_id
   LEFT JOIN routines rt ON rt.id = s.routine_id
 `
 

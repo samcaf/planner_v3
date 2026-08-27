@@ -21,8 +21,11 @@ r.get('/:date', h((req) => {
     // Attendees ride along: meetings are ordinary rows in this list, and the
     // schedule panel would otherwise render every one as unattended.
     tasks: db.prepare(`
-      SELECT t.*, p.name AS project_name, p.color AS project_color
-      FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+      SELECT t.*, p.name AS project_name, p.color AS project_color,
+             g.name AS group_name
+      FROM tasks t
+      LEFT JOIN projects p ON p.id = t.project_id
+      LEFT JOIN groups g   ON g.id = t.group_id
       WHERE t.scheduled_date = ?
       ORDER BY t.sort, t.id
     `).all(date).map(withPeople),

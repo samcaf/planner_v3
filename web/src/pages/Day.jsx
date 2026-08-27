@@ -12,7 +12,7 @@ import Progress, { tally } from '../components/Progress.jsx'
 import DeepBar from '../components/DeepBar.jsx'
 import { PRIORITIES, PriorityChip, PriorityIcon } from '../components/Priority.jsx'
 import { useToast } from '../components/Toast.jsx'
-import { Rich, RichEditor } from '../lib/rich.jsx'
+import { Rich, RichEditor, plainTitle } from '../lib/rich.jsx'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
@@ -186,7 +186,10 @@ function DayView({ date }) {
     if (!task) return
     const restore = await ops.remove(task)
     toast({
-      message: `Deleted "${(task.title || 'note').slice(0, 40)}"`,
+      // The whole title. It was cut at forty characters to stop it running out
+      // of the box; the box wraps and is bounded now, so the cut only hid which
+      // task the Undo beside it referred to.
+      message: `Deleted "${plainTitle(task.title) || 'note'}"`,
       action: { label: 'Undo', onClick: async () => { await restore(); refresh() } },
     })
   }
@@ -374,11 +377,9 @@ function DayView({ date }) {
   const removeSection = async (section) => {
     const inside = d.tasks.filter((t) => (t.section_id ?? null) === section.id)
     const count = inside.length
-    const what = count === 0
-      ? ''
-      : ` and ${count} task${count === 1 ? '' : 's'} in it, including anything nested under them,`
-    if (!window.confirm(`Delete "${section.name}"${what}? You can undo this.`)) return
-
+    // No confirm. The toast below names what went and offers Undo, and Ctrl-Z
+    // does the same — a modal asking "are you sure" before an action that is
+    // already reversible is a keystroke charged for nothing.
     const gone = await api.del(`/sections/${section.id}`)
     const restore = async () => {
       await api.post('/sections/restore', gone.section)
@@ -1196,7 +1197,7 @@ function ColumnGrid({
  */
 function SubSection({
   task, columnLabels, rowProps, onMoveToColumn,
-  onPlace, dragging, over, onDragState,
+  onPlace, dragging, over, onDragState, tone,
 }) {
   // Which edge a task is hovering over, so the strip it will land on lights up.
   const [edge, setEdge] = useState(null)
@@ -1315,14 +1316,16 @@ function SubSection({
           <Icon name={open ? 'chevronDown' : 'right'} size={12} />
         </button>
         {row(head, { head: true })}
-        {/* A band is a section in everything but name, so it gets a section's
-            progress bar. The heading itself is excluded: it is the container,
-            and counting it would let a band read as part-done purely because
-            the heading had been ticked. */}
-        {children.length > 0 && (
-          <Progress tasks={branchOf(children)} className="section-prog subsec-prog" />
-        )}
       </div>
+
+      {/* Under the heading, full width, in the section's own colour — beside it
+          the bar had to share the row with a title of unknown length and pushed
+          the text out of the box. The heading itself is excluded from the
+          count: it is the container, and counting it would let a band read as
+          part-done purely because its own box had been ticked. */}
+      {children.length > 0 && (
+        <Progress tasks={branchOf(children)} color={tone} className="subsec-prog" />
+      )}
 
       {open && (
         <>
@@ -1721,6 +1724,7 @@ function SectionPanel({
               // before it; a task dropped on a band's edge lands just outside
               // it, which is what puts a task above or below a sub-section.
               onPlace={(movedId, targetId, where) => onPlace?.(movedId, targetId, where)}
+              tone={tone}
               onMoveToColumn={(ids, col, retime, under) =>
                 onMoveToColumn(ids, col, retime, under)}
             />

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import Popover from './Popover.jsx'
@@ -531,10 +532,34 @@ export default function TaskRow({
               {task.location && (
                 <span className="task-sub-item"><Icon name="building" size={11} /> {task.location}</span>
               )}
+              {/* Both are references, not labels. A meeting names people and
+                  a group; going from the meeting to whoever it is with was a
+                  trip through the People page and a search. */}
+              {task.group_name && (
+                <Link
+                  className="task-sub-link"
+                  to={`/people?group=${task.group_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Everyone in ${task.group_name}`}
+                >
+                  <Icon name="building" size={11} /> {task.group_name}
+                </Link>
+              )}
               {attendees.length > 0 && (
                 <span className="task-sub-item">
                   <Icon name="people" size={11} />
-                  {attendees.map((p) => p.name).join(', ')}
+                  {attendees.map((p, i) => (
+                    <span key={p.id}>
+                      {i > 0 && ', '}
+                      <Link
+                        className="task-sub-person"
+                        to={`/people/${p.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {p.name}
+                      </Link>
+                    </span>
+                  ))}
                 </span>
               )}
             </div>

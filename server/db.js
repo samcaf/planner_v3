@@ -71,6 +71,26 @@ addColumn('tasks', 'timer_elapsed_ms', 'INTEGER NOT NULL DEFAULT 0')
 // long before it stops being worth keeping, and deleting it — which takes its
 // prose with it — was the only other way to get it out of the way.
 addColumn('tasks', 'archived', 'INTEGER NOT NULL DEFAULT 0')
+// Which group a meeting was booked with. Its members are attendees like anyone
+// else, but "this is the lab meeting" is a fact about the meeting that survives
+// people joining and leaving, and it is what you want to click through to.
+//
+// This column first shipped referencing `people_groups`, a table that does not
+// exist — the table is `groups`. SQLite accepts an unknown target at ALTER
+// time and only complains when a row is written, so the column looked fine and
+// every attempt to save a meeting failed with `no such table:
+// main.people_groups`. Dropping and re-adding it loses nothing: no write to it
+// could ever have succeeded, so on any database that has the broken version the
+// column is necessarily empty.
+//
+// No foreign key on the replacement, matching routine_item_id above. A deleted
+// group leaves a dangling id, and every read is a LEFT JOIN, so the meeting
+// simply stops naming a group rather than the delete being refused.
+const tasksSql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'tasks'").get()?.sql || ''
+if (/group_id[^,)]*people_groups/.test(tasksSql)) {
+  db.exec('ALTER TABLE tasks DROP COLUMN group_id')
+}
+addColumn('tasks', 'group_id', 'INTEGER')
 addColumn('tasks', 'url', "TEXT NOT NULL DEFAULT ''")
 addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // Which routine item produced this task. Top-up needs a stable identity for

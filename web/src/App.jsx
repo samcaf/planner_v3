@@ -39,12 +39,13 @@ const NAV = [
 
 const NAV_2 = [
   { to: '/tasks', icon: 'check', label: 'All tasks' },
-  { to: '/notebook', icon: 'templates', label: 'Notebook' },
   { to: '/projects', icon: 'projects', label: 'Projects' },
   { to: '/routines', icon: 'today', label: 'Routines' },
-  // People and Uploads live on the dashboard instead. Neither is somewhere you
-  // go to plan — they are places you look something up — and the rail is for
-  // the handful of views the day actually moves between.
+  // People, Uploads and the Notebook live on the dashboard instead. None is
+  // somewhere you go to plan — they are places you look something up — and the
+  // rail is for the handful of views the day actually moves between. Keeping
+  // the list short is what stops it scrolling, which was hiding the mark at
+  // its foot.
   { to: '/settings', icon: 'gear', label: 'Settings' },
 ]
 

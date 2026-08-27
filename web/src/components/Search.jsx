@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import Icon from './Icon.jsx'
 import { Rich } from '../lib/rich.jsx'
@@ -62,7 +63,44 @@ export default function Search() {
   const [showFilters, setShowFilters] = useState(false)
   const box = useRef(null)
   const input = useRef(null)
+  const panel = useRef(null)
+  const [pos, setPos] = useState(null)
   const location = useLocation()
+
+  /**
+   * Where the panel goes, in viewport coordinates.
+   *
+   * The rail scrolls, and a scroll container clips its children sideways as
+   * well as vertically — so a panel positioned inside it was cut off at the
+   * rail's edge however wide it was told to be. It is portalled to <body> and
+   * placed against the viewport instead, then pulled back from the right edge
+   * so a wide panel beside a wide rail still fits.
+   */
+  const place = useCallback(() => {
+    const anchor = box.current?.getBoundingClientRect()
+    if (!anchor) return
+    const width = panel.current?.getBoundingClientRect().width || 520
+    const vw = document.documentElement.clientWidth
+    const vh = document.documentElement.clientHeight
+    setPos({
+      top: anchor.bottom + 4,
+      left: Math.min(Math.max(8, anchor.left), Math.max(8, vw - 8 - width)),
+      maxHeight: Math.max(220, vh - anchor.bottom - 20),
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return }
+    place()
+    // `true` for the capture phase: the rail is a scroll container of its own,
+    // and a scroll inside it does not bubble to the window.
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, place, showFilters])
 
   const projects = useApi('/projects')
 
@@ -115,7 +153,11 @@ export default function Search() {
   // A click anywhere else puts it away.
   useEffect(() => {
     if (!open) return
-    const away = (e) => { if (!box.current?.contains(e.target)) setOpen(false) }
+    const away = (e) => {
+      if (box.current?.contains(e.target)) return
+      if (panel.current?.contains(e.target)) return
+      setOpen(false)
+    }
     window.addEventListener('mousedown', away)
     return () => window.removeEventListener('mousedown', away)
   }, [open])
@@ -162,8 +204,20 @@ export default function Search() {
         )}
       </div>
 
-      {open && (
-        <div className="sb-results panel" role="dialog" aria-label="Search results">
+      {open && createPortal(
+        <div
+          ref={panel}
+          className="sb-results panel"
+          role="dialog"
+          aria-label="Search results"
+          style={{
+            top: pos?.top ?? 0,
+            left: pos?.left ?? 0,
+            maxHeight: pos?.maxHeight,
+            // Hidden until measured, or it flashes at the top-left corner.
+            visibility: pos ? undefined : 'hidden',
+          }}
+        >
           <div className="sb-res-head">
             <button
               className={`btn ghost sm ${showFilters || active ? 'is-on' : ''}`}
@@ -267,7 +321,8 @@ export default function Search() {
               </section>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -8,7 +8,7 @@ import { api, useApi } from '../lib/api.js'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { longDate, minutesLabel, relative, shortDate, today } from '../lib/dates.js'
 import '../styles/dashboard.css'
-import { Rich } from '../lib/rich.jsx'
+import { Rich, plainTitle } from '../lib/rich.jsx'
 import { usePageTitle } from '../lib/title.js'
 
 /** Whole days between a stored timestamp and now. */
@@ -48,7 +48,10 @@ export default function Dashboard() {
     if (!task) return
     const restore = await ops.remove(task)
     toast({
-      message: `Deleted "${(task.title || 'note').slice(0, 40)}"`,
+      // The whole title. It was cut at forty characters to stop it running out
+      // of the box; the box wraps and is bounded now, so the cut only hid which
+      // task the Undo beside it referred to.
+      message: `Deleted "${plainTitle(task.title) || 'note'}"`,
       action: { label: 'Undo', onClick: async () => { await restore(); dash.reload() } },
     })
   }
@@ -163,9 +166,12 @@ export default function Dashboard() {
 function Elsewhere() {
   const people = useApi('/people')
   const uploads = useApi('/uploads')
+  const notebook = useApi('/notebook')
   const count = (r) => (Array.isArray(r.data) ? r.data.length : null)
 
   const LINKS = [
+    { to: '/notebook', icon: 'templates', label: 'Notebook', n: count(notebook),
+      hint: 'Notes that belong to no day and no project' },
     { to: '/people', icon: 'people', label: 'People', n: count(people),
       hint: 'Who you meet, and when you last did' },
     { to: '/uploads', icon: 'paperclip', label: 'Uploads', n: count(uploads),

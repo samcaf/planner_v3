@@ -145,6 +145,11 @@ export default function QuickMeeting({
         intensity: deep ? 'deep' : 'light',
         notes,
         people: attendees.map((p) => p.id),
+        // Which group this was booked with, kept as a fact about the meeting.
+        // Its members are attendees like anyone else, but "this is the lab
+        // meeting" outlives people joining and leaving it — and it is what you
+        // want to click through to from the row.
+        group_id: pickedGroup?.id ?? null,
       })
       onCreated?.(created)
     } finally {
