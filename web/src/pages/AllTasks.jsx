@@ -12,6 +12,7 @@ import BacklogBoards from '../components/BacklogBoards.jsx'
 import { bulkPatch } from '../components/Selection.jsx'
 import { isBacklogTask } from '../lib/backlog.js'
 import { columnLabels as labelsFor } from '../lib/columns.js'
+import { makeTaskDnd } from '../lib/taskDnd.js'
 import { useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { longDate, relative, shortDate } from '../lib/dates.js'
@@ -97,6 +98,13 @@ export default function AllTasks() {
   // The same definition the day's aside and each project's panel use: open work
   // that has never been given a day. See lib/backlog.js.
   const backlogTasks = list.filter((t) => isBacklogTask(t) && t.scheduled_date == null)
+
+  // Dateless work laid out in three boxes: no date and no sections travel with
+  // a drop, and `columns` is what says this view has boxes at all even though
+  // no section here does.
+  const dnd = makeTaskDnd({
+    tasks: backlogTasks, date: null, known: all, columns: true, undo, refresh: reload,
+  })
   const inProgress = (doing.data || []).filter((t) => t.kind !== 'note' && (showRoutine || !t.hide_from_all_tasks))
 
   const active = activeChips(filters, { search, projectId, projects: projects.data, showNotes, showRoutine })
@@ -365,11 +373,9 @@ export default function AllTasks() {
               onChange: (patch, id = t.id) => save(id, patch),
               onDelete: (id = t.id) => remove(id),
               onReschedule: reschedule,
+              onDropTask: dnd.onDropTask,
             })}
-            onMoveToColumn={(ids, col, known) => bulkPatch(
-              ids, { col_index: col },
-              { known, label: 'move between columns', undo },
-            ).then(() => tasks.reload())}
+            onMoveToColumn={(ids, col) => dnd.onMoveToColumn(ids, col)}
           />
         ) : groups.length === 0 ? (
           <Panel><Empty>{tasks.data ? 'Nothing matches these filters.' : 'Loading…'}</Empty></Panel>

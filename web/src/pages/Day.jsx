@@ -16,6 +16,7 @@ import { Rich, RichEditor } from '../lib/rich.jsx'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
+import { makeTaskDnd } from '../lib/taskDnd.js'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 import {
@@ -174,94 +175,11 @@ export default function Day() {
    * One gesture, two outcomes: a drop across the middle of a row nests, a drop
    * near either edge reorders within that row's own sibling group.
    */
-  /**
-   * Everything a move can disturb, captured so it can be put back. A drag
-   * rewrites `sort` across a whole sibling group and may change the parent,
-   * section and column of the row that moved — none of which a PATCH-based
-   * snapshot would cover, which is why moves used to be absent from the undo
-   * stack entirely and Ctrl-Z after a drag reversed some earlier, unrelated
-   * edit instead.
-   */
-  function snapshot(ids) {
-    return ids
-      .map((id) => d.tasks.find((t) => t.id === id))
-      .filter(Boolean)
-      .map((t) => ({
-        id: t.id,
-        sort: t.sort,
-        parent_id: t.parent_id ?? null,
-        section_id: t.section_id ?? null,
-        col_index: t.col_index ?? null,
-        scheduled_date: t.scheduled_date ?? null,
-      }))
-  }
-
-  const restoreAll = (rows) => async () => {
-    for (const r of rows) {
-      // parent_id is rejected by PATCH — re-parenting is /nest's job, because
-      // that is the only path that checks for cycles.
-      await api.post(`/tasks/${r.id}/nest`, { parent_id: r.parent_id })
-      await api.patch(`/tasks/${r.id}`, {
-        sort: r.sort,
-        section_id: r.section_id,
-        col_index: r.col_index,
-        scheduled_date: r.scheduled_date,
-      })
-    }
-  }
-
-  async function onDropTask(draggedId, target, zone) {
-    if (zone === 'nest') {
-      const before = snapshot([draggedId])
-      const nest = async () => { await api.post(`/tasks/${draggedId}/nest`, { parent_id: target.id }) }
-      await nest()
-      undo?.record?.({ label: 'nest', undo: restoreAll(before), redo: nest })
-      refresh()
-      return
-    }
-
-    const siblings = d.tasks
-      .filter((t) => (t.parent_id ?? null) === (target.parent_id ?? null)
-        && (t.section_id ?? null) === (target.section_id ?? null))
-      .sort((a, b) => a.sort - b.sort || a.id - b.id)
-      .map((t) => t.id)
-      .filter((id) => id !== draggedId)
-
-    const at = siblings.indexOf(target.id)
-    siblings.splice(zone === 'before' ? at : at + 1, 0, draggedId)
-
-    // Land in the target's column too, when the section has columns at all.
-    // Dropping onto a row is the *only* way into a column that is full to the
-    // bottom of its section — there is no empty space left below the last row
-    // to hit the column's own drop zone — so without this the commonest drop in
-    // a busy day silently put the task back where it came from.
-    const section = d.sections.find((s) => s.id === target.section_id)
-    const intoColumns = section?.layout === 'columns'
-
-    // A task that already says how long it is sorts itself: clearing the pin
-    // lets it grade into the column its own duration implies, rather than being
-    // filed under whichever row it happened to land next to.
-    const dragged = known.find((t) => t.id === draggedId)
-    const selfTiming = intoColumns && !!(dragged && ownMinutes(dragged))
-
-    const before = snapshot([draggedId, ...siblings])
-    const move = async () => {
-      await api.post('/tasks/reorder', {
-        ids: siblings,
-        scheduled_date: date,
-        section_id: target.section_id ?? null,
-        parent_id: target.parent_id ?? null,
-        // Named, so the server applies the column to this one row rather than
-        // to every sibling in the list.
-        ...(intoColumns
-        ? { col_index: selfTiming ? null : columnFor(target), moved_id: draggedId }
-        : {}),
-      })
-    }
-    await move()
-    undo?.record?.({ label: 'move', undo: restoreAll(before), redo: move })
-    refresh()
-  }
+  // The day is where this behaviour was grown and is where it is tested; the
+  // backlog boards call the same module rather than each keeping half of it.
+  const { onDropTask, snapshot, restoreAll } = makeTaskDnd({
+    tasks: d.tasks, sections: d.sections, date, known, undo, refresh,
+  })
 
   /**
    * Move a whole section within the day. The full resulting order is sent rather

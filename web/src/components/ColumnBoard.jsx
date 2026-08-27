@@ -51,6 +51,9 @@ export default function ColumnBoard({ tasks, labels, rowProps, onMoveToColumn, e
             : group.map((t) => (
               <TaskRow key={t.id} {...rowProps(t)} listIds={ids} />
             ))}
+          {/* The same tail the day's columns have: a column filled to the
+              bottom otherwise leaves nowhere to aim a drop. */}
+          <div className="box-col-tail" />
         </div>
       ))}
     </div>

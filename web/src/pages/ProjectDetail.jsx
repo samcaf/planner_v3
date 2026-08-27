@@ -17,6 +17,7 @@ import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import ColumnBoard from '../components/ColumnBoard.jsx'
 import { columnLabels as labelsFor } from '../lib/columns.js'
+import { makeTaskDnd } from '../lib/taskDnd.js'
 import { useUndo } from '../lib/undo.jsx'
 import { relative, shortDate } from '../lib/dates.js'
 import '../styles/projects.css'
@@ -140,6 +141,17 @@ export default function ProjectDetail() {
     onChange: (body, taskId = t.id) => saveTask(taskId, body),
     onDelete: (taskId = t.id) => removeTask(taskId),
     onReschedule: reschedule,
+    // The same row-level drop the day view has. Without it a backlog board was
+    // a three-column view you could not nest or reorder in — only drop into a
+    // column — which is the difference the two views used to have.
+    onDropTask: dnd.onDropTask,
+  })
+
+  // Dateless work, so no date and no sections travel with a drop; `columns`
+  // says this view lays work out in three boxes even though no section does.
+  const dnd = makeTaskDnd({
+    tasks: backlogTasks, date: null, known: [...tasks, ...backlogTasks],
+    columns: true, undo, refresh: reload,
   })
 
   /**
@@ -346,10 +358,7 @@ export default function ProjectDetail() {
                     tasks={backlogTasks}
                     labels={labelsFor(settings.data)}
                     rowProps={rowProps}
-                    onMoveToColumn={(ids, col) => bulkPatch(
-                      ids, { col_index: col },
-                      { known: backlogTasks, label: 'move between columns', undo },
-                    ).then(reload)}
+                    onMoveToColumn={(ids, col) => dnd.onMoveToColumn(ids, col)}
                   />
                 ) : (
                   <TaskList tasks={backlogTasks} rowProps={rowProps} />
