@@ -49,7 +49,7 @@ function Toast({ toast, onDismiss }) {
 
   return (
     <div className={`toast ${leaving ? 'is-leaving' : ''}`} role="status">
-      <span>{toast.message}</span>
+      <span className="toast-msg">{toast.message}</span>
       {toast.action && (
         <button
           className="toast-action"

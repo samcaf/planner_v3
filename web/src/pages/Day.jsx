@@ -1071,6 +1071,16 @@ function DayBucket({ label, hint, tasks, rowProps, defaultOpen = false }) {
  * non-band row into a single grid, which is what this replaced, made that
  * position impossible to express.
  */
+/** Every row under a band, however deep — what its progress is measured over. */
+function branchOf(tasks) {
+  const out = []
+  const walk = (list) => {
+    for (const t of list) { out.push(t); walk(t.subtasks || []) }
+  }
+  walk(tasks)
+  return out
+}
+
 function blocksOf(tree) {
   const blocks = []
   for (const t of tree) {
@@ -1305,6 +1315,13 @@ function SubSection({
           <Icon name={open ? 'chevronDown' : 'right'} size={12} />
         </button>
         {row(head, { head: true })}
+        {/* A band is a section in everything but name, so it gets a section's
+            progress bar. The heading itself is excluded: it is the container,
+            and counting it would let a band read as part-done purely because
+            the heading had been ticked. */}
+        {children.length > 0 && (
+          <Progress tasks={branchOf(children)} className="section-prog subsec-prog" />
+        )}
       </div>
 
       {open && (
@@ -1559,11 +1576,23 @@ function SectionPanel({
   // Each column is its own list, so a range never jumps between them.
   const noteIds = visibleIds(notes)
 
+  // A section filed under a project wears the project's colour. Keeping a
+  // separate palette for the band meant a day's "Teleonomy" section was some
+  // other colour than every Teleonomy task and chip on the same screen, so the
+  // one cue that ties work to a project stopped at the section heading.
+  // A colour set on the section itself still wins: that is a deliberate choice
+  // about this band, and the project is only the default.
+  //
+  // `gray` counts as unset, not as a choice: the column is NOT NULL DEFAULT
+  // 'gray', so a plain `section.color ||` never falls through and the project
+  // colour could never show at all.
+  const chosen = section.color && section.color !== 'gray' ? section.color : null
+  const tone = chosen || section.project_color || section.color
 
   return (
     <section
       className={[
-        'panel section', cls(section.color),
+        'panel section', cls(tone),
         complete ? 'is-complete' : '',
         over ? 'sel-drop-on' : '',
         dragging === section.id ? 'sec-dragging' : '',
@@ -1622,7 +1651,7 @@ function SectionPanel({
             layout each column has its own box as well; this is the one that
             covers all of them. */}
         <SelectAllBox ids={visibleIds(tree)} label={`everything in ${section.name}`} />
-        <Progress tasks={tasks} color={section.color} className="section-prog" />
+        <Progress tasks={tasks} color={tone} className="section-prog" />
         <span className="spacer" />
 
         <select

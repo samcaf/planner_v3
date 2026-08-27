@@ -144,9 +144,49 @@ export default function Dashboard() {
             tasks={d.recent}
             meta={(t) => (t.status === 'done' ? 'done' : t.status)}
           />
+
+          <Elsewhere />
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * The two directories, which used to sit in the rail.
+ *
+ * Neither is somewhere you go to plan a day — they are places you look
+ * something up — so they were taking two of the rail's dozen slots to be the
+ * two things nobody navigates to mid-morning. Here they are one panel among
+ * the digests, reachable in a click from the mark at the foot of the rail.
+ */
+function Elsewhere() {
+  const people = useApi('/people')
+  const uploads = useApi('/uploads')
+  const count = (r) => (Array.isArray(r.data) ? r.data.length : null)
+
+  const LINKS = [
+    { to: '/people', icon: 'people', label: 'People', n: count(people),
+      hint: 'Who you meet, and when you last did' },
+    { to: '/uploads', icon: 'paperclip', label: 'Uploads', n: count(uploads),
+      hint: 'Every file, and what refers to it' },
+  ]
+
+  return (
+    <Panel title={<><Icon name="search" size={14} /> Elsewhere</>} bodyClass="db-progress-b">
+      <div className="db-elsewhere">
+        {LINKS.map((l) => (
+          <Link key={l.to} to={l.to} className="db-row db-else-row">
+            <Icon name={l.icon} size={14} />
+            <span className="db-row-title">
+              {l.label}
+              <span className="db-hint db-else-hint">{l.hint}</span>
+            </span>
+            {l.n !== null && <span className="db-row-meta">{l.n}</span>}
+          </Link>
+        ))}
+      </div>
+    </Panel>
   )
 }
 

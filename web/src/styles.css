@@ -1371,22 +1371,35 @@ kbd {
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-4);
   z-index: 80;
+  /* Bounded, and bounded by the viewport. Undo messages name what they would
+     undo — a task title, a section name — so they are as long as the thing is,
+     and an unbounded pill centred with translateX ran off both edges at once. */
+  max-width: min(560px, calc(100vw - 32px));
 }
 
 .toast {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-6);
   background: var(--ink);
   color: var(--panel);
   padding: 9px var(--space-5) 9px var(--space-8);
-  border-radius: 99px;
+  /* Not a 99px pill: the moment the text wraps to a second line a pill's ends
+     bow around it and the first and last words sit outside the colour. */
+  border-radius: 14px;
   font-size: 13px;
+  line-height: 1.45;
+  max-width: 100%;
   box-shadow: var(--shadow-pop);
   transition: opacity .4s ease, transform .4s ease;
 }
+
+/* The message wraps; the action does not shrink to make room for it. */
+.toast-msg { min-width: 0; overflow-wrap: anywhere; }
+.toast .toast-action { flex: none; }
 
 .toast.is-leaving { opacity: 0; transform: translateY(6px); }
 
@@ -1942,3 +1955,12 @@ kbd {
 
 /* A band being dragged over a run of tasks lands above it. */
 .box-cols.is-band-over { box-shadow: inset 0 3px 0 var(--accent); }
+
+/* The band's progress bar sits with its heading, narrower than a section's so
+   the two read as nested rather than as peers. */
+.subsec-prog {
+  flex: none;
+  width: 84px;
+  margin-top: var(--space-5);
+  margin-right: var(--space-3);
+}

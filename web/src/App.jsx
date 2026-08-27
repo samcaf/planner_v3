@@ -41,8 +41,9 @@ const NAV_2 = [
   { to: '/notebook', icon: 'templates', label: 'Notebook' },
   { to: '/projects', icon: 'projects', label: 'Projects' },
   { to: '/routines', icon: 'today', label: 'Routines' },
-  { to: '/people', icon: 'people', label: 'People' },
-  { to: '/uploads', icon: 'paperclip', label: 'Uploads' },
+  // People and Uploads live on the dashboard instead. Neither is somewhere you
+  // go to plan — they are places you look something up — and the rail is for
+  // the handful of views the day actually moves between.
   { to: '/settings', icon: 'gear', label: 'Settings' },
 ]
 

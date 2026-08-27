@@ -38,7 +38,12 @@ try {
   check('the section keeps its colour and layout',
     band?.color === 'teal' && band?.layout === 'columns',
     `${band?.color}/${band?.layout}`)
-  check('the move is recorded as one', landed?.status === 'moved' && landed?.moved_to_date === NEXT,
+  // This used to assert status === 'moved' and a moved_to_date, which was the
+  // bug rather than the behaviour: that pair marks work pushed OFF a day, so
+  // the task arrived on the target already closed — out of its open count and
+  // out of its minutes — while nothing was left on the day it came from.
+  check('it arrives open, not marked as having moved away',
+    landed?.status === 'todo' && landed?.moved_to_date === null,
     `${landed?.status} ${landed?.moved_to_date}`)
 
   // Moving back should reuse the original band rather than making a second.
