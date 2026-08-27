@@ -17,6 +17,7 @@ import { useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { longDate, relative, shortDate } from '../lib/dates.js'
 import '../styles/alltasks.css'
+import { usePageTitle } from '../lib/title.js'
 
 const GROUPINGS = [
   ['none', 'No grouping'],
@@ -28,6 +29,7 @@ const GROUPINGS = [
 const NO_FILTERS = emptyFilters()
 
 export default function AllTasks() {
+  usePageTitle('All tasks')
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
   const [projectId, setProjectId] = useState(null)

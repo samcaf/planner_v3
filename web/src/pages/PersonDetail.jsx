@@ -10,11 +10,13 @@ import { api, useApi } from '../lib/api.js'
 import { relative, shortDate, today } from '../lib/dates.js'
 import { InlineText, tagList } from './People.jsx'
 import '../styles/people.css'
+import { usePageTitle } from '../lib/title.js'
 
 export default function PersonDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const person = useApi(`/people/${id}`, [id])
+  usePageTitle(person.data?.name)
   const groups = useApi('/people/groups')
   const [meeting, setMeeting] = useState(false)
   const undo = useUndo()

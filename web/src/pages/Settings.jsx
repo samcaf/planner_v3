@@ -4,6 +4,7 @@ import { Empty, Field, Panel } from '../components/ui.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
 import '../styles/settings.css'
+import { usePageTitle } from '../lib/title.js'
 
 const THEMES = [['light', 'Light'], ['dark', 'Night'], ['system', 'Auto']]
 
@@ -38,6 +39,7 @@ function parseDuration(text) {
 }
 
 export default function Settings({ theme, onTheme, accent, onAccent }) {
+  usePageTitle('Settings')
   const settings = useApi('/settings')
   const [saved, setSaved] = useState('')
   // The raw dump is a debugging aid, not part of the page.

@@ -7,6 +7,7 @@ import { RichLine } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel, shortDate, today } from '../lib/dates.js'
 import '../styles/routines.css'
+import { usePageTitle } from '../lib/title.js'
 
 /*
  * A routine's items are edited with the same TaskRow a day's section uses, so
@@ -99,6 +100,7 @@ function branchShelved(item, byId) {
 }
 
 export default function Routines() {
+  usePageTitle('Routines')
   const routines = useApi('/routines')
   const projects = useApi('/projects')
   const [toast, setToast] = useState('')

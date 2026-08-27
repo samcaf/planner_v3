@@ -12,6 +12,7 @@ import {
 import '../styles/calendar.css'
 import '../styles/people.css'
 import { Rich } from '../lib/rich.jsx'
+import { usePageTitle } from '../lib/title.js'
 
 const MAX_PILLS = 3
 
@@ -24,6 +25,7 @@ export default function Month() {
   const { date } = useParams()
   const navigate = useNavigate()
   useArrowNav(useCallback((by) => navigate(`/month/${addMonths(date, by)}`), [date, navigate]))
+  usePageTitle(monthLabel(date))
   const grid = monthGrid(date)
   const range = useApi(`/days/range/${grid[0]}/${grid[41]}`, [date])
   const [dragOver, setDragOver] = useState(null)

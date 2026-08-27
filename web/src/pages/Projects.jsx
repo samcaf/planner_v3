@@ -14,6 +14,7 @@ import '../styles/projects.css'
 // dashboard's rows already are, so it borrows their stylesheet rather than
 // growing a second set of nearly identical rules.
 import '../styles/dashboard.css'
+import { usePageTitle } from '../lib/title.js'
 
 const STATUSES = ['active', 'planned', 'done', 'archived']
 
@@ -43,6 +44,7 @@ function typeHint(p) {
 }
 
 export default function Projects() {
+  usePageTitle('Projects')
   const navigate = useNavigate()
   const [showArchived, setShowArchived] = useState(false)
   const projects = useApi(`/projects${showArchived ? '?include_archived=1' : ''}`, [showArchived])

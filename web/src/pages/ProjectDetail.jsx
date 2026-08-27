@@ -25,6 +25,7 @@ import '../styles/projects.css'
 // same setting — same markup, same classes. Imported rather than copied so the
 // two cannot drift into two slightly different looks for one idea.
 import '../styles/routines.css'
+import { usePageTitle } from '../lib/title.js'
 
 const STATUSES = ['active', 'planned', 'done', 'archived']
 
@@ -89,6 +90,11 @@ export default function ProjectDetail() {
   const [meeting, setMeeting] = useState(false)
   const undo = useUndo()
   const toast = useToast()
+
+  // Above the early returns. A hook after one runs on some renders and not
+  // others, and the count changing between them is a hard React error — which
+  // is exactly how this page would have white-screened the moment it loaded.
+  usePageTitle(project.data?.name)
 
   if (project.error) return <div className="page"><p className="muted">{project.error.message}</p></div>
   if (!project.data) return <div className="page"><p className="muted">Loading…</p></div>

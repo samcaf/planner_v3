@@ -6,6 +6,7 @@ import { ColorPicker, Empty, Field, Modal, Panel, cls, initials } from '../compo
 import { api, useApi } from '../lib/api.js'
 import { relative } from '../lib/dates.js'
 import '../styles/people.css'
+import { usePageTitle } from '../lib/title.js'
 
 const BLANK_PERSON = {
   name: '', role: '', group_id: null, email: '', phone: '', location: '',
@@ -47,6 +48,7 @@ export function InlineText({ value, onSave, className = 'input', ...rest }) {
 }
 
 export default function People() {
+  usePageTitle('People')
   const [params, setParams] = useSearchParams()
   const [tab, setTab] = useState('people')
   const [asTable, setAsTable] = useState(false)

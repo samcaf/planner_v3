@@ -12,6 +12,7 @@ import {
 } from '../lib/dates.js'
 import '../styles/calendar.css'
 import { Rich } from '../lib/rich.jsx'
+import { tabDate, usePageTitle } from '../lib/title.js'
 
 const GROUP_STORE = 'planner.week.groups'
 
@@ -119,6 +120,7 @@ export default function Week() {
   const { date } = useParams()
   const navigate = useNavigate()
   useArrowNav(useCallback((by) => navigate(`/week/${addDays(date, by * 7)}`), [date, navigate]))
+  usePageTitle(`Week of ${tabDate(weekDays(date)[0])}`)
   const days = weekDays(date)
   const range = useApi(`/days/range/${days[0]}/${days[6]}`, [date])
   const sections = useSections(days[0])

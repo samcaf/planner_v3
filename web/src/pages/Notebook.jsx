@@ -4,6 +4,7 @@ import { Empty, Panel } from '../components/ui.jsx'
 import { RichEditor, RichLine } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
 import '../styles/notebook.css'
+import { usePageTitle } from '../lib/title.js'
 
 /**
  * Notes that belong to no day and no project: references, standing lists, the
@@ -17,6 +18,7 @@ import '../styles/notebook.css'
  * notes has no other order that means anything.
  */
 export default function Notebook() {
+  usePageTitle('Notebook')
   const [showArchived, setShowArchived] = useState(false)
   const notes = useApi(`/notebook${showArchived ? '?archived=1' : ''}`, [showArchived])
   const [openId, setOpenId] = useState(null)

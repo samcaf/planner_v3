@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
@@ -17,6 +17,7 @@ import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
+import { tabDate, usePageTitle } from '../lib/title.js'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 import {
@@ -44,8 +45,27 @@ const byPriority = (a, b) =>
   (PRI_RANK[a.priority] ?? 2) - (PRI_RANK[b.priority] ?? 2) || a.sort - b.sort || a.id - b.id
 
 
+/**
+ * `/day/0` is today, `/day/+1` tomorrow, `/day/-3` three days back.
+ *
+ * Bookmarking a real date pins it to that date forever, which is no use for
+ * "the day before yesterday" — a link you want to mean the same thing relative
+ * to whenever you follow it. The relative form resolves and then replaces
+ * itself with the concrete date, so the URL you end up on is still shareable
+ * and the back button does not bounce through the redirect.
+ */
+const RELATIVE = /^[+-]?\d+$/
+
 export default function Day() {
   const { date } = useParams()
+  if (RELATIVE.test(date || '')) {
+    return <Navigate to={`/day/${addDays(today(), Number(date))}`} replace />
+  }
+  return <DayView key={date} date={date} />
+}
+
+function DayView({ date }) {
+  usePageTitle(tabDate(date))
   const navigate = useNavigate()
   const day = useApi(`/days/${date}`, [date])
   const backlog = useApi(`/tasks?${BACKLOG_QUERY}`)
@@ -460,6 +480,9 @@ export default function Day() {
   const inSection = (id) =>
     d.tasks.filter((t) => (t.section_id ?? null) === id && passesFilter(t))
   const loose = inSection(null)
+  const looseOpen = loose.filter(
+    (t) => t.kind !== 'note' && (t.status === 'todo' || t.status === 'doing')
+  ).length
 
   const backlogTasks = (backlog.data || []).filter(isBacklogTask).sort(
     backlogBy === 'project'
@@ -469,7 +492,11 @@ export default function Day() {
   const load = d.tasks
     .filter((t) => t.kind !== 'note' && (t.status === 'todo' || t.status === 'doing'))
     .reduce((sum, t) => sum + (t.estimate_min || 0), 0)
-  const openCount = d.tasks.filter((t) => t.kind !== 'note' && (t.status === 'todo' || t.status === 'doing')).length
+  // What the Tasks panel actually holds, which is only the work in no section
+  // at all. Counting every open task on the day — which is what this used to do
+  // — made the number disagree with the rows underneath it by however many were
+  // filed in bands. `loose` is already filtered, so the count follows the
+  // filters too, and nested rows count because they are drawn.
 
   return (
     <SelectionProvider>
@@ -582,7 +609,7 @@ export default function Day() {
           <Panel
             title={
               <>
-                Tasks <span className="muted">({openCount})</span>
+                Tasks <span className="muted">({looseOpen})</span>
                 <Progress tasks={loose} className="section-prog" />
               </>
             }

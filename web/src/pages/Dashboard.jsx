@@ -9,6 +9,7 @@ import { taskOps, useUndo } from '../lib/undo.jsx'
 import { longDate, minutesLabel, relative, shortDate, today } from '../lib/dates.js'
 import '../styles/dashboard.css'
 import { Rich } from '../lib/rich.jsx'
+import { usePageTitle } from '../lib/title.js'
 
 /** Whole days between a stored timestamp and now. */
 function ageInDays(stamp) {
@@ -19,6 +20,7 @@ function ageInDays(stamp) {
 }
 
 export default function Dashboard() {
+  usePageTitle('Dashboard')
   const dash = useApi('/dashboard')
   const undo = useUndo()
   const toast = useToast()

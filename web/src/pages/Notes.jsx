@@ -8,6 +8,7 @@ import {
   parse, shortDate, today, weekDays,
 } from '../lib/dates.js'
 import '../styles/notes.css'
+import { tabDate, usePageTitle } from '../lib/title.js'
 
 const SCOPES = [['day', 'Day'], ['week', 'Week'], ['month', 'Month']]
 
@@ -54,6 +55,7 @@ function noteRows(tasks) {
 export default function Notes() {
   const { date } = useParams()
   const navigate = useNavigate()
+  usePageTitle(`Notes ${tabDate(date)}`)
   const [scope, setScope] = useState('day')
   const [attached, setAttached] = useState(true)
 

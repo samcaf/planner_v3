@@ -305,11 +305,28 @@ async function suggestFor(query) {
       .filter((p) => !lower || p.name.toLowerCase().includes(lower))
       .slice(0, 5)
       .map((p) => ({ insert: `project:${p.name}`, label: p.name, kind: 'project' })),
-    // A backlog task has no day to open, so it cannot be linked to yet.
+    // The id is what resolves; the title is what gets READ. Inserting the id
+    // alone left "Task 2119" sitting in the prose, which says nothing about
+    // what was linked. The label is a snapshot — renaming the task later does
+    // not rewrite links already written, which is the usual bargain for
+    // human-readable wiki links.
+    //
+    // Backlog tasks are offered too. They used to be filtered out for having
+    // no day to open; they now have a board of their own to land on.
     ...tasks
-      .filter((t) => t.scheduled_date)
       .slice(0, 5)
-      .map((t) => ({ insert: `task:${t.id}`, label: plainTitle(t.title) || `Task ${t.id}`, kind: 'task' })),
+      .map((t) => {
+        const name = plainTitle(t.title).trim()
+        // `|` ends the target and `]` ends the link, so neither can travel in
+        // a label. Both are dropped rather than escaped: a title is prose, and
+        // markdown has no escape inside `[[…]]`.
+        const label = name.replace(/[|\]]/g, ' ').replace(/\s+/g, ' ').slice(0, 80).trim()
+        return {
+          insert: label ? `task:${t.id}|${label}` : `task:${t.id}`,
+          label: name || `Task ${t.id}`,
+          kind: 'task',
+        }
+      }),
   ]
 }
 

@@ -7,6 +7,7 @@ import { api, useApi } from '../lib/api.js'
 import { Rich, attach, markdownFor } from '../lib/rich.jsx'
 import { shortDate } from '../lib/dates.js'
 import '../styles/extras.css'
+import { usePageTitle } from '../lib/title.js'
 
 /** Human bytes — KB and MB are all a file browser has to distinguish. */
 function size(bytes) {
@@ -45,6 +46,7 @@ function iconFor(file) {
  * now, the only place a file can be added without going through an editor.
  */
 export default function Uploads() {
+  usePageTitle('Uploads')
   const list = useApi('/uploads')
   const [doomed, setDoomed] = useState(null)
   // The image currently held open over the page, if any.
