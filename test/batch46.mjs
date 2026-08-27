@@ -78,7 +78,7 @@ try {
   const onSection = () => document.querySelector('.panel.section.vim-on-section')?.dataset.sectionId || null
   const where = () => (onSection() ? `s${onSection()}` : onTask())
 
-  for (let i = 0; i < 20 && where() == null; i++) await wait(150)
+  for (let i = 0; i < 60 && where() == null; i++) await wait(150)
   check('the cursor starts on a task, not a heading', onTask() !== null && onSection() === null,
     `task=${onTask()} section=${onSection()}`)
 

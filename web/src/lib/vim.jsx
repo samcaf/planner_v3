@@ -240,16 +240,56 @@ export function VimProvider({ children }) {
    * built in, so both calls start from the same place and `2j` moved one.
    */
   const move = useCallback((to, n = 1) => {
-    const ids = idsOnScreen()
+    const els = stopEls()
+    const ids = els.map(keyOf)
     if (!ids.length) return
     const at = cursor == null ? -1 : ids.indexOf(cursor)
     const steps = Math.max(1, n)
+
+    /**
+     * Down and up a COLUMN, then out of the grid entirely.
+     *
+     * Document order runs a three-box grid box by box, so plain j at the foot
+     * of the first box walked sideways into the top of the second — which is
+     * what h and l are for. Inside a grid, j and k stay in their box, and at
+     * its edges they step over the whole grid: out of a band into the section's
+     * own work, or out of a section into the next one.
+     */
+    const outOf = (grid, from, dir) => {
+      for (let i = from + dir; i >= 0 && i < els.length; i += dir) {
+        if (!grid.contains(els[i])) return i
+      }
+      return null
+    }
+
     let next = at
-    if (to === 'down') next = at < 0 ? 0 : Math.min(ids.length - 1, at + steps)
-    else if (to === 'up') next = at < 0 ? 0 : Math.max(0, at - steps)
-    else if (to === 'first') next = 0
+    if (to === 'first') next = 0
     else if (to === 'last') next = ids.length - 1
     else if (typeof to === 'number') next = Math.max(0, Math.min(ids.length - 1, to))
+    else if (at < 0) next = 0
+    else {
+      const dir = to === 'down' ? 1 : -1
+      const col = els[at]?.closest?.('.box-col')
+      const grid = col?.parentElement
+
+      if (col && grid) {
+        const inCol = idsIn(col)
+        const i = inCol.indexOf(cursor)
+        const want = i + dir * steps
+        if (i >= 0 && want >= 0 && want < inCol.length) {
+          next = ids.indexOf(inCol[want])
+        } else {
+          // Past the end of the box: leave the grid rather than sliding into
+          // the box beside it. A count that overshoots lands here too, which is
+          // the same thing vim does at the end of a buffer.
+          const outside = outOf(grid, at, dir)
+          next = outside === null ? at : outside
+        }
+      } else {
+        next = Math.max(0, Math.min(ids.length - 1, at + dir * steps))
+      }
+    }
+
     const id = ids[next]
     setCursor(id)
     rowFor(id)?.scrollIntoView({ block: 'nearest' })

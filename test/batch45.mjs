@@ -119,7 +119,7 @@ try {
     const el = window.document.querySelector('.task.vim-on')
     return el ? Number(el.dataset.taskId) : null
   }
-  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
   key(window, 'g'); await wait(90); key(window, 'g'); await wait(200)
   for (let i = 0; i < 16 && cursorId() !== withNote.id; i++) { key(window, 'j'); await wait(90) }
   check('aimed at the task with a note', cursorId() === withNote.id, `${cursorId()}`)

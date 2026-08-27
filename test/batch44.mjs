@@ -73,7 +73,7 @@ try {
   const sectionShut = (id) => document
     .querySelector(`.panel.section[data-section-id="${id}"]`)?.dataset.sectionShut === '1'
 
-  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
   check('the cursor starts', cursorId() !== null, 'no cursor')
 
   // 1 ── Enter ticks, Space folds ------------------------------------------

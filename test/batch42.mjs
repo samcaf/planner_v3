@@ -70,7 +70,9 @@ try {
     document.querySelector('.vim-mode')?.textContent)
   // The cursor waits for the first row to exist, and the list arrives over the
   // network, so this settles rather than sampling once.
-  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
+  // Generous, because the whole suite runs these back to back and the page has
+  // to fetch its day before there is a row for the cursor to take.
+  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
   check('the cursor starts on the first row', cursorId() !== null, 'no cursor')
 
   // ------------------------------------------------------------- navigation

@@ -85,13 +85,30 @@ try {
     return [...el.parentElement.children].filter((c) => c.classList.contains('box-col')).indexOf(el)
   }
   const clip = () => window.__clip
-  const aim = async (id) => {
-    key('g'); await wait(90); key('g'); await wait(200)
-    for (let i = 0; i < 16 && cursorId() !== id; i++) { key('j'); await wait(90) }
+  /**
+   * Aim with `/`, not by walking.
+   *
+   * j and k keep to their own box now — at the foot of one they leave the grid
+   * rather than sliding into the box beside it, which is what h and l are for.
+   * So a walk from the top cannot reach a task in the second or third box at
+   * all, and searching for it by name is both shorter and the thing a person
+   * would actually do.
+   */
+  const aim = async (id, title) => {
+    key('Escape'); await wait(120)
+    key('/'); await wait(250)
+    const box = document.querySelector('.vim-cmd-input')
+    if (!box) return false
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    set.call(box, title)
+    box.dispatchEvent(new window.Event('input', { bubbles: true }))
+    box.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+    await wait(600)
+    for (let i = 0; i < 8 && cursorId() !== id; i++) { key('n'); await wait(140) }
     return cursorId() === id
   }
 
-  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
   check('the cursor starts somewhere', cursorId() !== null, 'no cursor')
 
   // 1 ── counts before a movement -------------------------------------------
@@ -105,7 +122,7 @@ try {
     twoDown === cursorId() && twoDown !== top, `${top} -> ${twoDown} vs ${cursorId()}`)
 
   // 2 ── h and l cross the three boxes ---------------------------------------
-  check('a 5-minute task sits in the first box', (await aim(one.id)) && colOfCursor() === 0,
+  check('a 5-minute task sits in the first box', (await aim(one.id, 'ZZ one')) && colOfCursor() === 0,
     `col ${colOfCursor()}`)
   key('l'); await wait(250)
   check('l moves to a box on the right', colOfCursor() > 0, `col ${colOfCursor()}`)
@@ -120,7 +137,7 @@ try {
     .sort((a, b) => a.sort - b.sort || a.id - b.id).map((t) => t.title)
   const before = await orderNow()
   check('the section starts in a known order', before.length >= 3, before.join(','))
-  check('aimed at the first task', await aim(one.id), `${cursorId()}`)
+  check('aimed at the first task', await aim(one.id, 'ZZ one'), `${cursorId()}`)
   key('j', { altKey: true }); await wait(1100)
   const after = await orderNow()
   check('Alt-j moves the task itself down, not the cursor',
@@ -131,7 +148,7 @@ try {
     (await orderNow()).join(','))
 
   // 4 ── u undoes, Ctrl-r redoes --------------------------------------------
-  check('aimed', await aim(two.id))
+  check('aimed', await aim(two.id, 'ZZ two'))
   key('Enter'); await wait(900)
   check('Enter ticks it', (await json(`/api/tasks/${two.id}`)).status === 'done',
     (await json(`/api/tasks/${two.id}`)).status)
@@ -145,7 +162,7 @@ try {
   await wait(500)
 
   // 5 ── visual mode starts on the text -------------------------------------
-  check('aimed at a task with a note', await aim(one.id))
+  check('aimed at a task with a note', await aim(one.id, 'ZZ one'))
   key('v'); await wait(250)
   check('v enters visual mode',
     document.querySelector('.vim-mode')?.textContent === 'VISUAL',
@@ -164,19 +181,19 @@ try {
   key('Escape'); await wait(250)
 
   // 7 ── yy yanks the text ---------------------------------------------------
-  check('aimed', await aim(one.id))
+  check('aimed', await aim(one.id, 'ZZ one'))
   await keys('yy', 130)
   await wait(500)
   check('yy yanks the title and its note',
     clip() === 'ZZ one\nfirst note', JSON.stringify(clip()))
 
-  check('aimed at one without a note', await aim(two.id))
+  check('aimed at one without a note', await aim(two.id, 'ZZ two'))
   await keys('yy', 130)
   await wait(500)
   check('a task with no note yanks just its title', clip() === 'ZZ two', JSON.stringify(clip()))
 
   // 8 ── y over several tasks separates them --------------------------------
-  check('aimed', await aim(one.id))
+  check('aimed', await aim(one.id, 'ZZ one'))
   key('V'); await wait(200)
   key('j'); await wait(250)
   key('y'); await wait(600)
@@ -184,7 +201,7 @@ try {
     (clip() || '').split('\n\n').length === 2, JSON.stringify(clip()))
 
   // 9 ── yt yanks markdown ---------------------------------------------------
-  check('aimed', await aim(one.id))
+  check('aimed', await aim(one.id, 'ZZ one'))
   await keys('yt', 130)
   await wait(600)
   const md = clip() || ''
@@ -194,7 +211,7 @@ try {
   check('and the note underneath', md.includes('first note'), md.slice(0, 200))
 
   // 9b ── a band head yanks the whole band ----------------------------------
-  check('aimed at the band head', await aim(band.id), `${cursorId()}`)
+  check('aimed at the band head', await aim(band.id, 'ZZ band'), `${cursorId()}`)
   await keys('yy', 130)
   await wait(600)
   check('yanking a sub-section takes what is under it too',
@@ -214,7 +231,7 @@ try {
   await wait(400)
 
   // 11 ── :note opens the note ----------------------------------------------
-  check('aimed', await aim(deep.id))
+  check('aimed', await aim(deep.id, 'ZZ deep'))
   key(':'); await wait(300)
   const field = document.querySelector('.vim-cmd-input')
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set

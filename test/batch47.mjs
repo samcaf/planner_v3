@@ -72,7 +72,7 @@ async function exercise(label, url, ids) {
     return cursorId() === id
   }
 
-  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
   check(`${label}: the cursor finds a task`, cursorId() !== null, 'no cursor')
 
   // --- ticking -------------------------------------------------------------
