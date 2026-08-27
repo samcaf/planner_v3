@@ -5,7 +5,7 @@ import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
 import { isSectionDrag, useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
-import { RichEditor, RichLine } from '../lib/rich.jsx'
+import { Rich, RichEditor, RichLine } from '../lib/rich.jsx'
 import { cls } from './ui.jsx'
 import { addDays, minutesLabel, shortDate, today } from '../lib/dates.js'
 
@@ -967,7 +967,10 @@ export function MiniTask({ task, onToggle, childCount = 0 }) {
       <StatusBox status={task.status} onClick={onToggle} />
       <span className="dot"
         style={{ background: `var(--${task.project_color || 'gray'})`, width: 6, height: 6, flexBasis: 6 }} />
-      <span className="mtitle" title={task.title}>{task.title}</span>
+      {/* Through Rich like every other title: a week cell used to show the
+          markdown source, so a task with a link in it read as brackets and a
+          URL and the link could not be followed from here at all. */}
+      <span className="mtitle" title={task.title}><Rich text={task.title} inline /></span>
       {task.start_time && <span className="mtime">{task.start_time}</span>}
       {childCount > 0 && <span className="mtime">{childCount}</span>}
     </div>

@@ -86,11 +86,15 @@ export default function QuickMeeting({
   // With nothing typed the list is a directory to pick from; with a query it
   // narrows. Either way it is the same list, so there is no mode to learn.
   const groupMatches = (groups.data || []).filter(
-    (g) => q.trim() && g.name.toLowerCase().includes(q.trim().toLowerCase()) && g.people_count > 0
+    (g) => q.trim() && g.name.toLowerCase().includes(q.trim().toLowerCase())
   )
+  // Empty groups are listed too. Filtering on people_count > 0 meant a group
+  // you had made but not yet filled simply did not exist in this dialog, with
+  // nothing to say why — and picking one is still worth doing, because the
+  // group carries the room link and is what the meeting is *with*.
   const shownGroups = q.trim()
     ? groupMatches.slice(0, 3)
-    : (groups.data || []).filter((g) => g.people_count > 0).slice(0, 4)
+    : (groups.data || []).slice(0, 4)
   const shownPeople = (q.trim() ? matches : matches.slice(0, 8))
     .slice(0, q.trim() ? 6 : 8)
 
@@ -255,7 +259,9 @@ export default function QuickMeeting({
                 <span className="avatar is-group"><Icon name="building" size={12} /></span>
                 <span className="pe-result-name">{g.name}</span>
                 <span className="muted">
-                  whole group · {g.people_count} {g.people_count === 1 ? 'person' : 'people'}
+                  {g.people_count === 0
+                    ? 'no members yet'
+                    : `whole group · ${g.people_count} ${g.people_count === 1 ? 'person' : 'people'}`}
                 </span>
                 {g.meeting_url && <span className="chip c-blue"><Icon name="link" size={10} /> link</span>}
               </button>
@@ -283,12 +289,11 @@ export default function QuickMeeting({
             )}
 
             {!q.trim() && shownPeople.length === 0 && shownGroups.length === 0 && (
-              <span className="pe-hint" style={{ padding: '6px 8px' }}>
-                No people yet — type a name to add one.
+              <span className="pe-hint pe-empty">
+                No people or groups yet — type a name to add one.
               </span>
             )}
           </div>
-          )}
         </div>
       </Field>
 

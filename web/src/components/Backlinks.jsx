@@ -4,6 +4,7 @@ import { Panel } from './ui.jsx'
 import { useApi } from '../lib/api.js'
 import { shortDate } from '../lib/dates.js'
 import '../styles/extras.css'
+import { Rich } from '../lib/rich.jsx'
 
 /**
  * What links here: every note, task or day whose text carries a `[[…]]` to
@@ -30,7 +31,7 @@ export default function Backlinks({ target, title = 'Linked from' }) {
             <Link className="ex-link" to={item.href}>
               <span className="ex-link-kind">{item.kind}</span>
               <span className="ex-link-body">
-                <span className="ex-link-title">{item.title}</span>
+                <span className="ex-link-title"><Rich text={item.title} inline /></span>
                 <span className="ex-link-snip">{item.snippet}</span>
               </span>
               {item.date && <span className="chip">{shortDate(item.date)}</span>}

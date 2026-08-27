@@ -11,6 +11,7 @@ import {
   DOW, addDays, dayNum, minutesLabel, parse, shortDate, startOfWeek, today, weekDays,
 } from '../lib/dates.js'
 import '../styles/calendar.css'
+import { Rich } from '../lib/rich.jsx'
 
 const GROUP_STORE = 'planner.week.groups'
 
@@ -225,13 +226,13 @@ export default function Week() {
                 <div className="wday-b">
                   {milesByDay[d].map((m) => (
                     <Link key={`m${m.id}`} to={`/projects/${m.project_id}`} className={`pill ${cls(m.project_color)}`}>
-                      ⚑ {m.title}
+                      ⚑ <Rich text={m.title} inline />
                     </Link>
                   ))}
 
                   {eventsByDay[d].map((e) => (
                     <Link key={`e${e.id}`} to={`/day/${d}`} className={`pill ${cls(e.project_color)}`}>
-                      {e.start_time ? `${e.start_time} ` : ''}{e.title}
+                      {e.start_time ? `${e.start_time} ` : ''}<Rich text={e.title} inline />
                     </Link>
                   ))}
 

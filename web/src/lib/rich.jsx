@@ -404,6 +404,11 @@ export function RichEditor({
 }) {
   const storeKey = draftKey ? `${DRAFT_PREFIX}${draftKey}` : null
   const [editing, setEditing] = useState(!!autoFocus)
+  // True between mousedown and the click that follows it, so the focus landing
+  // in between can tell a pointer press from a Tab. Cleared on window mouseup
+  // rather than in a timer, because a press that never becomes a click — a drag
+  // that leaves the box — must clear it too.
+  const pressing = useRef(false)
   const [draft, setDraft] = useState(value || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -458,6 +463,16 @@ export function RichEditor({
   // Unmounting — a route change, say — removes the textarea without blurring
   // it, so the last debounce window has to be flushed rather than dropped.
   useEffect(() => () => pending.current?.(), [])
+
+  // Clears the press flag wherever the gesture ends, including a drag that
+  // leaves the box without ever becoming a click. Declared here rather than
+  // beside the view it serves: everything below `if (!editing)` is past an
+  // early return, and a hook there changes the hook count between renders.
+  useEffect(() => {
+    const up = () => { pressing.current = false }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
 
   /** Drop the stored draft and the strip offering it back. */
   function forget() {
@@ -573,7 +588,21 @@ export function RichEditor({
           // that would open it opens the editor instead, and the only way to
           // reach a link was to copy it out of the markdown by hand.
           onClick={(e) => { if (e.target.closest('a')) return; setDraft(value || ''); setEditing(true); onEditing?.(true) }}
-          onFocus={() => { setDraft(value || ''); setEditing(true); onEditing?.(true) }}
+          // Focus opens the editor for the KEYBOARD only. This box carries
+          // tabIndex, so a mouse press anywhere in it — including on a link —
+          // focuses it, and focus used to open the editor immediately. The
+          // textarea replaced the text between mousedown and mouseup, so the
+          // click never landed on the anchor and the link silently did nothing.
+          // The press flag is what separates "tabbed here" from "clicked here";
+          // a click that is not on a link still opens the editor, just one
+          // event later, via onClick above.
+          onMouseDown={() => { pressing.current = true }}
+          onFocus={(e) => {
+            if (pressing.current || e.target !== e.currentTarget) return
+            setDraft(value || '')
+            setEditing(true)
+            onEditing?.(true)
+          }}
         >
           {value ? <Rich text={value} /> : <span className="muted">{placeholder}</span>}
         </div>

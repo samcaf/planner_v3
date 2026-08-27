@@ -12,7 +12,7 @@ import Progress, { tally } from '../components/Progress.jsx'
 import DeepBar from '../components/DeepBar.jsx'
 import { PRIORITIES, PriorityChip, PriorityIcon } from '../components/Priority.jsx'
 import { useToast } from '../components/Toast.jsx'
-import { RichEditor } from '../lib/rich.jsx'
+import { Rich, RichEditor } from '../lib/rich.jsx'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
@@ -568,7 +568,7 @@ export default function Day() {
                 <div key={e.id} className={`event ${cls(e.project_color)}`}>
                   <span className="time">{e.start_time || '—'}</span>
                   <div style={{ flex: 1 }}>
-                    <div className="etitle">{e.title}</div>
+                    <div className="etitle"><Rich text={e.title} inline /></div>
                     <div className="task-meta">
                       <span className="chip">{e.kind === 'meeting' ? 'meeting' : e.end_time ? `${e.start_time}–${e.end_time}` : 'timed'}</span>
                       {e.project_name && <span className={`chip ${cls(e.project_color)}`}>{e.project_name}</span>}

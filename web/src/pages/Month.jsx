@@ -11,6 +11,7 @@ import {
 } from '../lib/dates.js'
 import '../styles/calendar.css'
 import '../styles/people.css'
+import { Rich } from '../lib/rich.jsx'
 
 const MAX_PILLS = 3
 
@@ -185,7 +186,7 @@ export default function Month() {
                   >
                     {it._type === 'milestone' ? '⚑ ' : ''}
                     {it._type === 'event' && it.start_time ? `${it.start_time} ` : ''}
-                    {it.title}
+                    <Rich text={it.title} inline />
                   </div>
                 ))}
 

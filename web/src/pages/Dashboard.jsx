@@ -8,6 +8,7 @@ import { api, useApi } from '../lib/api.js'
 import { taskOps, useUndo } from '../lib/undo.jsx'
 import { longDate, minutesLabel, relative, shortDate, today } from '../lib/dates.js'
 import '../styles/dashboard.css'
+import { Rich } from '../lib/rich.jsx'
 
 /** Whole days between a stored timestamp and now. */
 function ageInDays(stamp) {
@@ -234,7 +235,7 @@ function TaskPanel({ title, hint, icon, tasks, meta, tone }) {
           className="db-row"
         >
           <span className="dot" style={{ background: `var(--${t.project_color || 'gray'})` }} />
-          <span className="db-row-title">{t.title}</span>
+          <span className="db-row-title"><Rich text={t.title} inline /></span>
           <span className={`db-row-meta ${tone === 'red' ? 'is-red' : ''}`}>{meta(t)}</span>
         </Link>
       ))}

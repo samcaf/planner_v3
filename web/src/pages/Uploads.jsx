@@ -4,7 +4,7 @@ import Icon from '../components/Icon.jsx'
 import { Empty, Modal, Panel } from '../components/ui.jsx'
 import { useToast } from '../components/Toast.jsx'
 import { api, useApi } from '../lib/api.js'
-import { attach, markdownFor } from '../lib/rich.jsx'
+import { Rich, attach, markdownFor } from '../lib/rich.jsx'
 import { shortDate } from '../lib/dates.js'
 import '../styles/extras.css'
 
@@ -308,7 +308,7 @@ function ConfirmDelete({ file, busy, onCancel, onConfirm }) {
                 <Link className="ex-link" to={item.href} onClick={onCancel}>
                   <span className="ex-link-kind">{item.kind}</span>
                   <span className="ex-link-body">
-                    <span className="ex-link-title">{item.title}</span>
+                    <span className="ex-link-title"><Rich text={item.title} inline /></span>
                     <span className="ex-link-snip">{item.snippet}</span>
                   </span>
                 </Link>

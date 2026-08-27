@@ -176,3 +176,7 @@
   .pe-meeting { grid-template-columns: 1fr; }
   .pe-meeting-day, .pe-meeting-join { padding-top: 0; margin-top: 0; }
 }
+
+/* The picker's own empty line, rather than an inline style that the design
+   tokens cannot reach. */
+.pe-empty { padding: var(--space-3) var(--space-4); }
