@@ -577,12 +577,30 @@ r.post('/:id/move', h((req) => {
     const ownSection = parentId ? null : landing
 
     if (!copy) {
+      // The row itself relocates, so it must NOT be marked as having moved
+      // away. `status = 'moved'` with a `moved_to_date` is the stub left behind
+      // when work is pushed on from a day — and setting it here meant the task
+      // ARRIVED on the target day already closed: it dropped out of that day's
+      // open count and out of its total minutes, while nothing at all was left
+      // on the day it came from. A task that had been rolled over before comes
+      // back to 'todo', because arriving somewhere is not being pushed on.
       db.prepare(`
-        UPDATE tasks SET scheduled_date = ?, section_id = ?, parent_id = ?,
-                         status = 'moved', moved_to_date = ?
+        UPDATE tasks
+        SET scheduled_date = ?, section_id = ?, parent_id = ?,
+            moved_to_date = NULL,
+            status = CASE WHEN status = 'moved' THEN 'todo' ELSE status END
         WHERE id = ?
-      `).run(date, ownSection, parentId, date, id)
-      db.prepare(`UPDATE tasks SET scheduled_date = ? WHERE id IN (${DESCENDANTS})`).run(date, id)
+      `).run(date, ownSection, parentId, id)
+
+      const kids = db.prepare(DESCENDANTS).all(id).map((row) => row.id)
+      for (const kid of kids) {
+        // Children follow the date, and then have to let go of any section that
+        // belongs to the day they came from. Without this a subtask kept
+        // pointing at a band on the old date — a row on one day claiming a
+        // section on another, which no view can draw correctly.
+        db.prepare('UPDATE tasks SET scheduled_date = ? WHERE id = ?').run(date, kid)
+        detachFromForeignSection(kid)
+      }
       return id
     }
 

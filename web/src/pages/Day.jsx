@@ -5,7 +5,7 @@ import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
   SelectAllBox, SelectionBar, SelectionProvider, bulkPatch, draggedIds,
-  isSectionDrag, isTaskDrag,
+  isSectionDrag, isTaskDrag, parentsFirst,
 } from '../components/Selection.jsx'
 import { Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
 import Progress, { tally } from '../components/Progress.jsx'
@@ -424,6 +424,41 @@ export default function Day() {
     refresh()
   }
 
+  /**
+   * Delete a section and the work in it.
+   *
+   * Both halves come back from the server — the section row and every task it
+   * took — and both restore by their original ids, so undo is a matter of
+   * putting the rows back rather than rebuilding anything. Tasks go back
+   * parents-first: parent_id is a real foreign key and a child restored ahead
+   * of its parent is rejected outright.
+   */
+  const removeSection = async (section) => {
+    const inside = d.tasks.filter((t) => (t.section_id ?? null) === section.id)
+    const count = inside.length
+    const what = count === 0
+      ? ''
+      : ` and ${count} task${count === 1 ? '' : 's'} in it, including anything nested under them,`
+    if (!window.confirm(`Delete "${section.name}"${what}? You can undo this.`)) return
+
+    const gone = await api.del(`/sections/${section.id}`)
+    const restore = async () => {
+      await api.post('/sections/restore', gone.section)
+      for (const row of parentsFirst(gone.tasks || [])) await api.post('/tasks/restore', row)
+    }
+
+    undo?.record?.({
+      label: `delete ${section.name}`,
+      undo: restore,
+      redo: async () => { await api.del(`/sections/${section.id}`) },
+    })
+    toast({
+      message: `Deleted "${section.name}"${count ? ` and ${count} task${count === 1 ? '' : 's'}` : ''}`,
+      action: { label: 'Undo', onClick: async () => { await restore(); refresh() } },
+    })
+    refresh()
+  }
+
   const rowProps = (task) => ({
     task,
     subtasks: task.subtasks || [],
@@ -616,7 +651,7 @@ export default function Day() {
               onDragOverSection={(id, side) => setSectionDropAt({ id, side })}
               onDropSection={reorderSections}
               onPatch={async (patch) => { await api.patch(`/sections/${section.id}`, patch); refresh() }}
-              onDelete={async () => { await api.del(`/sections/${section.id}`); refresh() }}
+              onDelete={() => removeSection(section)}
               onDropLoose={(ids) =>
                 dropTasks(ids, { section_id: section.id, scheduled_date: date }, `move to ${section.name}`)}
               onMoveToColumn={(ids, col, retime, under = null) => moveToColumn(
@@ -1681,7 +1716,11 @@ function SectionPanel({
         <button className="btn ghost sm" title="Add meeting" onClick={onAddMeeting}>
           <Icon name="clock" size={13} />
         </button>
-        <button className="btn ghost sm danger" title="Remove section (keeps its tasks)" onClick={onDelete}>
+        <button
+          className="btn ghost sm danger"
+          title="Delete this section and the tasks in it"
+          onClick={onDelete}
+        >
           <Icon name="trash" size={13} />
         </button>
       </header>

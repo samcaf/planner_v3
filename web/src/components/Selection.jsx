@@ -246,7 +246,7 @@ function withDescendants(ids, known) {
 
 /** Parents before children: `parent_id` is a real foreign key, so restoring a
  *  child while its parent is still missing is rejected outright. */
-function parentsFirst(rows) {
+export function parentsFirst(rows) {
   const byId = new Map(rows.map((r) => [r.id, r]))
   const out = []
   const seen = new Set()

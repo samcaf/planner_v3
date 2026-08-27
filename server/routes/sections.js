@@ -29,26 +29,61 @@ r.post('/', h((req) => {
 r.patch('/:id', h((req) => sections.update(req.params.id, req.body)))
 
 /**
- * Deleting a section keeps its tasks — they fall back to the day's loose list
- * rather than vanishing with the container.
- */
-/**
- * Removing a band takes the chores the routine put there with it, and leaves
- * anything you wrote yourself.
+ * Deleting a section deletes what is in it.
  *
- * Orphaning everything, which is what this used to do, meant deleting the
- * Morning band tipped all of its chores into the day as loose tasks — so the
- * routine appeared to have been re-added rather than removed. A task the
- * routine generated has no life outside it; one you typed into the band does.
+ * It used to orphan them: every task fell back into the day's loose list, so
+ * removing the Morning band tipped its chores into the day and the routine
+ * looked as though it had been re-added rather than removed. A section is the
+ * container for that work — throwing the box away and leaving the contents on
+ * the floor is not what anybody meant by "delete".
+ *
+ * The sweep walks DOWN from every task in the section rather than trusting
+ * `section_id` alone. Children normally carry their parent's section, but a row
+ * that lost it — an older one, or one mid-move — would otherwise survive its
+ * own parent and reappear as a loose task with no context.
+ *
+ * The reply carries the full rows, not just a count: the client hands them
+ * straight back to /tasks/restore and /sections/restore to undo this, and both
+ * of those restore by original id, so nothing has to be remapped.
  */
 r.delete('/:id', h((req) => {
-  const id = req.params.id
+  const id = Number(req.params.id)
+  const section = sections.get(id)
+  if (!section) throw notFound('section not found')
+
+  const doomed = db.prepare(`
+    WITH RECURSIVE below(id) AS (
+      SELECT id FROM tasks WHERE section_id = ?
+      UNION
+      SELECT t.id FROM tasks t JOIN below b ON t.parent_id = b.id
+    )
+    SELECT * FROM tasks WHERE id IN (SELECT id FROM below)
+  `).all(id)
+
   db.transaction(() => {
-    db.prepare('DELETE FROM tasks WHERE section_id = ? AND from_template = 1').run(id)
-    db.prepare('UPDATE tasks SET section_id = NULL WHERE section_id = ?').run(id)
+    // Deepest first. parent_id is a real foreign key, and deleting a parent
+    // first would cascade rows out from under the loop.
+    for (const t of [...doomed].reverse()) {
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(t.id)
+    }
     sections.remove(id)
   })()
-  return { ok: true }
+
+  return { ok: true, section, tasks: doomed }
+}))
+
+/** Put a deleted section back exactly as it was, id and all. */
+r.post('/restore', h((req) => {
+  const row = req.body || {}
+  if (!row.id) throw badRequest('a full section row is required')
+
+  const cols = ['id', ...FIELDS.filter((f) => row[f] !== undefined)]
+  const values = cols.map((c) => (c === 'id' ? row.id : row[c]))
+  db.prepare(
+    `INSERT OR REPLACE INTO sections (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+  ).run(...values)
+
+  return sections.get(row.id)
 }))
 
 /** Reorder sections within a day. */
