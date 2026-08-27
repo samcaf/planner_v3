@@ -82,7 +82,7 @@ export function branchMinutes(tasks = []) {
   }, 0)
 }
 
-function StatusBox({ status, optional, meeting, onClick, onToggleOptional }) {
+function StatusBox({ status, optional, meeting, onClick, onToggleOptional, onDrop }) {
   const glyph = {
     done: <Icon name="check" size={11} strokeWidth={3} />,
     moved: <Icon name="arrowRight" size={10} strokeWidth={3} />,
@@ -99,8 +99,19 @@ function StatusBox({ status, optional, meeting, onClick, onToggleOptional }) {
         // as something that happens at a time rather than something you finish.
         meeting ? 'is-meeting' : '',
       ].filter(Boolean).join(' ')}
-      title={`${STATUS_LABEL[status]} · right-click to make it ${optional ? 'committed' : 'optional'}`}
-      onClick={onClick}
+      title={[
+        STATUS_LABEL[status],
+        `right-click to make it ${optional ? 'committed' : 'optional'}`,
+        `shift-click to ${status === 'dropped' ? 'undrop' : 'drop'} it`,
+      ].join(' · ')}
+      // Three answers to "am I doing this", on one control. A plain click is
+      // done/not-done, right-click is optional, and shift-click drops — which
+      // used to be four levels down an overflow menu, so the quickest way to
+      // abandon something was slower than doing it.
+      onClick={(e) => {
+        if (e.shiftKey) { e.preventDefault(); onDrop?.(); return }
+        onClick?.(e)
+      }}
       // The checkbox is where the commit/optional decision belongs: it is the
       // same control that answers "am I doing this", and it stays hittable when
       // the title is in an editor.
@@ -373,6 +384,7 @@ export default function TaskRow({
               meeting={isMeeting}
               onClick={() => onChange({ status: CHECK_CYCLE[task.status] })}
               onToggleOptional={() => onChange({ optional: task.optional ? 0 : 1 })}
+              onDrop={() => onChange({ status: task.status === 'dropped' ? 'todo' : 'dropped' })}
             />
             {/* Under the box, not beside it. To the left it pushed the checkbox
                 out of line with every childless row in the same column, and

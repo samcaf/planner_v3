@@ -25,6 +25,7 @@ import Uploads from './pages/Uploads.jsx'
 import Settings from './pages/Settings.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Resolver, { InternalLinks } from './components/Resolver.jsx'
+import Search from './components/Search.jsx'
 
 /** Wide enough for the mark, narrow enough to leave the page most of the screen. */
 const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
@@ -92,6 +93,10 @@ export default function App() {
     <div className="app">
       <nav className="sidebar" style={{ width: railWidth, flexBasis: railWidth }}>
         <UndoButtons />
+
+        {/* Above the navigation, because it is how you get to anything that is
+            not one of the dozen places below. Ctrl-K from anywhere. */}
+        <Search />
 
         <div className="sb-section">Calendar</div>
         {NAV.map((n) => (

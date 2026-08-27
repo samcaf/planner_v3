@@ -119,6 +119,39 @@ try {
   check('and it reflects the work under it, not the heading',
     /width:\s*(?!0%)(?!100%)\d/.test(pct) || /width:\s*50/.test(pct), pct || '(no width)')
 
+  // ------------------------------------------------- dropping a task quickly
+  const dropRow = [...document.querySelectorAll('.task')]
+    .find((r) => /ZZ k2/.test(r.querySelector('.task-title')?.textContent || ''))
+  const box = dropRow?.querySelector('.task-check')
+  check('the checkbox says all three of its gestures',
+    /right-click/.test(box?.getAttribute('title') || '')
+      && /shift-click/.test(box?.getAttribute('title') || ''),
+    box?.getAttribute('title'))
+
+  box?.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }))
+  await wait(900)
+  check('shift-clicking it drops the task',
+    (await json(`/api/tasks/${k2.id}`)).status === 'dropped',
+    (await json(`/api/tasks/${k2.id}`)).status)
+
+  const again = [...document.querySelectorAll('.task')]
+    .find((r) => /ZZ k2/.test(r.querySelector('.task-title')?.textContent || ''))
+    ?.querySelector('.task-check')
+  again?.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }))
+  await wait(900)
+  check('and shift-clicking again brings it back',
+    (await json(`/api/tasks/${k2.id}`)).status === 'todo',
+    (await json(`/api/tasks/${k2.id}`)).status)
+
+  const plain = [...document.querySelectorAll('.task')]
+    .find((r) => /ZZ k2/.test(r.querySelector('.task-title')?.textContent || ''))
+    ?.querySelector('.task-check')
+  plain?.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }))
+  await wait(900)
+  check('a plain click still means done, not dropped',
+    (await json(`/api/tasks/${k2.id}`)).status === 'done',
+    (await json(`/api/tasks/${k2.id}`)).status)
+
   // ------------------------------------------------------------- the toast
   // Read off disk rather than out of the page: the bundle may inline its CSS
   // in a <style> tag, and fetching only <link> elements then yields nothing —

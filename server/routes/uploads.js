@@ -208,6 +208,17 @@ function entry(name, index) {
   }
 }
 
+/** Every upload, as the list endpoint reports them. Exported so search can
+ *  scan files without duplicating how one is described. */
+export function listUploads() {
+  if (!existsSync(UPLOAD_DIR)) return []
+  const index = readIndex()
+  return readdirSync(UPLOAD_DIR)
+    .filter((name) => SAFE_NAME.test(name))
+    .map((name) => entry(name, index))
+    .sort((a, b) => b.mtime.localeCompare(a.mtime))
+}
+
 r.get('/', h(() => {
   if (!existsSync(UPLOAD_DIR)) return []
   const index = readIndex()

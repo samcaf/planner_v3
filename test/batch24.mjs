@@ -34,9 +34,14 @@ try {
 
   const undo = document.querySelector('.sb-undo')
   const rail = document.querySelector('.sidebar')
-  const heading = document.querySelector('.sb-undo + .sb-section')
+  // Undo, then the search box, then the navigation. Search went in between
+  // deliberately — it is how you reach anything that is not one of the dozen
+  // places listed below it — so this checks the order rather than adjacency.
+  const heading = document.querySelector('.sb-section')
+  const order = [...(rail?.children || [])].map((el) => el.className.split(' ')[0])
   check('undo sits at the head of the rail', rail?.firstElementChild === undo)
-  check('Calendar follows it directly', heading?.textContent === 'Calendar', heading?.textContent)
+  check('the search box follows it', order[1] === 'sb-search', order.slice(0, 3).join(' > '))
+  check('and Calendar heads the navigation', heading?.textContent === 'Calendar', heading?.textContent)
 
   const raw = readdirSync('web/dist/assets')
     .filter((f) => /\.(css|js)$/.test(f))
