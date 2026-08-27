@@ -139,17 +139,9 @@ export function VimProvider({ children }) {
     rowFor(id)?.scrollIntoView({ block: 'nearest' })
   }, [cursor])
 
-  // A cursor pointing at a row that has gone — deleted, moved, filtered away —
-  // is worse than none, so it lands on whatever now occupies the position.
-  useEffect(() => {
-    if (!enabled || cursor == null) return
-    const timer = setTimeout(() => {
-      if (rowFor(cursor)) return
-      const ids = idsOnScreen()
-      setCursor(ids.length ? ids[0] : null)
-    }, 400)
-    return () => clearTimeout(timer)
-  })
+  // Recovering a cursor whose row has gone is done in VimLayer, where the DOM
+  // is already being watched. A timer here could not see the moment a row was
+  // removed, and re-armed itself on every render besides.
 
   const value = useMemo(() => ({
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,

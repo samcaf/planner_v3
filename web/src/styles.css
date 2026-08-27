@@ -2016,3 +2016,34 @@ kbd {
 /* The last resort. Wide content that genuinely cannot shrink — a table, a code
    block — scrolls inside its own box; the page itself never does. */
 .main { overflow-x: hidden; }
+
+/* The rail's foot carries two switches now, side by side under the mark. */
+.sb-foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+}
+
+.sb-vim {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--sb-ink);
+  opacity: .65;
+  cursor: pointer;
+}
+
+.sb-vim:hover { opacity: 1; background: var(--sb-hi); }
+
+/* Lit while the mode is on, because it has taken over the letter keys and the
+   only way back is to find this again. */
+.sb-vim.is-on {
+  opacity: 1;
+  color: var(--sb-accent);
+  background: var(--sb-act);
+}

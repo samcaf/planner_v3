@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useVim, parseDuration, parseWhen } from '../lib/vim.jsx'
+import { GO_TO } from '../lib/nav.js'
 import Icon from './Icon.jsx'
 import '../styles/vim.css'
 
@@ -16,6 +18,9 @@ const HELP = [
   ['Moving', [
     ['j / k', 'next / previous task'],
     ['gg / G', 'first / last task'],
+    ['\u2190 / \u2192', 'the day before / after'],
+    ['g then a / p / e', 'all tasks, projects, people'],
+    ['g then r / u / n', 'routines, uploads, notebook'],
     ['h / l', 'fold / unfold the task’s children'],
     ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
   ]],
@@ -55,6 +60,7 @@ export { HELP }
 
 export default function VimLayer() {
   const vim = useVim()
+  const navigate = useNavigate()
   const cmdInput = useRef(null)
   /**
    * The half-typed sequence — the `g` of `gg`, the `d` of `dd`.
@@ -66,6 +72,8 @@ export default function VimLayer() {
    * did nothing at all.
    */
   const seq = useRef('')
+  /** Where the cursor was in the list, so a row leaving does not send it home. */
+  const lastIndex = useRef(0)
   const {
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,
     pending, setPending, command, setCommand, flash, say,
@@ -224,7 +232,11 @@ export default function VimLayer() {
       const clear = () => { seq.current = ''; setPending('') }
       if (held === 'g') {
         clear()
-        if (k === 'g') { e.preventDefault(); e.stopPropagation(); move('first') }
+        if (k === 'g') { e.preventDefault(); e.stopPropagation(); move('first'); return }
+        // The same g-prefix the app has without this mode on, so `ga` means
+        // all-tasks either way rather than one thing in each.
+        const to = GO_TO[k]
+        if (to) { e.preventDefault(); e.stopPropagation(); navigate(to) }
         return
       }
       if (held === 'd') {
@@ -302,42 +314,85 @@ export default function VimLayer() {
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // Start the cursor on the first row as soon as there is one.
-  //
-  // Watching rather than looking once: this mounts with the app, long before
-  // any page has fetched its tasks, so a single check finds nothing and — with
-  // nothing else to re-render this — never looks again. The cursor simply
-  // never appeared.
+  // Belt to the observer's braces. The repaint below adopts the first row the
+  // moment one appears, and usually gets there first — but a cursor that never
+  // starts leaves the whole mode inert, with no mark and every command acting
+  // on nothing, so it is worth a cheap poll to be certain. It stops the instant
+  // there is a cursor, because that changes the deps.
   useEffect(() => {
     if (!enabled || cursor != null) return
-    const take = () => {
+    const timer = setInterval(() => {
       const first = document.querySelector('.task[data-task-id]')
-      if (!first) return false
-      setCursor(Number(first.dataset.taskId))
-      return true
-    }
-    if (take()) return
-    const watch = new MutationObserver(() => { if (take()) watch.disconnect() })
-    watch.observe(document.body, { childList: true, subtree: true })
-    return () => watch.disconnect()
+      if (first) setCursor(Number(first.dataset.taskId))
+    }, 250)
+    return () => clearInterval(timer)
   }, [enabled, cursor, setCursor])
 
   // The cursor is drawn by a class rather than by React, because the rows
   // belong to whichever page is mounted and this has no business re-rendering
   // them on every keypress.
+  //
+  // Repainted on DOM changes as well as on render. A page refetching its tasks
+  // replaces every row element, and this component has no reason to re-render
+  // when that happens — so the mark simply disappeared after any action that
+  // reloaded the list, which is most of them.
   useEffect(() => {
-    for (const el of document.querySelectorAll('.task.vim-on, .task.vim-sel')) {
-      el.classList.remove('vim-on', 'vim-sel')
+    const paint = () => {
+      for (const el of document.querySelectorAll('.task.vim-on, .task.vim-sel')) {
+        el.classList.remove('vim-on', 'vim-sel')
+      }
+      if (!enabled) return
+
+      const ids = [...document.querySelectorAll('.task[data-task-id]')]
+        .map((el) => Number(el.dataset.taskId))
+
+      // Adopt the first row when there is nothing to point at yet. This lives
+      // here rather than in an effect of its own because this runs on renders
+      // AND on DOM changes, which is exactly the two moments a first row can
+      // appear — a separate observer fired inconsistently and the cursor
+      // sometimes never started at all.
+      if (cursor == null) {
+        if (ids.length) setCursor(ids[0])
+        return
+      }
+
+      // The row the cursor was on can simply leave: ticking a task folds it
+      // into "N done" and it is removed from the page. Staying on an id that
+      // is no longer drawn leaves no mark and gives the next command nothing
+      // to act on — which is what made a colon command straight after a tick
+      // look like it did nothing at all. Hold the line number, the way vim
+      // does, rather than jumping back to the top.
+      const here = ids.indexOf(cursor)
+      if (here < 0) {
+        if (ids.length) setCursor(ids[Math.min(lastIndex.current, ids.length - 1)])
+        return
+      }
+      lastIndex.current = here
+
+      for (const id of selection) rowFor(id)?.classList.add('vim-sel')
+      rowFor(cursor)?.classList.add('vim-on')
     }
+    paint()
     if (!enabled) return
-    for (const id of selection) rowFor(id)?.classList.add('vim-sel')
-    rowFor(cursor)?.classList.add('vim-on')
+
+    // Coalesced: a refetch mutates the tree many times in a row, and painting
+    // on each one would be a class change per row per mutation.
+    let queued = false
+    const watch = new MutationObserver(() => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => { queued = false; paint() })
+    })
+    watch.observe(document.body, { childList: true, subtree: true })
+    return () => watch.disconnect()
   })
 
   if (!enabled) return null
 
   return (
     <>
+      {/* Vim's own arrangement: what you are typing sits bottom left, and the
+          half-finished command you have started sits bottom right. */}
       <div className={`vim-bar is-${mode}`} role="status">
         <span className="vim-mode">{MODE_LABEL[mode]}</span>
         {mode === 'command' ? (
@@ -365,9 +420,15 @@ export default function VimLayer() {
             />
           </form>
         ) : (
-          <span className="vim-say">{flash || (pending ? `${pending}…` : '')}</span>
+          <span className="vim-say">{flash}</span>
         )}
         <span className="spacer" />
+        {/* The keys you have typed so far, bottom right, exactly where vim
+            shows them — so a sequence that is waiting for its second key looks
+            like it is waiting rather than like nothing happened. */}
+        <span className={`vim-pending${pending ? ' is-on' : ''}`} aria-live="polite">
+          {pending}
+        </span>
         <button className="vim-help-btn" title="Keys and commands" onClick={() => setHelpOpen(true)}>
           <Icon name="list" size={12} /> ?
         </button>

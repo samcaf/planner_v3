@@ -28,6 +28,7 @@ import Resolver, { InternalLinks } from './components/Resolver.jsx'
 import Search from './components/Search.jsx'
 import VimLayer from './components/VimLayer.jsx'
 import { VimProvider, useVim } from './lib/vim.jsx'
+import { GO_TO } from './lib/nav.js'
 
 /** Wide enough for the mark, narrow enough to leave the page most of the screen. */
 const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
@@ -123,7 +124,10 @@ export default function App() {
           <NavLink to="/dashboard" className="brand" title="Dashboard">
             <Wordmark />
           </NavLink>
-          <DayNight dark={isDark} onToggle={() => setTheme(isDark ? 'light' : 'dark')} />
+          <div className="sb-foot-row">
+            <DayNight dark={isDark} onToggle={() => setTheme(isDark ? 'light' : 'dark')} />
+            <VimToggle />
+          </div>
         </div>
       </nav>
 
@@ -208,13 +212,37 @@ export default function App() {
 const VIEW_KEYS = { d: 'day', w: 'week', m: 'month', n: 'notes' }
 
 const HELP = [
+  ['\u2190 / \u2192', 'The day, week or month before / after'],
   ['d / w / m / n', 'Day, Week, Month, Notes — keeping the date you are on'],
   ['t', 'Jump to today'],
-  ['j / k', 'Next / previous day, week or month, depending on the view'],
-  ['g then p / e / a', 'Go to Projects, People, All tasks'],
+  ['g then p / e / a', 'Projects, People, All tasks'],
+  ['g then r / u / n', 'Routines, Uploads, Notebook'],
+  ['g then h', 'The dashboard'],
   ['?', 'This list'],
   ['Esc', 'Close'],
 ]
+
+/**
+ * Keyboard control, on the rail rather than only in Settings.
+ *
+ * It was a switch three panels down a settings page, which is nowhere: the one
+ * thing a mode needs is somewhere obvious to turn it on, and somewhere obvious
+ * to turn it off again when it has taken over your letter keys.
+ */
+function VimToggle() {
+  const vim = useVim()
+  const on = !!vim?.enabled
+  return (
+    <button
+      className={`sb-vim${on ? ' is-on' : ''}`}
+      aria-pressed={on}
+      title={`Keyboard control is ${on ? 'on' : 'off'} — Ctrl-Alt-V`}
+      onClick={() => vim?.toggle()}
+    >
+      <Icon name="keyboard" size={15} />
+    </button>
+  )
+}
 
 /**
  * Global keys, following the convention shared by Google Calendar, Linear and
@@ -243,9 +271,8 @@ function Shortcuts() {
 
       if (pendingG) {
         setPendingG(false)
-        if (e.key === 'p') return navigate('/projects')
-        if (e.key === 'e') return navigate('/people')
-        if (e.key === 'a') return navigate('/tasks')
+        const to = GO_TO[e.key]
+        if (to) return navigate(to)
         return
       }
 
@@ -255,12 +282,10 @@ function Shortcuts() {
 
       if (VIEW_KEYS[e.key]) { navigate(`/${VIEW_KEYS[e.key]}/${anchor}`); return }
 
-      if (e.key === 'j' || e.key === 'k') {
-        const step = e.key === 'j' ? 1 : -1
-        if (view === 'month') navigate(`/month/${addMonths(anchor, step)}`)
-        else if (view === 'week') navigate(`/week/${addDays(anchor, 7 * step)}`)
-        else if (view === 'day' || view === 'notes') navigate(`/${view}/${addDays(anchor, step)}`)
-      }
+      // j and k are deliberately not bound here any more. The arrow keys already
+      // walk the calendar, and leaving these free means they mean one thing —
+      // move down and up a list of tasks — rather than something different
+      // depending on whether keyboard control happens to be on.
     }
 
     window.addEventListener('keydown', onKey)

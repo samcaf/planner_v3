@@ -52,6 +52,17 @@
 
 .vim-say { opacity: .8; }
 
+/* The half-typed sequence, bottom right, where vim puts it. Reserved width so
+   the help button beside it does not jump as keys arrive. */
+.vim-pending {
+  min-width: 3ch;
+  text-align: right;
+  letter-spacing: .12em;
+  opacity: 0;
+}
+
+.vim-pending.is-on { opacity: 1; color: var(--amber); font-weight: 700; }
+
 .vim-cmd { display: flex; align-items: center; gap: var(--space-1); flex: 1; min-width: 0; }
 .vim-colon { opacity: .7; }
 

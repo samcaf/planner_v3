@@ -33,6 +33,10 @@ const PATHS = {
   list: 'M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01',
   image: 'M3 5h18v14H3z M3 16l5-5 4 4 3-3 6 6 M15.5 8.5h.01',
   moon: 'M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z',
+  /* A keyboard: an outline with three rows of keys and a spacebar. Dots rather
+     than rects for the keys, so it stays legible at 14px. */
+  keyboard: 'M2.5 6h19v12h-19z M6 9.5h.01 M9.5 9.5h.01 M13 9.5h.01 M16.5 9.5h.01'
+    + ' M6 12.5h.01 M9.5 12.5h.01 M13 12.5h.01 M16.5 12.5h.01 M7.5 15.5h9',
   paperclip: 'M21.4 11l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
 
   /*

@@ -12,6 +12,9 @@ const post = (p, b) => json(p, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b),
 })
 const del = (p) => fetch(BASE + p, { method: 'DELETE' })
+const patch = (p, b) => json(p, {
+  method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b),
+})
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function openPage(url, errors, onWindow) {
@@ -64,7 +67,9 @@ try {
   check('it starts in normal mode',
     document.querySelector('.vim-mode')?.textContent === 'NORMAL',
     document.querySelector('.vim-mode')?.textContent)
-  await wait(300)
+  // The cursor waits for the first row to exist, and the list arrives over the
+  // network, so this settles rather than sampling once.
+  for (let i = 0; i < 20 && cursorId() === null; i++) await wait(150)
   check('the cursor starts on the first row', cursorId() !== null, 'no cursor')
 
   // ------------------------------------------------------------- navigation
@@ -91,6 +96,15 @@ try {
     await wait(ms)
     return id == null ? null : json(`/api/tasks/${id}`)
   }
+  const send = async (line) => {
+    const box2 = document.querySelector('.vim-cmd-input')
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(box2, line)
+    box2.dispatchEvent(new window.Event('input', { bubbles: true }))
+    box2.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+    await wait(1200)
+  }
+
   const aim = async () => {
     key('g'); await wait(90); key('g'); await wait(200)
     return cursorId()
@@ -103,10 +117,32 @@ try {
   let after = await act(' ')
   check('space ticks the task under the cursor', after?.status === 'done', after?.status)
 
+  // ------------------------------- the cursor survives the page reloading
+  // Checked right here, while the tick that just happened is the only thing
+  // that has moved. This is what made colon commands look broken: ticking a
+  // task refetches the day, the row leaves for the "N done" fold, and both the
+  // mark and the cursor went with it — so the next command had nothing to act
+  // on and quietly did nothing.
+  check('the cursor still points at something after a refetch',
+    cursorId() !== null, 'the cursor vanished when the list reloaded')
+  check('and the mark is repainted onto the new rows',
+    document.querySelectorAll('.task.vim-on').length === 1,
+    `${document.querySelectorAll('.task.vim-on').length} marked`)
+
+  key(':'); await wait(300)
+  const nowOn = cursorId()
+  await send('done')
+  const afterCmd = nowOn ? await json(`/api/tasks/${nowOn}`) : null
+  check(':done works after the list has reloaded', afterCmd?.status === 'done',
+    `cursor=${nowOn} status=${afterCmd?.status}`)
+  // Put it back, so the checks below start from the list they expect.
+  if (nowOn) await patch(`/api/tasks/${nowOn}`, { status: 'todo' })
+  await wait(600)
+
   // A ticked or dropped task folds itself away into "N done", so reaching it
   // again means opening that fold first. Ensure-open, not toggle: clicking a
   // fold that was already open from a previous step shuts it again.
-  const ensureFoldOpen = async (id) => {
+  const openFoldFor = async (id) => {
     if (document.querySelector(`.task[data-task-id="${id}"]`)) return
     const f = [...document.querySelectorAll('.done-toggle')]
       .find((x) => /\d+ done/.test(x.textContent) && x.getAttribute('aria-expanded') !== 'true')
@@ -115,7 +151,7 @@ try {
   }
   // There is no public setter, so aim by walking until the id matches.
   const walkTo = async (id) => {
-    await ensureFoldOpen(id)
+    await openFoldFor(id)
     await aim()
     for (let i = 0; i < 16 && cursorId() !== id; i++) { key('j'); await wait(80) }
     return cursorId() === id
@@ -147,14 +183,6 @@ try {
   const input = document.querySelector('.vim-cmd-input')
   check('with a field to type in', !!input)
 
-  const send = async (line) => {
-    const box2 = document.querySelector('.vim-cmd-input')
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-    setter.call(box2, line)
-    box2.dispatchEvent(new window.Event('input', { bubbles: true }))
-    box2.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
-    await wait(1200)
-  }
 
   await send('t 45')
   check(':t sets the estimate', (await json(`/api/tasks/${target}`)).estimate_min === 45,
@@ -223,13 +251,17 @@ try {
     if (!ok) bad++
   }
   console.log(bad ? `\n${bad} failed` : '\nall checks passed')
-  for (const d of doms) { try { d.window.close() } catch {} }
+  // Rows first, windows second. Closing a jsdom window while the page still
+  // has timers in flight can throw a page-sized dump that takes the process
+  // with it — and everything after it, which is how three probe tasks per run
+  // were left behind to poison the next one.
   for (const day of [D, '2030-06-11']) {
     const got = await json(`/api/days/${day}`).catch(() => ({ tasks: [], sections: [] }))
     for (const t of got.tasks) await del(`/api/tasks/${t.id}`)
     for (const s of got.sections) await del(`/api/sections/${s.id}`)
   }
   console.log('cleanup: probe days cleared')
+  for (const d of doms) { try { d.window.close() } catch {} }
   // Non-zero so the runner, and CI, can tell a red suite from a green one.
   process.exit(bad ? 1 : 0)
 }
