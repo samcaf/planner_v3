@@ -164,9 +164,7 @@ export default function VimLayer() {
         break
       }
       case 'pomodoro':
-        if (!click(document.querySelector('.pomo-play, .pomo-transport button[title*="Start"], .pomo-transport button[title*="Pause"]'))) {
-          say('no pomodoro on this page')
-        }
+        if (!click(document.querySelector('[data-pomo="toggle"]'))) say('no pomodoro to start')
         break
       default:
         say(`unknown: ${what}`)

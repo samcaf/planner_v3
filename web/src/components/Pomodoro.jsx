@@ -151,7 +151,14 @@ export default function Pomodoro() {
           <Icon name="rewind" size={16} />
         </button>
 
-        <button className="btn ghost" title={running ? 'Pause' : 'Start'} onClick={toggle}>
+        {/* Named so the keyboard can find it. Matching on the title would mean
+            matching a string that changes with the state it is reporting. */}
+        <button
+          className="btn ghost"
+          data-pomo="toggle"
+          title={running ? 'Pause' : 'Start'}
+          onClick={toggle}
+        >
           <Icon name={running ? 'pause' : 'play'} size={16} />
         </button>
         <button

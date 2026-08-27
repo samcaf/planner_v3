@@ -168,6 +168,17 @@ try {
     moved.scheduled_date)
   check('and it arrives open, like any other move', moved.status === 'todo', moved.status)
 
+  // ---------------------------------------------------------- the pomodoro
+  const pomo = () => document.querySelector('[data-pomo="toggle"]')
+  check('the pomodoro has a hook the keyboard can find', !!pomo())
+  const wasRunning = pomo()?.getAttribute('title')
+  key('z'); await wait(500)
+  check('z works the pomodoro', pomo()?.getAttribute('title') !== wasRunning,
+    `${wasRunning} -> ${pomo()?.getAttribute('title')}`)
+  key('z'); await wait(500)
+  check('and z again puts it back', pomo()?.getAttribute('title') === wasRunning,
+    `${pomo()?.getAttribute('title')}`)
+
   // ------------------------------------------------------------- the help
   key('?'); await wait(300)
   check('? opens the key sheet', !!document.querySelector('.vim-help'))
