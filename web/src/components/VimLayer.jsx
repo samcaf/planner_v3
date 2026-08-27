@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import {
   useVim, parseDuration, parseWhen, yankText, yankMarkdown, columnOf, idsIn,
 } from '../lib/vim.jsx'
-import { GO_TO } from '../lib/nav.js'
+import { GO_TO, GO_DATED, anchorOf } from '../lib/nav.js'
+import { today as todayIso } from '../lib/dates.js'
 import Icon from './Icon.jsx'
 import '../styles/vim.css'
 
@@ -26,8 +27,9 @@ const HELP = [
     ['gg / G', 'first / last task'],
     ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
     ['\u2190 / \u2192', 'the day before / after'],
+    ['g then d / w / m / n', 'day, week, month, notes'],
     ['g then a / p / e', 'all tasks, projects, people'],
-    ['g then r / u / n / h / s', 'routines, uploads, notebook, dashboard, settings'],
+    ['g then r / u / b / h / s', 'routines, uploads, notebook, dashboard, settings'],
   ]],
   ['Changing', [
     ['Enter or x', 'done / not done'],
@@ -172,11 +174,27 @@ export default function VimLayer() {
 
   const clearText = () => window.getSelection()?.removeAllRanges()
 
-  /** The rows a yank should take, in the order they are drawn. */
+  /**
+   * The rows a yank should take, in the order they are drawn.
+   *
+   * A sub-section heading carries its whole band. The heading alone says
+   * nothing useful — it is a container — so yanking one and getting a single
+   * line would be a yank of the label rather than of the work.
+   */
   const yankRows = () => {
     const a = actions.current || {}
     if (!a.taskById) return []
-    return selection.map((id) => a.taskById(id)).filter(Boolean)
+    const out = []
+    const seen = new Set()
+    for (const id of selection) {
+      const rows = a.branch && a.taskById(id)?.subsection ? a.branch(id) : [a.taskById(id)]
+      for (const row of rows) {
+        if (!row || seen.has(row.id)) continue
+        seen.add(row.id)
+        out.push(row)
+      }
+    }
+    return out
   }
 
   const putInRegister = async (text, what) => {
@@ -204,6 +222,39 @@ export default function VimLayer() {
     return [...document.querySelectorAll('.task[data-task-id]')]
       .filter((el) => el.textContent.toLowerCase().includes(needle))
       .map((el) => Number(el.dataset.taskId))
+  }
+
+  /**
+   * Paint the matched words themselves, not just the rows holding them.
+   *
+   * The CSS Custom Highlight API rather than wrapping the text in elements:
+   * these rows are React's, and splicing <mark> into them would be undone on
+   * the next render — and would fight the editors that live inside them.
+   * Where the API is missing the row marking still stands on its own.
+   */
+  const paintMatches = (q) => {
+    const CSSHL = window.CSS?.highlights
+    if (!CSSHL) return
+    CSSHL.delete('vim-find')
+    const needle = String(q || '').trim().toLowerCase()
+    if (!needle) return
+
+    const ranges = []
+    for (const row of document.querySelectorAll('.task[data-task-id]')) {
+      const walker = document.createTreeWalker(row, window.NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.nodeValue.toLowerCase()
+        let at = text.indexOf(needle)
+        while (at >= 0) {
+          const range = document.createRange()
+          range.setStart(node, at)
+          range.setEnd(node, at + needle.length)
+          ranges.push(range)
+          at = text.indexOf(needle, at + needle.length)
+        }
+      }
+    }
+    if (ranges.length) CSSHL.set('vim-find', new window.Highlight(...ranges))
   }
 
   const sectionEl = (id) => rowFor(id)?.closest('.panel.section') || null
@@ -477,6 +528,8 @@ export default function VimLayer() {
         if (mode === 'command' || mode === 'search') { setCommand(''); setMode('normal'); return }
         if (typing()) { document.activeElement.blur(); setMode('normal'); return }
         setMode('normal'); setAnchor(null); seq.current = ''; setPending('')
+        lastSearch.current = ''
+        window.CSS?.highlights?.delete('vim-find')
         return
       }
 
@@ -510,7 +563,12 @@ export default function VimLayer() {
         // The same g-prefix the app has without this mode on, so `ga` means
         // all-tasks either way rather than one thing in each.
         const to = GO_TO[k]
-        if (to) { e.preventDefault(); e.stopPropagation(); navigate(to) }
+        if (to) { e.preventDefault(); e.stopPropagation(); navigate(to); return }
+        const dated = GO_DATED[k]
+        if (dated) {
+          e.preventDefault(); e.stopPropagation()
+          navigate(`/${dated}/${anchorOf(window.location.pathname, todayIso())}`)
+        }
         return
       }
       if (held === 'd') {
@@ -590,8 +648,23 @@ export default function VimLayer() {
       if (e.altKey && k.toLowerCase() === 'k') return go(() => run('shift', 'up'))
       if (e.altKey) return
 
-      if (k === 'j') return go(() => { coarsen(); step(() => move('down', N)) })
-      if (k === 'k') return go(() => { coarsen(); step(() => move('up', N)) })
+      // With nothing to point at — a page with no tasks on it — j and k fall
+      // back to scrolling, which is what they do in a pager and what your hands
+      // will try anyway.
+      const scroller = () => document.querySelector('.main') || document.scrollingElement
+      const noRows = () => !document.querySelector('.task[data-task-id]')
+      if (k === 'j') {
+        return go(() => {
+          if (noRows()) { scroller()?.scrollBy({ top: 60 * N }); return }
+          coarsen(); step(() => move('down', N))
+        })
+      }
+      if (k === 'k') {
+        return go(() => {
+          if (noRows()) { scroller()?.scrollBy({ top: -60 * N }); return }
+          coarsen(); step(() => move('up', N))
+        })
+      }
       if (k === 'G') return go(() => move('last'))
       if (k === 'h') return go(() => run('column', 'left'))
       if (k === 'l') return go(() => run('column', 'right'))
@@ -706,6 +779,7 @@ export default function VimLayer() {
   useEffect(() => {
     if (!enabled || cursor != null) return
     const timer = setInterval(() => {
+      if (typeof document === 'undefined' || !document?.querySelector) return
       const first = document.querySelector('.task[data-task-id]')
       if (first) setCursor(Number(first.dataset.taskId))
     }, 250)
@@ -722,6 +796,13 @@ export default function VimLayer() {
   // reloaded the list, which is most of them.
   useEffect(() => {
     const paint = () => {
+      // A queued callback can outlive the document that scheduled it — closing
+      // a window does not unmount React, so an observer or a timer can fire
+      // into a torn-down page. A browser never sees this; a test harness that
+      // opens several pages in turn sees it constantly, and the crash it
+      // produces reads like a bug in whatever was being tested at the time.
+      if (typeof document === 'undefined' || !document?.querySelectorAll) return
+
       for (const el of document.querySelectorAll('.task.vim-on, .task.vim-sel')) {
         el.classList.remove('vim-on', 'vim-sel')
       }
@@ -761,6 +842,9 @@ export default function VimLayer() {
 
       for (const id of selection) rowFor(id)?.classList.add('vim-sel')
       rowFor(cursor)?.classList.add('vim-on')
+      // Ranges point at text nodes, which a redraw replaces, so the highlight
+      // has to be laid down again alongside the cursor.
+      if (lastSearch.current) paintMatches(lastSearch.current)
     }
     paint()
     if (!enabled) return
@@ -797,6 +881,7 @@ export default function VimLayer() {
               if (!searching) { runCommand(line); return }
               lastSearch.current = line
               const hits = matches(line)
+              paintMatches(line)
               if (!hits.length) { say(`no match for "${line}"`); return }
               setCursor(hits[0])
               say(`1 of ${hits.length}`)

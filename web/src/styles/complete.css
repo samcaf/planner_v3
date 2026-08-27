@@ -1,0 +1,74 @@
+/* ------------------------------------------------------------ day complete */
+
+/* Over everything, and through it: this is a moment rather than a dialog, so
+   it takes no clicks it does not need and blocks nothing underneath. */
+.dc {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  cursor: default;
+  animation: dc-out 4.2s ease forwards;
+}
+
+/* The wash. A wide, soft radial in the accent, brought up and taken away again
+   — the light in the room changing rather than a panel appearing. */
+.dc-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 50% at 50% 55%, var(--accent) 0%, transparent 72%);
+  opacity: 0;
+  animation: dc-wash 4.2s ease forwards;
+}
+
+.dc-words {
+  position: relative;
+  margin: 0;
+  display: flex;
+  gap: .06em;
+  font-family: 'Archivo', ui-serif, Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(30px, 7vw, 78px);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 0 26px var(--accent-soft);
+}
+
+.dc-ch {
+  opacity: 0;
+  transform: translateY(8px) scale(1.06);
+  animation: dc-letter .9s cubic-bezier(.16, .84, .44, 1) forwards;
+}
+
+@keyframes dc-wash {
+  0%   { opacity: 0; }
+  18%  { opacity: .30; }
+  62%  { opacity: .22; }
+  100% { opacity: 0; }
+}
+
+@keyframes dc-letter {
+  0%   { opacity: 0; transform: translateY(8px) scale(1.06); filter: blur(6px); }
+  60%  { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes dc-out {
+  0%, 82% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
+/* Nobody should be made to sit through this. With motion reduced it states the
+   fact and goes, with no travel and no blur. */
+@media (prefers-reduced-motion: reduce) {
+  .dc, .dc-glow, .dc-ch { animation-duration: 2.4s; }
+  .dc-ch { animation-name: dc-letter-still; }
+  @keyframes dc-letter-still {
+    0% { opacity: 0; transform: none; }
+    100% { opacity: 1; transform: none; }
+  }
+}

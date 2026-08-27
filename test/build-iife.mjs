@@ -25,6 +25,9 @@ await build({
   build: {
     outDir: join(ROOT, 'web', 'dist'),
     emptyOutDir: true,
+    // PLANNER_TEST_READABLE=1 keeps names and whitespace, so a stack trace from
+    // inside the bundle points at a function you can find.
+    minify: process.env.PLANNER_TEST_READABLE ? false : 'esbuild',
     rollupOptions: { output: { format: 'iife', inlineDynamicImports: true } },
   },
 })

@@ -224,6 +224,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
    rather than by the mark alone — otherwise the switch would be pushed below
    the rail's edge on a short window. */
 .sb-foot {
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1000,10 +1001,10 @@ kbd {
    from the nav, and one below from the mark, so it reads as its own thing
    rather than as the tail of the list or the top of the signature. */
 .pomo {
-  /* margin-top: auto pushes the pomodoro and everything under it to the foot,
-     so the spare height collects in ONE place instead of being spent above the
-     block whether or not there is any to spare. */
-  margin-top: auto;
+  /* Close under the last nav row. The spare height belongs at the foot with
+     the mark, which is what .sb-foot claims — putting it here instead left a
+     gap between Settings and the timer that grew with the window. */
+  margin-top: var(--space-4);
   padding: var(--space-3) var(--space-4) var(--space-2);
   border-top: 1px solid rgba(255, 255, 255, .09);
   border-bottom: 1px solid rgba(255, 255, 255, .09);

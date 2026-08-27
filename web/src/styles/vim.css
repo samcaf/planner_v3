@@ -147,3 +147,11 @@
 
 /* The bar covers the foot of the page, so give the scroll something to end on. */
 body:has(.vim-bar) .main { padding-bottom: 30px; }
+
+/* The matched words themselves, in the accent you chose. ::highlight paints
+   over React's own DOM without touching it, which is what makes this safe
+   inside rows that redraw and inside editors. */
+::highlight(vim-find) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}

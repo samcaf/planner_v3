@@ -1,4 +1,5 @@
 /** The second round of keyboard requests: Space, Enter, sections, /, gs, clicks. */
+import './ensure-iife.mjs'
 import { JSDOM, VirtualConsole } from 'jsdom'
 import { readFileSync, readdirSync } from 'node:fs'
 

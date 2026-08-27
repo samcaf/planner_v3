@@ -1,4 +1,5 @@
 /** Keyboard control: a cursor, the keys that move it, and the ones that act. */
+import './ensure-iife.mjs'
 import { JSDOM, VirtualConsole } from 'jsdom'
 
 const BASE = 'http://localhost:8787'

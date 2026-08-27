@@ -26,6 +26,10 @@ export default function Resolver() {
         return match ? `/projects/${match.id}` : null
       }
 
+      // A notebook entry has no day to open, so the notebook opens with it
+      // selected — see Notebook.jsx, which reads ?note= for exactly this.
+      if (kind === 'note') return `/notebook?note=${encodeURIComponent(decoded)}`
+
       if (kind === 'task') {
         const task = await api.get(`/tasks/${decoded}`)
         // An unscheduled task has no day to land on, so fall back to the list.

@@ -28,7 +28,7 @@ import Resolver, { InternalLinks } from './components/Resolver.jsx'
 import Search from './components/Search.jsx'
 import VimLayer from './components/VimLayer.jsx'
 import { VimProvider, useVim } from './lib/vim.jsx'
-import { GO_TO } from './lib/nav.js'
+import { GO_TO, GO_DATED } from './lib/nav.js'
 
 /** Wide enough for the mark, narrow enough to leave the page most of the screen. */
 const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
@@ -213,11 +213,11 @@ const VIEW_KEYS = { d: 'day', w: 'week', m: 'month', n: 'notes' }
 
 const HELP = [
   ['\u2190 / \u2192', 'The day, week or month before / after'],
-  ['d / w / m / n', 'Day, Week, Month, Notes — keeping the date you are on'],
-  ['t', 'Jump to today'],
-  ['g then p / e / a', 'Projects, People, All tasks'],
-  ['g then r / u / n', 'Routines, Uploads, Notebook'],
+  ['g then d / w / m / n', 'Day, Week, Month, Notes — keeping the date you are on'],
+  ['g then a / p / e', 'All tasks, Projects, People'],
+  ['g then r / u / b', 'Routines, Uploads, Notebook'],
   ['g then h / s', 'The dashboard, Settings'],
+  ['t', 'Jump to today'],
   ['?', 'This list'],
   ['Esc', 'Close'],
 ]
@@ -273,6 +273,8 @@ function Shortcuts() {
         setPendingG(false)
         const to = GO_TO[e.key]
         if (to) return navigate(to)
+        const dated = GO_DATED[e.key]
+        if (dated) return navigate(`/${dated}/${anchor}`)
         return
       }
 
@@ -280,7 +282,9 @@ function Shortcuts() {
       if (e.key === 'g') { setPendingG(true); return }
       if (e.key === 't') { navigate(`/${VIEW_KEYS[view?.[0]] ? view : 'day'}/${today()}`); return }
 
-      if (VIEW_KEYS[e.key]) { navigate(`/${VIEW_KEYS[e.key]}/${anchor}`); return }
+      // d, w, m and n are only reachable through g now, so the bare letters
+      // mean the same thing whether or not keyboard control is on.
+
 
       // j and k are deliberately not bound here any more. The arrow keys already
       // walk the calendar, and leaving these free means they mean one thing —

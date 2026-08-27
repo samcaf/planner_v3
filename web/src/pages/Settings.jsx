@@ -270,11 +270,11 @@ function Keys() {
       ['Escape', 'close a menu, or leave a field'],
     ]],
     ['Going places', [
-      ['d / w / m / n', 'day, week, month, notes — keeping the date'],
-      ['t', 'jump to today'],
-      ['g then p / e / a', 'projects, people, all tasks'],
-      ['g then r / u / n', 'routines, uploads, notebook'],
+      ['g then d / w / m / n', 'day, week, month, notes — keeping the date'],
+      ['g then a / p / e', 'all tasks, projects, people'],
+      ['g then r / u / b', 'routines, uploads, notebook'],
       ['g then h / s', 'the dashboard, settings'],
+      ['t', 'jump to today'],
       ['?', 'the shortcut list'],
     ]],
     ['On a day', [

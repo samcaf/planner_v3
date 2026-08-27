@@ -54,14 +54,17 @@ const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ESCAPE[c])
  * targets /go/* and the resolver route does the lookup on click.
  */
 function wikiLink(target, label) {
-  const [, kind, rest] = /^(?:(day|project|task):)?([\s\S]*)$/.exec(target) || []
+  const [, kind, rest] = /^(?:(day|project|task|note):)?([\s\S]*)$/.exec(target) || []
   const value = (rest || '').trim()
   // Without a label the value reads better than the raw target, since the
   // `kind:` prefix is syntax rather than something worth showing.
-  const text = (label || (kind === 'task' ? `Task ${value}` : value)).trim()
+  const text = (label || (kind === 'task' || kind === 'note' ? `${kind === 'task' ? 'Task' : 'Note'} ${value}` : value)).trim()
   if (!value) return null
   if (kind === 'project') return { kind: 'project', href: `/go/project/${encodeURIComponent(value)}`, text }
   if (kind === 'task') return { kind: 'task', href: `/go/task/${encodeURIComponent(value)}`, text }
+  // A notebook entry belongs to no day and no project, so it could not be
+  // linked at all — which is exactly the sort of note you most want to point at.
+  if (kind === 'note') return { kind: 'note', href: `/go/note/${encodeURIComponent(value)}`, text }
   if (kind === 'day' || ISO.test(value)) return { kind: 'day', href: `/go/day/${encodeURIComponent(value)}`, text }
   // Anything else is not a link the app can resolve, so it stays as prose.
   return null
@@ -351,10 +354,11 @@ async function suggestFor(query) {
         { insert: `day:${addDays(today(), -1)}`, label: `Yesterday · ${addDays(today(), -1)}`, kind: 'day' },
       ].filter((d) => !lower || d.label.toLowerCase().includes(lower))
 
-  const [projects, tasks] = await Promise.all([
+  const [projects, tasks, notes] = await Promise.all([
     loadProjects(),
     // A one-letter search matches most of the database, so it is not worth a round trip.
     q.length >= 2 ? api.get(`/tasks?q=${encodeURIComponent(q)}`).catch(() => []) : [],
+    api.get('/notebook').catch(() => []),
   ])
 
   return [
@@ -363,6 +367,20 @@ async function suggestFor(query) {
       .filter((p) => !lower || p.name.toLowerCase().includes(lower))
       .slice(0, 5)
       .map((p) => ({ insert: `project:${p.name}`, label: p.name, kind: 'project' })),
+    // Notebook entries, which belong to no day and no project and so had no
+    // way of being pointed at from anywhere else.
+    ...notes
+      .filter((n) => !lower || (n.title || '').toLowerCase().includes(lower))
+      .slice(0, 4)
+      .map((n) => {
+        const name = plainTitle(n.title).trim()
+        const label = name.replace(/[|\]]/g, ' ').replace(/\s+/g, ' ').slice(0, 80).trim()
+        return {
+          insert: label ? `note:${n.id}|${label}` : `note:${n.id}`,
+          label: name || `Note ${n.id}`,
+          kind: 'note',
+        }
+      }),
     // The id is what resolves; the title is what gets READ. Inserting the id
     // alone left "Task 2119" sitting in the prose, which says nothing about
     // what was linked. The label is a snapshot — renaming the task later does

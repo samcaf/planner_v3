@@ -1,4 +1,5 @@
 /** Every keyboard-control request, checked one at a time. */
+import './ensure-iife.mjs'
 import { JSDOM, VirtualConsole } from 'jsdom'
 
 const BASE = 'http://localhost:8787'
@@ -50,6 +51,15 @@ try {
   const deep = await post('/api/tasks', {
     title: 'ZZ deep', scheduled_date: D, section_id: sec.id, estimate_min: 120,
   })
+  // Made before the page loads: rows added afterwards are not on screen until
+  // something makes it refetch, and the cursor can only reach what is drawn.
+  const band = await post('/api/tasks', {
+    title: 'ZZ band', scheduled_date: D, section_id: sec.id, subsection: 1,
+  })
+  const inBand = await post('/api/tasks', {
+    title: 'ZZ under it', scheduled_date: D, section_id: sec.id, notes: 'band note',
+  })
+  await post(`/api/tasks/${inBand.id}/nest`, { parent_id: band.id })
 
   const errors = []
   const dom = await openPage(`${BASE}/day/${D}`, errors)
@@ -182,6 +192,16 @@ try {
   check('and the task as a second-level heading', /\n## ZZ one/.test(md), md.slice(0, 90))
   check('with a line of metadata', /\*[^*]*5m[^*]*\*/.test(md), md.slice(0, 160))
   check('and the note underneath', md.includes('first note'), md.slice(0, 200))
+
+  // 9b ── a band head yanks the whole band ----------------------------------
+  check('aimed at the band head', await aim(band.id), `${cursorId()}`)
+  await keys('yy', 130)
+  await wait(600)
+  check('yanking a sub-section takes what is under it too',
+    (clip() || '').includes('ZZ band') && (clip() || '').includes('ZZ under it'),
+    JSON.stringify(clip()))
+  check('including that task’s own note', (clip() || '').includes('band note'),
+    JSON.stringify(clip()))
 
   // 10 ── za folds, zp is the pomodoro ---------------------------------------
   const pomo = () => document.querySelector('[data-pomo="toggle"]')

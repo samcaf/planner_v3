@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Empty, Panel } from '../components/ui.jsx'
 import { RichEditor, RichLine } from '../lib/rich.jsx'
@@ -19,6 +20,9 @@ import { usePageTitle } from '../lib/title.js'
  */
 export default function Notebook() {
   usePageTitle('Notebook')
+  // `?note=12` opens straight onto one, which is what a [[note:…]] link needs
+  // in order to land on something rather than just on the page.
+  const [params] = useSearchParams()
   const [showArchived, setShowArchived] = useState(false)
   const notes = useApi(`/notebook${showArchived ? '?archived=1' : ''}`, [showArchived])
   const [openId, setOpenId] = useState(null)
@@ -29,7 +33,8 @@ export default function Notebook() {
   if (!notes.data) return <div className="page"><p className="muted">Loading…</p></div>
 
   const list = notes.data
-  const open = list.find((n) => n.id === openId) || list[0] || null
+  const asked = Number(params.get('note')) || null
+  const open = list.find((n) => n.id === (openId ?? asked)) || list[0] || null
 
   const save = async (id, patch) => { await api.patch(`/notebook/${id}`, patch); notes.reload() }
 

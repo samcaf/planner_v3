@@ -17,6 +17,7 @@ import { taskOps, useUndo } from '../lib/undo.jsx'
 import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
+import DayComplete from '../components/DayComplete.jsx'
 import { tabDate, usePageTitle } from '../lib/title.js'
 import { useVimActions } from '../lib/vim.jsx'
 import { useArrowNav } from '../lib/keys.js'
@@ -132,6 +133,17 @@ function DayView({ date }) {
     date,
     undo,
     taskById: (id) => (day.data?.tasks || []).find((t) => t.id === id),
+    /** A task and everything under it, however deep — what a band amounts to. */
+    branch: (id) => {
+      const all = day.data?.tasks || []
+      const out = []
+      const walk = (parentId) => {
+        for (const t of all.filter((x) => x.parent_id === parentId)) { out.push(t); walk(t.id) }
+      }
+      const head = all.find((t) => t.id === id)
+      if (head) { out.push(head); walk(id) }
+      return out
+    },
     /** Which band a task sits in, for a markdown yank that keeps its shape. */
     sectionName: (t) => (day.data?.sections || [])
       .find((sec) => sec.id === (t.section_id ?? null))?.name || null,
@@ -970,6 +982,18 @@ function DayView({ date }) {
       </div>
 
       <SelectionBar tasks={known} onDone={refresh} />
+
+      {/* Counted over the day's real work: notes are not tasks, dropped work
+          was decided against rather than finished, and optional work is
+          explicitly outside the plan — so none of the three should be able to
+          hold the day open or to complete it on their own. */}
+      <DayComplete
+        date={date}
+        done={d.tasks.filter((t) => t.kind !== 'note' && !t.optional && t.status === 'done').length}
+        total={d.tasks.filter(
+          (t) => t.kind !== 'note' && !t.optional && t.status !== 'dropped' && t.status !== 'moved',
+        ).length}
+      />
 
       {meetingFor && (
         <QuickMeeting
