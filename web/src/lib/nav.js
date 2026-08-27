@@ -14,4 +14,5 @@ export const GO_TO = {
   u: '/uploads',
   n: '/notebook',
   h: '/dashboard',
+  s: '/settings',
 }

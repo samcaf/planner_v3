@@ -123,7 +123,9 @@ try {
   check('the block is centred', /\.pomo\{[^}]*align-items:center/.test(css))
   check('it is ruled off from the nav and the mark',
     /\.pomo\{[^}]*border-top:1pxsolid/.test(css) && /\.pomo\{[^}]*border-bottom:1pxsolid/.test(css))
-  check('the fruit is bigger than it was', /pomo-face\{[^}]*width:64px/.test(css))
+  // Sized against the window now, so the rail fits a laptop screen without a
+  // scrollbar hiding the mark at its foot.
+  check('the fruit is sized against the window', /pomo-face\{[^}]*width:clamp\(/.test(css))
   check('the clock is bigger than it was', /pomo-clock\{[^}]*font-size:22px/.test(css))
   check('clock and phase share the fruit\'s colour',
     /pomo-clock\{[^}]*color:var\(--pomo-ink\)/.test(css) && /pomo-phase\{[^}]*color:var\(--pomo-ink\)/.test(css))

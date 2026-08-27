@@ -262,7 +262,8 @@ function Keys() {
 
   const GENERAL = [
     ['Everywhere', [
-      ['Ctrl / \u2318 + K', 'search everything'],
+      ['Ctrl / \u2318 + /', 'search everything'],
+      ['Ctrl / \u2318 + K', 'the same, unless you are in a text box'],
       ['Ctrl / \u2318 + Z', 'undo'],
       ['Ctrl / \u2318 + Shift + Z', 'redo'],
       ['Ctrl + Alt + V', 'turn keyboard control on or off'],
@@ -271,13 +272,21 @@ function Keys() {
     ['Going places', [
       ['d / w / m / n', 'day, week, month, notes — keeping the date'],
       ['t', 'jump to today'],
-      ['j / k', 'the next / previous day, week or month'],
       ['g then p / e / a', 'projects, people, all tasks'],
+      ['g then r / u / n', 'routines, uploads, notebook'],
+      ['g then h / s', 'the dashboard, settings'],
       ['?', 'the shortcut list'],
     ]],
     ['On a day', [
       ['\u2190 / \u2192', 'the day before / after'],
       ['Ctrl-click the arrows', 'open that day in a new tab'],
+    ]],
+    ['While writing', [
+      ['Ctrl / \u2318 + K', 'make a hyperlink'],
+      ['Ctrl / \u2318 + J', 'hop between a link\u2019s text and its url'],
+      ['Ctrl / \u2318 + B  /  I', 'bold, italic'],
+      ['Ctrl / \u2318 + Enter', 'save and close the editor'],
+      ['[[', 'link a day, project or task'],
     ]],
     ['On a task', [
       ['click the checkbox', 'done / not done'],

@@ -104,26 +104,27 @@ try {
   key('h'); await wait(250)
   check('h moves back to the left', colOfCursor() < rightCol, `col ${colOfCursor()}`)
 
-  // 3 ── J and K move the task itself ---------------------------------------
+  // 3 ── Alt-j and Alt-k move the task itself (J and K walk sections) --------
   const orderNow = async () => (await json(`/api/days/${D}`)).tasks
     .filter((t) => t.section_id === sec.id && t.kind !== 'note')
     .sort((a, b) => a.sort - b.sort || a.id - b.id).map((t) => t.title)
   const before = await orderNow()
   check('the section starts in a known order', before.length >= 3, before.join(','))
   check('aimed at the first task', await aim(one.id), `${cursorId()}`)
-  key('J'); await wait(1100)
+  key('j', { altKey: true }); await wait(1100)
   const after = await orderNow()
-  check('J moves the task itself down, not the cursor',
+  check('Alt-j moves the task itself down, not the cursor',
     after.indexOf('ZZ one') > before.indexOf('ZZ one'), `${before.join(',')} -> ${after.join(',')}`)
   check('the cursor stays with the task it moved', cursorId() === one.id, `${cursorId()}`)
-  key('K'); await wait(1100)
-  check('K moves it back up', (await orderNow()).join(',') === before.join(','),
+  key('k', { altKey: true }); await wait(1100)
+  check('Alt-k moves it back up', (await orderNow()).join(',') === before.join(','),
     (await orderNow()).join(','))
 
   // 4 ── u undoes, Ctrl-r redoes --------------------------------------------
   check('aimed', await aim(two.id))
-  key(' '); await wait(900)
-  check('ticked it', (await json(`/api/tasks/${two.id}`)).status === 'done')
+  key('Enter'); await wait(900)
+  check('Enter ticks it', (await json(`/api/tasks/${two.id}`)).status === 'done',
+    (await json(`/api/tasks/${two.id}`)).status)
   key('u'); await wait(1100)
   check('u undoes the last change', (await json(`/api/tasks/${two.id}`)).status === 'todo',
     (await json(`/api/tasks/${two.id}`)).status)

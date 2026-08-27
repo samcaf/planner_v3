@@ -217,7 +217,7 @@ const HELP = [
   ['t', 'Jump to today'],
   ['g then p / e / a', 'Projects, People, All tasks'],
   ['g then r / u / n', 'Routines, Uploads, Notebook'],
-  ['g then h', 'The dashboard'],
+  ['g then h / s', 'The dashboard, Settings'],
   ['?', 'This list'],
   ['Esc', 'Close'],
 ]

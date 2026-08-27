@@ -22,6 +22,10 @@
 /* Visual mode: everything in the span, with the cursor still marked among it. */
 .task.vim-sel { background: var(--accent-soft); }
 
+/* The bar is dark in both themes and its text takes the accent you chose, so
+   the mode reads as part of the app rather than as a black strip stuck to the
+   bottom of it. --sb-accent is the accent already tuned to sit on a dark
+   ground, which is exactly the problem here. */
 .vim-bar {
   position: fixed;
   left: 0;
@@ -32,8 +36,9 @@
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-2) var(--space-6);
-  background: var(--ink);
-  color: #f4f6fb;
+  background: var(--sb-bg);
+  color: var(--sb-accent);
+  border-top: 1px solid rgba(255, 255, 255, .09);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
@@ -43,14 +48,18 @@
   letter-spacing: .08em;
   padding: 1px var(--space-3);
   border-radius: 3px;
-  background: rgba(255, 255, 255, .14);
+  background: var(--sb-accent);
+  color: var(--sb-bg);
 }
 
 .vim-bar.is-insert .vim-mode { background: var(--green); color: #06130c; }
 .vim-bar.is-visual .vim-mode { background: var(--amber); color: #1a1204; }
-.vim-bar.is-command .vim-mode { background: var(--accent); color: var(--accent-ink); }
+.vim-bar.is-command .vim-mode,
+.vim-bar.is-search .vim-mode { background: var(--accent); color: var(--accent-ink); }
 
-.vim-say { opacity: .8; }
+/* What it just did, and the keys still in the air: readable, but a step back
+   from the mode itself. */
+.vim-say { color: var(--sb-ink); }
 
 /* The half-typed sequence, bottom right, where vim puts it. Reserved width so
    the help button beside it does not jump as keys arrive. */
@@ -61,25 +70,26 @@
   opacity: 0;
 }
 
-.vim-pending.is-on { opacity: 1; color: var(--amber); font-weight: 700; }
+.vim-pending.is-on { opacity: 1; color: var(--sb-accent); font-weight: 700; }
 
 .vim-cmd { display: flex; align-items: center; gap: var(--space-1); flex: 1; min-width: 0; }
-.vim-colon { opacity: .7; }
+.vim-colon { color: var(--sb-accent); }
 
 .vim-cmd-input {
   flex: 1;
   min-width: 0;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--sb-ink);
   font: inherit;
   outline: none;
 }
+.vim-cmd-input::placeholder { color: var(--sb-ink); opacity: .5; }
 
 .vim-help-btn {
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--sb-ink);
   font: inherit;
   opacity: .75;
   cursor: pointer;

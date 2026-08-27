@@ -184,8 +184,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   flex-direction: column;
   /* Barely any at the top: undo is the first thing in the rail and should sit
      against its edge rather than floating below it. */
-  padding: var(--space-2) var(--space-5) var(--space-7);
-  gap: var(--space-1);
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  gap: 0;
   overflow-y: auto;
 }
 
@@ -224,7 +224,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
    rather than by the mark alone — otherwise the switch would be pushed below
    the rail's edge on a short window. */
 .sb-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -239,7 +238,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
      aspect ratio comes from a padding-bottom percentage resolved against the
      same width — so insetting here scales the whole thing without the height
      needing to be restated. The bottom value is clearance from the rail's edge. */
-  padding: var(--space-6) 15px var(--space-5);
+  padding: clamp(2px, 1vh, 10px) 12px clamp(2px, 1vh, 10px);
   color: #fff;
   font-weight: 650;
   letter-spacing: -.01em;
@@ -254,10 +253,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
    and the near-black ink stays visible on a dark sidebar. */
 .brand-mark {
   display: block;
-  /* Full bleed across the rail; the height follows from the artwork's own
-     aspect ratio, which Wordmark.jsx holds as a padding-bottom percentage so
-     the block reserves its space before the mask has loaded. */
+  /* As wide as the rail allows, but never taller than a slice of the window:
+     the mark is the tallest thing in the sidebar and was what pushed everything
+     else into a scrollbar on a laptop screen. `contain` keeps the artwork whole
+     inside whatever box is left, so a shorter box means a smaller mark, not a
+     cropped one. */
   width: 100%;
+  max-height: clamp(64px, 14vh, 150px);
+  margin: 0 auto;
   background-color: var(--sb-accent);
   -webkit-mask-image: url('/brand/wordmark.png');
   mask-image: url('/brand/wordmark.png');
@@ -274,7 +277,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
   text-transform: uppercase;
   letter-spacing: .07em;
   color: #7b85a6;
-  padding: var(--space-7) 9px 5px;
+  /* Tightened from 14px above to 8. Two of these plus the padding they carried
+     was most of the reason the rail did not fit a laptop screen. */
+  padding: var(--space-4) 9px 3px;
   font-weight: 600;
 }
 
@@ -286,7 +291,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 7px 9px;
+  /* A pixel off each row: ten rows makes it worth having. */
+  padding: 6px 9px;
   border-radius: var(--radius-sm);
   color: var(--sb-ink);
   cursor: pointer;
@@ -994,20 +1000,25 @@ kbd {
    from the nav, and one below from the mark, so it reads as its own thing
    rather than as the tail of the list or the top of the signature. */
 .pomo {
-  margin-top: var(--space-8);
-  padding: var(--space-7) var(--space-4) var(--space-6);
+  /* margin-top: auto pushes the pomodoro and everything under it to the foot,
+     so the spare height collects in ONE place instead of being spent above the
+     block whether or not there is any to spare. */
+  margin-top: auto;
+  padding: var(--space-3) var(--space-4) var(--space-2);
   border-top: 1px solid rgba(255, 255, 255, .09);
   border-bottom: 1px solid rgba(255, 255, 255, .09);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: 1px;
   color: var(--sb-ink);
 }
 
 .pomo-face {
-  width: 64px;
-  height: 64px;
+  /* Smaller, and smaller still on a short window: this and the mark are the
+     two things that decided whether the rail needed a scrollbar. */
+  width: clamp(38px, 6vh, 56px);
+  height: clamp(38px, 6vh, 56px);
   padding: 0;
   border: 0;
   background: none;
@@ -1015,11 +1026,19 @@ kbd {
 }
 
 .pom { width: 100%; height: 100%; display: block; }
-.pom-track { fill: none; stroke: currentColor; stroke-width: 2.4; opacity: .18; }
-.pom-arc { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-.pom-shell { fill: none; stroke: currentColor; stroke-width: 1.8; }
-.pom-ink { fill: currentColor; }
-.pom-seed { fill: currentColor; opacity: .85; }
+
+/* The fruit, twice over: the outline as drawn, and the same drawing clipped to
+   the part that has elapsed. The ring that used to sit around it is gone — it
+   said the same thing while standing apart from the thing it described. */
+.pom-body .pom-shell { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.pom-body .pom-ink { fill: currentColor; }
+.pom-body .pom-seed { fill: currentColor; opacity: .85; }
+
+/* The elapsed part: filled through, so the shell reads as full rather than
+   outlined, and the seeds inside it fill with it. */
+.pom-body.is-filled .pom-shell { fill: currentColor; opacity: .30; }
+.pom-body.is-filled .pom-ink,
+.pom-body.is-filled .pom-seed { fill: currentColor; opacity: 1; }
 
 /* The fruit takes the accent while it is counting and goes quiet when it is
    not, so a glance at the rail says whether anything is running. Everything
@@ -1030,6 +1049,9 @@ kbd {
 .pomo.is-running.phase-long { --pomo-ink: var(--green); }
 
 .pomo .pom { color: var(--pomo-ink); opacity: .55; transition: opacity .2s, color .2s; }
+/* The unfilled part steps back so the filled part is what you read. */
+.pomo .pom-body:not(.is-filled) { opacity: .5; }
+.pomo.is-running .pom-body:not(.is-filled) { opacity: .45; }
 .pomo.is-running .pom { opacity: 1; }
 
 /* Brighter than the fruit rather than a different colour: same family, more
@@ -2046,4 +2068,27 @@ kbd {
   opacity: 1;
   color: var(--sb-accent);
   background: var(--sb-act);
+}
+
+/* ------------------------------------------------- the rail on a short window */
+
+/* The rail must fit without scrolling: the mark at its foot is how you reach
+   the dashboard, and a scrollbar hides it. Rather than tune half a dozen
+   clamps against each other, everything in it gives a little at once — and
+   goes back to full size the moment there is room. */
+@media (max-height: 760px) {
+  .sb-link { padding: 4px 9px; font-size: 13px; }
+  .sb-section { padding: 6px 9px 2px; }
+  .sidebar .brand { padding: 2px 12px; }
+  .brand-mark { max-height: 11vh; }
+  .pomo { padding: 4px var(--space-4) 2px; }
+  .pomo-clock { font-size: 15px; }
+}
+
+@media (max-height: 640px) {
+  .sb-link { padding: 3px 9px; }
+  .brand-mark { max-height: 9vh; }
+  /* The phase label is the one thing here that repeats what the colour already
+     says, so it is what goes first. */
+  .pomo-phase { display: none; }
 }

@@ -59,9 +59,12 @@ try {
 
   check('a line separates them', /\.sb-undo\{[^}]*border-bottom:1pxsolid/.test(css))
   check('the gap below undo is small', /\.sb-undo\{[^}]*padding-bottom:5px/.test(css))
+  // The rail was tightened so it fits a laptop screen without scrolling, which
+  // is what was hiding the mark at its foot. The exact numbers moved; what
+  // matters is still that the top is barely padded.
   check('and the heading no longer takes a run-up',
     /\.sb-undo\+\.sb-section\{padding-top:6px\}/.test(css))
-  check('the rail barely pads its top', /\.sidebar\{[^}]*padding:4px10px14px/.test(css))
+  check('the rail barely pads its top', /\.sidebar\{[^}]*padding:4px10px8px/.test(css))
 
   // 60/40 as growth factors, so the split survives the rail being resized and
   // the gap comes out of the row first. Matched against the RAW css: the

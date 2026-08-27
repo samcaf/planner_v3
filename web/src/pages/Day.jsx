@@ -1687,6 +1687,10 @@ function SectionPanel({
 
   return (
     <section
+      // Named for the keyboard, which walks sections and needs to open a shut
+      // one before it can put the cursor inside it.
+      data-section-id={section.id}
+      data-section-shut={shut ? '1' : '0'}
       className={[
         'panel section', cls(tone),
         complete ? 'is-complete' : '',
@@ -1712,6 +1716,7 @@ function SectionPanel({
         </span>
         <button
           className="task-twist"
+          data-section-twist=""
           title={section.collapsed ? 'Expand section' : 'Minimise section'}
           aria-expanded={!shut}
           onClick={() => {

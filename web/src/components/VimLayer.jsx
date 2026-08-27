@@ -20,22 +20,24 @@ const HELP = [
   ['Moving', [
     ['j / k', 'next / previous task (3j for three)'],
     ['h / l', 'the box to the left / right'],
+    ['J / K', 'the next / previous section'],
+    ['Space', 'fold / unfold what is under a task'],
+    ['Ctrl-Space', 'fold / unfold the whole section'],
     ['gg / G', 'first / last task'],
     ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
     ['\u2190 / \u2192', 'the day before / after'],
     ['g then a / p / e', 'all tasks, projects, people'],
-    ['g then r / u / n / h', 'routines, uploads, notebook, dashboard'],
+    ['g then r / u / n / h / s', 'routines, uploads, notebook, dashboard, settings'],
   ]],
   ['Changing', [
-    ['Space or x', 'done / not done'],
+    ['Enter or x', 'done / not done'],
     ['t', 'optional / committed'],
     ['dd', 'drop'],
     ['DD', 'delete (undoable)'],
-    ['J / K', 'move the task itself down / up'],
+    ['Alt-j / Alt-k', 'move the task itself down / up'],
     ['o / O', 'new task below / above'],
     ['> / <', 'move to tomorrow / yesterday'],
-    ['Enter or i', 'edit the title'],
-    ['za', 'fold / unfold what is under it'],
+    ['i', 'edit the title'],
     ['u / Ctrl-r', 'undo / redo'],
     ['Escape', 'back to normal mode'],
   ]],
@@ -50,6 +52,11 @@ const HELP = [
     ['yt', 'as markdown, with its section and metadata'],
     ['p / P', 'paste below / above the cursor'],
     ['"a', 'use register a for the next yank or paste'],
+  ]],
+  ['Finding', [
+    ['/', 'find on this page'],
+    ['n / N', 'the next / previous match'],
+    ['Ctrl-/', 'search everything, not just this page'],
   ]],
   ['Elsewhere', [
     ['zp', 'start or pause the pomodoro'],
@@ -91,6 +98,32 @@ export default function VimLayer() {
   const count = useRef('')
   /** Whether visual mode is selecting text inside one task, or whole tasks. */
   const grain = useRef('text')
+  /**
+   * A section this opened only so the cursor could go in.
+   *
+   * If nothing is changed while inside, it is shut again on the way out — so
+   * walking past a collapsed section with J does not quietly unfold the day.
+   */
+  const peeked = useRef(null)
+  /** What / last looked for, so n and N have something to repeat. */
+  const lastSearch = useRef('')
+  /**
+   * The section the cursor was last inside.
+   *
+   * Folding a section takes its rows off the page, so the cursor is no longer
+   * in it and Ctrl-Space would have nothing to unfold — you could shut a
+   * section from the keyboard and then not be able to open it again.
+   */
+  const lastSection = useRef(null)
+  /**
+   * A section this just folded.
+   *
+   * Folding takes its rows off the page, so the cursor moves into whatever
+   * section is next — and a second Ctrl-Space would then fold THAT one rather
+   * than reopening what you just shut. Held until a movement key says you have
+   * gone somewhere on purpose.
+   */
+  const justFolded = useRef(null)
   const {
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,
     pending, setPending, command, setCommand, flash, say,
@@ -158,12 +191,56 @@ export default function VimLayer() {
     clearText()
   }
 
+  /**
+   * Rows on this page whose text contains `q`.
+   *
+   * The page's own grep. A row is what this app is made of, so searching them
+   * — rather than raw text nodes — is what lets a hit become the cursor, and
+   * n and N walk the hits the way they do in vim.
+   */
+  const matches = (q) => {
+    const needle = String(q || '').trim().toLowerCase()
+    if (!needle) return []
+    return [...document.querySelectorAll('.task[data-task-id]')]
+      .filter((el) => el.textContent.toLowerCase().includes(needle))
+      .map((el) => Number(el.dataset.taskId))
+  }
+
+  const sectionEl = (id) => rowFor(id)?.closest('.panel.section') || null
+  const sectionsOnPage = () => [...document.querySelectorAll('.panel.section[data-section-id]')]
+  const twistOf = (el) => el?.querySelector('[data-section-twist]')
+  const isShut = (el) => el?.dataset.sectionShut === '1'
+
+  /** Shut again whatever was opened just to look inside, if nothing changed. */
+  const unpeek = (leavingId) => {
+    const held = peeked.current
+    if (!held) return
+    if (held.dirty) { peeked.current = null; return }
+    const stillInside = sectionEl(leavingId)?.dataset.sectionId === held.id
+    if (stillInside) return
+    const el = document.querySelector(`.panel.section[data-section-id="${held.id}"]`)
+    if (el && !isShut(el)) click(twistOf(el))
+    peeked.current = null
+  }
+
   /** Everything a command or a key can ask for, in one place. */
+  const CHANGES = new Set([
+    'done', 'optional', 'drop', 'delete', 'edit', 'estimate', 'move', 'copy',
+    'paste', 'new', 'note', 'shift', 'undo', 'redo',
+  ])
+
   const run = async (what, arg) => {
+    if (CHANGES.has(what) && peeked.current) peeked.current.dirty = true
     const a = actions.current || {}
     const ids = selection
     const id = cursor
-    if (id == null && what !== 'pomodoro') { say('no task under the cursor'); return }
+
+    // Only the things that act ON a task need one. Undo, the pomodoro, walking
+    // sections and folding one do not — and requiring a cursor for them meant
+    // that as soon as a row vanished (ticking folds it away) those keys went
+    // dead with no explanation, which looked like the mode had stopped working.
+    const NEEDS_TASK = !['pomodoro', 'undo', 'redo', 'section', 'foldSection'].includes(what)
+    if (id == null && NEEDS_TASK) { say('no task under the cursor'); return }
 
     switch (what) {
       case 'done':
@@ -191,11 +268,59 @@ export default function VimLayer() {
         if (twist) click(twist); else say('nothing under this to fold')
         break
       }
+      case 'section': {
+        const all = sectionsOnPage()
+        if (!all.length) return
+        const here = sectionEl(id)
+        const at = here ? all.indexOf(here) : -1
+        const want = at < 0
+          ? (arg === 'up' ? all.length - 1 : 0)
+          : at + (arg === 'up' ? -1 : 1)
+        if (want < 0 || want >= all.length) { say(arg === 'up' ? 'first section' : 'last section'); return }
+
+        const target = all[want]
+        // Going into a shut section opens it, and remembers that it was this
+        // that opened it. Leaving without changing anything shuts it again.
+        if (isShut(target)) {
+          click(twistOf(target))
+          await new Promise((r) => setTimeout(r, 120))
+          peeked.current = { id: target.dataset.sectionId, dirty: false }
+        }
+        const fresh = document.querySelector(`.panel.section[data-section-id="${target.dataset.sectionId}"]`)
+        const first = fresh?.querySelector('.task[data-task-id]')
+        if (first) {
+          unpeek(Number(first.dataset.taskId))
+          setCursor(Number(first.dataset.taskId))
+        } else {
+          say('that section is empty')
+        }
+        break
+      }
+      case 'foldSection': {
+        // What was just folded wins, so the second press reopens it rather than
+        // shutting whichever section the cursor fell into.
+        const pinned = justFolded.current
+          && document.querySelector(`.panel.section[data-section-id="${justFolded.current}"]`)
+        const here = (pinned && isShut(pinned) ? pinned : null)
+          || sectionEl(id)
+          || (lastSection.current
+            && document.querySelector(`.panel.section[data-section-id="${lastSection.current}"]`))
+        if (!here) { say('this task is in no section'); return }
+
+        // Deliberate, so it stays that way rather than being a peek.
+        if (peeked.current?.id === here.dataset.sectionId) peeked.current = null
+        const wasShut = isShut(here)
+        click(twistOf(here))
+        justFolded.current = wasShut ? null : here.dataset.sectionId
+        break
+      }
       case 'column': {
         // Sideways through the three boxes, keeping roughly the same depth
         // down the column so it feels like moving across a grid.
+        // Silent where there are no columns: h and l simply have nothing to
+        // do in a plain list, and a complaint every time would be noise.
         const at = columnOf(id)
-        if (!at) { say('this view has no columns'); return }
+        if (!at) return
         const step = arg === 'left' ? -1 : 1
         const here = idsIn(at.cols[at.index]).indexOf(id)
         for (let i = at.index + step; i >= 0 && i < at.cols.length; i += step) {
@@ -349,18 +474,18 @@ export default function VimLayer() {
       // Escape always comes back, even out of a text box.
       if (e.key === 'Escape') {
         if (helpOpen) { setHelpOpen(false); return }
-        if (mode === 'command') { setCommand(''); setMode('normal'); return }
+        if (mode === 'command' || mode === 'search') { setCommand(''); setMode('normal'); return }
         if (typing()) { document.activeElement.blur(); setMode('normal'); return }
         setMode('normal'); setAnchor(null); seq.current = ''; setPending('')
         return
       }
 
       // While the caret is in a field, the field owns every other key.
-      if (typing() || mode === 'insert' || mode === 'command') return
+      if (typing() || mode === 'insert' || mode === 'command' || mode === 'search') return
       // Leave the app's own chords alone: Ctrl-Z, Ctrl-K and the rest. The three
       // named here are ours — half a screen down, half a screen up, and redo —
       // and leaving `r` out of this list is why Ctrl-r never reached its binding.
-      const MINE = ['d', 'u', 'r']
+      const MINE = ['d', 'u', 'r', ' ']
       if (e.metaKey || (e.ctrlKey && !MINE.includes(e.key.toLowerCase()))) return
 
       const k = e.key
@@ -454,13 +579,25 @@ export default function VimLayer() {
           setAnchor(cursor)
         }
       }
-      if (k === 'j') return go(() => { coarsen(); move('down', N) })
-      if (k === 'k') return go(() => { coarsen(); move('up', N) })
+      // Moving the cursor also shuts any section that was opened only so it
+      // could be looked into.
+      const step = (fn) => { justFolded.current = null; fn(); unpeek(cursor) }
+
+      // The modified forms come first. Alt-j still arrives with key 'j', so a
+      // plain-j branch above this would swallow it and move the cursor instead
+      // of the task.
+      if (e.altKey && k.toLowerCase() === 'j') return go(() => run('shift', 'down'))
+      if (e.altKey && k.toLowerCase() === 'k') return go(() => run('shift', 'up'))
+      if (e.altKey) return
+
+      if (k === 'j') return go(() => { coarsen(); step(() => move('down', N)) })
+      if (k === 'k') return go(() => { coarsen(); step(() => move('up', N)) })
       if (k === 'G') return go(() => move('last'))
       if (k === 'h') return go(() => run('column', 'left'))
       if (k === 'l') return go(() => run('column', 'right'))
-      if (k === 'J') return go(() => { coarsen(); run('shift', 'down') })
-      if (k === 'K') return go(() => { coarsen(); run('shift', 'up') })
+      // Whole sections, not rows. Moving the task itself is Alt-j and Alt-k.
+      if (k === 'J') return go(() => { justFolded.current = null; run('section', 'down') })
+      if (k === 'K') return go(() => { justFolded.current = null; run('section', 'up') })
       if (k === 'u') return go(() => run('undo'))
       if (e.ctrlKey && k.toLowerCase() === 'r') return go(() => run('redo'))
       if (k === 'w') {
@@ -471,13 +608,17 @@ export default function VimLayer() {
       }
       if (e.ctrlKey && k.toLowerCase() === 'd') return go(() => move('down', 8))
       if (e.ctrlKey && k.toLowerCase() === 'u') return go(() => move('up', 8))
-      if (k === ' ' || k === 'x') return go(() => run('done'))
+      // Space folds what is under a task; Ctrl-Space folds the whole section.
+      // Enter is what ticks a task off, and x with it for the vim habit.
+      if (k === ' ' && e.ctrlKey) return go(() => run('foldSection'))
+      if (k === ' ') return go(() => run('fold'))
+      if (k === 'Enter' || k === 'x') return go(() => run('done'))
       if (k === 't') return go(() => run('optional'))
       if (k === 'o') return go(() => run('new', 'below'))
       if (k === 'O') return go(() => run('new', 'above'))
       if (k === '>') return go(() => run('move', 'tomorrow'))
       if (k === '<') return go(() => run('move', 'yesterday'))
-      if (k === 'i' || k === 'Enter') return go(() => run('edit'))
+      if (k === 'i') return go(() => run('edit'))
       if (k === 'v' || k === 'V') {
         return go(() => {
           if (mode === 'visual') {
@@ -510,6 +651,25 @@ export default function VimLayer() {
         return
       }
       if (k === '?') return go(() => setHelpOpen(true))
+      if (k === '/') {
+        return go(() => {
+          setCommand('')
+          setMode('search')
+          setTimeout(() => cmdInput.current?.focus(), 0)
+        })
+      }
+      if (k === 'n' || k === 'N') {
+        return go(() => {
+          const hits = matches(lastSearch.current)
+          if (!hits.length) { say(lastSearch.current ? 'no match' : 'nothing searched for yet'); return }
+          const at = hits.indexOf(cursor)
+          const next = k === 'n'
+            ? hits[(at + 1 + hits.length) % hits.length]
+            : hits[(at - 1 + hits.length) % hits.length]
+          setCursor(next)
+          say(`${hits.indexOf(next) + 1} of ${hits.length}`)
+        })
+      }
       if (k === ':') {
         return go(() => {
           setCommand('')
@@ -522,6 +682,21 @@ export default function VimLayer() {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
+
+  // A click puts the cursor where you clicked. Reaching for the mouse in the
+  // middle of a keyboard session is normal, and coming back to find the cursor
+  // still where it was three tasks ago is not what anyone means by it.
+  useEffect(() => {
+    if (!enabled) return
+    const onClick = (e) => {
+      const row = e.target.closest?.('.task[data-task-id]')
+      if (!row) return
+      const id = Number(row.dataset.taskId)
+      if (!Number.isNaN(id)) setCursor(id)
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [enabled, setCursor])
 
   // Belt to the observer's braces. The repaint below adopts the first row the
   // moment one appears, and usually gets there first — but a cursor that never
@@ -573,10 +748,16 @@ export default function VimLayer() {
       // does, rather than jumping back to the top.
       const here = ids.indexOf(cursor)
       if (here < 0) {
+        // The row went. Something changed it — ticking, dropping, moving — so
+        // a section opened only to look inside has now been worked in, and
+        // should stay open.
+        if (peeked.current) peeked.current.dirty = true
         if (ids.length) setCursor(ids[Math.min(lastIndex.current, ids.length - 1)])
         return
       }
       lastIndex.current = here
+      lastSection.current = rowFor(cursor)?.closest('.panel.section')?.dataset.sectionId
+        ?? lastSection.current
 
       for (const id of selection) rowFor(id)?.classList.add('vim-sel')
       rowFor(cursor)?.classList.add('vim-on')
@@ -604,18 +785,24 @@ export default function VimLayer() {
           half-finished command you have started sits bottom right. */}
       <div className={`vim-bar is-${mode}`} role="status">
         <span className="vim-mode">{MODE_LABEL[mode]}</span>
-        {mode === 'command' ? (
+        {mode === 'command' || mode === 'search' ? (
           <form
             className="vim-cmd"
             onSubmit={(e) => {
               e.preventDefault()
               const line = command
+              const searching = mode === 'search'
               setCommand('')
               setMode('normal')
-              runCommand(line)
+              if (!searching) { runCommand(line); return }
+              lastSearch.current = line
+              const hits = matches(line)
+              if (!hits.length) { say(`no match for "${line}"`); return }
+              setCursor(hits[0])
+              say(`1 of ${hits.length}`)
             }}
           >
-            <span className="vim-colon">:</span>
+            <span className="vim-colon">{mode === 'search' ? '/' : ':'}</span>
             <input
               ref={cmdInput}
               className="vim-cmd-input"
@@ -675,7 +862,9 @@ export default function VimLayer() {
   )
 }
 
-const MODE_LABEL = { normal: 'NORMAL', insert: 'INSERT', visual: 'VISUAL', command: 'COMMAND' }
+const MODE_LABEL = {
+  normal: 'NORMAL', insert: 'INSERT', visual: 'VISUAL', command: 'COMMAND', search: 'SEARCH',
+}
 
 function typing() {
   const el = document.activeElement

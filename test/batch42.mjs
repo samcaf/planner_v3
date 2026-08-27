@@ -114,8 +114,9 @@ try {
   let target = cursorId()
   check('the cursor holds a real task', target != null, 'no cursor')
 
-  let after = await act(' ')
-  check('space ticks the task under the cursor', after?.status === 'done', after?.status)
+  // Enter ticks now; Space folds what is under a task.
+  let after = await act('Enter')
+  check('Enter ticks the task under the cursor', after?.status === 'done', after?.status)
 
   // ------------------------------- the cursor survives the page reloading
   // Checked right here, while the tick that just happened is the only thing
@@ -157,8 +158,8 @@ try {
     return cursorId() === id
   }
   check('the ticked task can be reached again', await walkTo(target), `${cursorId()} want ${target}`)
-  after = await act(' ')
-  check('and space unticks it', after?.status === 'todo', after?.status)
+  after = await act('Enter')
+  check('and Enter unticks it', after?.status === 'todo', after?.status)
 
   check('back on it', await walkTo(target))
   after = await act('t')

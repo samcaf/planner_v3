@@ -10,9 +10,13 @@
  * ornaments and the navy letters come through as a single colour, because a
  * mask carries shape and not hue.
  *
- * Sized by aspect ratio rather than a fixed height. The block spans the rail's
- * full width and reserves its height through `padding-bottom`, so the sidebar
- * does not reflow when the mask image finishes loading.
+ * Sized by `aspect-ratio` with a height that yields on a short window. It used
+ * to reserve its height with a `padding-bottom` percentage of the rail's width,
+ * which meant a wide rail was always a tall mark — and the mark is the tallest
+ * single thing in the sidebar, so on a laptop screen it was what pushed the
+ * rest of the rail into a scrollbar. `mask-size: contain` keeps the artwork
+ * whole inside whatever box it is given, so capping the height simply makes it
+ * smaller rather than cropping it.
  *
  * The ratio below is the trimmed ink of the source, and scripts/build-brand.sh
  * is what produces it — change the artwork there and this number follows.
@@ -25,7 +29,7 @@ export default function Wordmark({ title = 'Planner', ...rest }) {
       className="brand-mark"
       role="img"
       aria-label={title}
-      style={{ paddingBottom: `${RATIO * 100}%` }}
+      style={{ aspectRatio: `${1 / RATIO}` }}
       {...rest}
     />
   )

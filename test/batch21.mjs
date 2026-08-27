@@ -104,7 +104,10 @@ try {
   await wait(700)
   check('clicking the fruit starts it', pomo.classList.contains('is-running'))
   check('and the clock moves', clock() !== '30:00', clock())
-  check('the ring begins to fill', !!pomo.querySelector('.pom-arc'))
+  // The ring is gone: progress fills the fruit itself now, drawn as a second
+  // copy of the whole symbol clipped to the part that has elapsed.
+  check('the fruit itself begins to fill', !!pomo.querySelector('.pom-body.is-filled'))
+  check('and no ring is drawn around it', !pomo.querySelector('.pom-arc, .pom-track'))
 
   click(pomo.querySelector('.pomo-face'))
   await wait(300)

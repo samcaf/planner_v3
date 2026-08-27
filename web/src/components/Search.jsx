@@ -55,6 +55,13 @@ const NO_FILTERS = {
   kinds: [], projectId: null, priorities: [], statuses: [], exts: '', from: '', to: '',
 }
 
+/** Is the caret somewhere that owns its own keys? */
+function inTextBox() {
+  const el = document.activeElement
+  if (!el) return false
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
+}
+
 export default function Search() {
   const [q, setQ] = useState('')
   const [typed, setTyped] = useState('')
@@ -138,7 +145,12 @@ export default function Search() {
   // Ctrl/Cmd-K from anywhere, the shortcut every search box has. Escape closes.
   useEffect(() => {
     const key = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      // Ctrl-/ opens it. Ctrl-K used to, and still does where nothing else
+      // wants it — but in a text box Ctrl-K makes a hyperlink, which is the
+      // older habit and the one that matters while writing.
+      const wants = (e.ctrlKey || e.metaKey)
+        && (e.key === '/' || (e.key.toLowerCase() === 'k' && !inTextBox()))
+      if (wants) {
         e.preventDefault()
         setOpen(true)
         input.current?.focus()

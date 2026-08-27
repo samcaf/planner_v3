@@ -245,6 +245,35 @@ function linkAt(text, from, to) {
   return { text: text.slice(0, from) + body + text.slice(to), start: at, end: at + 3 }
 }
 
+/**
+ * Jump between the two halves of the link the caret is sitting in.
+ *
+ * Ctrl-K writes `[text](url)` with the url selected, which is the half you
+ * usually paste first; Ctrl-J then takes you to the label to name it, and back
+ * again. Both halves of a link are things you edit in one breath, and reaching
+ * for the mouse between them is what makes writing one tedious.
+ */
+function hopLink(text, from) {
+  const wiki = /\[([^\]\n]*)\]\(([^)\n]*)\)/g
+  for (let m = wiki.exec(text); m; m = wiki.exec(text)) {
+    const start = m.index
+    const end = start + m[0].length
+    if (from < start || from > end) continue
+
+    const labelAt = start + 1
+    const labelEnd = labelAt + m[1].length
+    const urlAt = labelEnd + 2
+    const urlEnd = urlAt + m[2].length
+
+    // In the label, go to the url; anywhere else in the link, go to the label.
+    const inLabel = from >= labelAt && from <= labelEnd
+    return inLabel
+      ? { text, start: urlAt, end: urlEnd }
+      : { text, start: labelAt, end: labelEnd }
+  }
+  return null
+}
+
 function rule(text, from, to) {
   const lead = from === 0 || text[from - 1] === '\n' ? '' : '\n'
   const body = `${lead}\n---\n\n`
@@ -748,6 +777,13 @@ export function RichEditor({
             forget()
             setDraft(value || '')
             setEditing(false)
+            return
+          }
+          // Ctrl-J walks between the label and the url of the link the caret
+          // is in — the other half of what Ctrl-K just made.
+          if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'j') {
+            e.preventDefault()
+            transform((text, from) => hopLink(text, from) || { text, start: from, end: from })
             return
           }
           if ((e.metaKey || e.ctrlKey) && !e.altKey && SHORTCUTS[e.key.toLowerCase()]) {
