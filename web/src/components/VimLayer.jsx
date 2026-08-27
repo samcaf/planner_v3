@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useVim, parseDuration, parseWhen, yankText, yankMarkdown, columnOf, idsIn,
+  keyOf, isSectionKey, sectionIdOf,
 } from '../lib/vim.jsx'
 import { GO_TO, GO_DATED, anchorOf } from '../lib/nav.js'
 import { today as todayIso } from '../lib/dates.js'
@@ -19,11 +20,11 @@ import '../styles/vim.css'
 
 const HELP = [
   ['Moving', [
-    ['j / k', 'next / previous task (3j for three)'],
+    ['j / k', 'next / previous task, or section (3j for three)'],
     ['h / l', 'the box to the left / right'],
     ['J / K', 'the next / previous section'],
-    ['Space', 'fold / unfold what is under a task'],
-    ['Ctrl-Space', 'fold / unfold the whole section'],
+    ['Space', 'fold / unfold — a task’s children, or a whole section'],
+    ['Ctrl-Space', 'fold / unfold the section you are in'],
     ['gg / G', 'first / last task'],
     ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
     ['\u2190 / \u2192', 'the day before / after'],
@@ -51,6 +52,7 @@ const HELP = [
   ]],
   ['Yanking', [
     ['yy or y', 'the text: title, then its note'],
+    ['yy on a section', 'everything in it'],
     ['yt', 'as markdown, with its section and metadata'],
     ['p / P', 'paste below / above the cursor'],
     ['"a', 'use register a for the next yank or paste'],
@@ -132,7 +134,9 @@ export default function VimLayer() {
     actions, registers, register, helpOpen, setHelpOpen, setAnchor,
   } = vim
 
-  const rowFor = (id) => document.querySelector(`.task[data-task-id="${id}"]`)
+  const rowFor = (key) => (isSectionKey(key)
+    ? document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
+    : document.querySelector(`.task[data-task-id="${key}"]`))
   const ctrl = (id, sel) => rowFor(id)?.querySelector(sel)
   const click = (el, init) => {
     if (!el) return false
@@ -257,7 +261,19 @@ export default function VimLayer() {
     if (ranges.length) CSSHL.set('vim-find', new window.Highlight(...ranges))
   }
 
-  const sectionEl = (id) => rowFor(id)?.closest('.panel.section') || null
+  /** Every task drawn inside a section, in the order it is drawn. */
+  const sectionRows = (key) => {
+    const a = actions.current || {}
+    const el = rowFor(key)
+    if (!el || !a.taskById) return []
+    return [...el.querySelectorAll('.task[data-task-id]')]
+      .map((r) => a.taskById(Number(r.dataset.taskId)))
+      .filter(Boolean)
+  }
+
+  const sectionEl = (key) => (isSectionKey(key)
+    ? rowFor(key)
+    : rowFor(key)?.closest('.panel.section') || null)
   const sectionsOnPage = () => [...document.querySelectorAll('.panel.section[data-section-id]')]
   const twistOf = (el) => el?.querySelector('[data-section-twist]')
   const isShut = (el) => el?.dataset.sectionShut === '1'
@@ -292,6 +308,35 @@ export default function VimLayer() {
     // dead with no explanation, which looked like the mode had stopped working.
     const NEEDS_TASK = !['pomodoro', 'undo', 'redo', 'section', 'foldSection'].includes(what)
     if (id == null && NEEDS_TASK) { say('no task under the cursor'); return }
+
+    // With a section under the cursor, the keys that act on one task say so
+    // rather than silently doing nothing — except the handful that mean
+    // something for a section too, which are handled below.
+    if (isSectionKey(id)) {
+      if (what === 'fold' || what === 'foldSection') {
+        const el = rowFor(id)
+        if (peeked.current?.id === sectionIdOf(id)) peeked.current = null
+        const wasShut = isShut(el)
+        click(twistOf(el))
+        justFolded.current = wasShut ? null : sectionIdOf(id)
+        return
+      }
+      if (what === 'yank' || what === 'yankMarkdown') {
+        const rowsOut = sectionRows(id)
+        if (!rowsOut.length) { say('nothing in this section'); return }
+        await putInRegister(
+          what === 'yank'
+            ? yankText(rowsOut)
+            : yankMarkdown(rowsOut, { sectionName: a.sectionName }),
+          `${rowsOut.length} from ${rowFor(id)?.querySelector('.section-h')?.textContent?.trim() || 'the section'}`,
+        )
+        return
+      }
+      if (['undo', 'redo', 'pomodoro', 'section'].includes(what)) { /* fall through */ } else {
+        say('that is a section — j moves into it')
+        return
+      }
+    }
 
     switch (what) {
       case 'done':
@@ -651,17 +696,25 @@ export default function VimLayer() {
       // With nothing to point at — a page with no tasks on it — j and k fall
       // back to scrolling, which is what they do in a pager and what your hands
       // will try anyway.
-      const scroller = () => document.querySelector('.main') || document.scrollingElement
-      const noRows = () => !document.querySelector('.task[data-task-id]')
+      const noRows = () => !document.querySelector(
+        '.panel.section[data-section-id], .task[data-task-id]',
+      )
+      /** scrollBy where it exists, scrollTop where it does not. */
+      const scrollPage = (by) => {
+        const el = document.querySelector('.main') || document.scrollingElement
+        if (!el) return
+        if (typeof el.scrollBy === 'function') el.scrollBy({ top: by })
+        else el.scrollTop += by
+      }
       if (k === 'j') {
         return go(() => {
-          if (noRows()) { scroller()?.scrollBy({ top: 60 * N }); return }
+          if (noRows()) { scrollPage(60 * N); return }
           coarsen(); step(() => move('down', N))
         })
       }
       if (k === 'k') {
         return go(() => {
-          if (noRows()) { scroller()?.scrollBy({ top: -60 * N }); return }
+          if (noRows()) { scrollPage(-60 * N); return }
           coarsen(); step(() => move('up', N))
         })
       }
@@ -803,13 +856,14 @@ export default function VimLayer() {
       // produces reads like a bug in whatever was being tested at the time.
       if (typeof document === 'undefined' || !document?.querySelectorAll) return
 
-      for (const el of document.querySelectorAll('.task.vim-on, .task.vim-sel')) {
-        el.classList.remove('vim-on', 'vim-sel')
+      for (const el of document.querySelectorAll('.vim-on, .vim-sel, .vim-on-section, .vim-on-band')) {
+        el.classList.remove('vim-on', 'vim-sel', 'vim-on-section', 'vim-on-band')
       }
       if (!enabled) return
 
-      const ids = [...document.querySelectorAll('.task[data-task-id]')]
-        .map((el) => Number(el.dataset.taskId))
+      const ids = [...document.querySelectorAll(
+        '.panel.section[data-section-id], .task[data-task-id]',
+      )].map(keyOf)
 
       // Adopt the first row when there is nothing to point at yet. This lives
       // here rather than in an effect of its own because this runs on renders
@@ -817,7 +871,11 @@ export default function VimLayer() {
       // appear — a separate observer fired inconsistently and the cursor
       // sometimes never started at all.
       if (cursor == null) {
-        if (ids.length) setCursor(ids[0])
+        // The first TASK, not the first stop: opening a day on its first
+        // section heading would mean a keypress before you could do anything.
+        const first = document.querySelector('.task[data-task-id]')
+        if (first) setCursor(keyOf(first))
+        else if (ids.length) setCursor(ids[0])
         return
       }
 
@@ -833,6 +891,15 @@ export default function VimLayer() {
         // a section opened only to look inside has now been worked in, and
         // should stay open.
         if (peeked.current) peeked.current.dirty = true
+
+        // Prefer the section the row was in, if that is still on the page. It
+        // usually is, and usually BECAUSE it just folded — landing on its
+        // heading is both nearest to where you were and exactly where you need
+        // to be to open it again. Falling back to a position in the list sent
+        // the cursor into the NEXT section instead, so folding one from inside
+        // left you unable to unfold it.
+        const home = lastSection.current && `s${lastSection.current}`
+        if (home && ids.includes(home)) { setCursor(home); return }
         if (ids.length) setCursor(ids[Math.min(lastIndex.current, ids.length - 1)])
         return
       }
@@ -841,7 +908,19 @@ export default function VimLayer() {
         ?? lastSection.current
 
       for (const id of selection) rowFor(id)?.classList.add('vim-sel')
-      rowFor(cursor)?.classList.add('vim-on')
+
+      const at = rowFor(cursor)
+      if (isSectionKey(cursor)) {
+        // The whole section, not a line inside it: what is selected is the
+        // container, and saying so with the same thin bar a row gets would
+        // read as "this heading" rather than "all of this".
+        at?.classList.add('vim-on-section')
+      } else {
+        at?.classList.add('vim-on')
+        // A sub-section heading stands for its band, so the band lights with
+        // it — that is the thing a yank from here would take.
+        at?.closest('.subsec')?.classList.add('vim-on-band')
+      }
       // Ranges point at text nodes, which a redraw replaces, so the highlight
       // has to be laid down again alongside the cursor.
       if (lastSearch.current) paintMatches(lastSearch.current)

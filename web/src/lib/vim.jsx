@@ -37,11 +37,35 @@ export function useVimActions(handlers) {
 
 const MODES = { normal: 'NORMAL', insert: 'INSERT', visual: 'VISUAL', command: 'COMMAND' }
 
-/** Rows on screen, in the order they are drawn. */
-const rows = () => [...document.querySelectorAll('.task[data-task-id]')]
-const idsOnScreen = () => rows().map((el) => Number(el.dataset.taskId))
+/**
+ * Everywhere the cursor can stop, in the order they are drawn.
+ *
+ * Sections are stops as well as tasks. A section element CONTAINS its tasks, so
+ * document order puts the heading immediately before the first of them — which
+ * is exactly where the stop belongs: `k` off the first task lands on the
+ * section, `j` off the last lands on the next one.
+ *
+ * A stop is identified by a key rather than an id, because two kinds of thing
+ * share one cursor: `12` is a task, `'s12'` a section. Keys are compared with
+ * `===` throughout, so the two can never be mistaken for one another.
+ */
+const STOPS = '.panel.section[data-section-id], .task[data-task-id]'
 
-const rowFor = (id) => document.querySelector(`.task[data-task-id="${id}"]`)
+const stopEls = () => [...document.querySelectorAll(STOPS)]
+
+export const keyOf = (el) => (el?.dataset?.sectionId
+  ? `s${el.dataset.sectionId}`
+  : Number(el?.dataset?.taskId))
+
+export const isSectionKey = (key) => typeof key === 'string' && key.startsWith('s')
+export const sectionIdOf = (key) => (isSectionKey(key) ? key.slice(1) : null)
+
+const idsOnScreen = () => stopEls().map(keyOf)
+
+/** The element a key points at, whichever kind it is. */
+const rowFor = (key) => (isSectionKey(key)
+  ? document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
+  : document.querySelector(`.task[data-task-id="${key}"]`))
 
 /**
  * Which of a section's three boxes a row is drawn in, and where among them.

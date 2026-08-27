@@ -63,9 +63,11 @@ try {
     const el = document.querySelector('.task.vim-on')
     return el ? Number(el.dataset.taskId) : null
   }
+  // Sections are cursor stops too, so a walk from the top passes through them —
+  // the loop needs room for those as well as for the tasks.
   const aim = async (id) => {
     key('g'); await wait(90); key('g'); await wait(200)
-    for (let i = 0; i < 18 && cursorId() !== id; i++) { key('j'); await wait(90) }
+    for (let i = 0; i < 24 && cursorId() !== id; i++) { key('j'); await wait(90) }
     return cursorId() === id
   }
   const sectionShut = (id) => document
@@ -119,8 +121,10 @@ try {
 
   // 3 ── J and K walk sections ----------------------------------------------
   check('back on the parent', await aim(parent.id))
-  const sectionOfCursor = () => document.querySelector('.task.vim-on')
-    ?.closest('.panel.section')?.dataset.sectionId
+  // The cursor may be holding the section itself rather than a row inside it.
+  const sectionOfCursor = () => document.querySelector('.panel.section.vim-on-section')
+    ?.dataset.sectionId
+    ?? document.querySelector('.task.vim-on')?.closest('.panel.section')?.dataset.sectionId
   check('the cursor is in the first section', sectionOfCursor() === String(morning.id),
     sectionOfCursor())
   key('J'); await wait(700)

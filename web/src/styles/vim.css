@@ -155,3 +155,15 @@ body:has(.vim-bar) .main { padding-bottom: 30px; }
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* A section under the cursor is selected WHOLE — it is a container, and the
+   thin bar a row gets would read as "this heading" rather than "all of this". */
+.panel.section.vim-on-section {
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--accent);
+}
+
+.panel.section.vim-on-section > .section-h { background: var(--accent-soft); }
+
+/* A sub-section heading stands for its band, so the band lights with it: that
+   is what a yank from there would take. */
+.subsec.vim-on-band { background: var(--accent-soft); border-radius: var(--radius-sm); }

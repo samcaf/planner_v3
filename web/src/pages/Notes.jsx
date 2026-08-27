@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { RichEditor, RichLine } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
+import { useArrowNav } from '../lib/keys.js'
 import {
   DOW, addDays, addMonths, dayNum, isSameMonth, longDate, monthGrid, monthLabel,
   parse, shortDate, today, weekDays,
@@ -58,6 +59,16 @@ export default function Notes() {
   usePageTitle(`Notes ${tabDate(date)}`)
   const [scope, setScope] = useState('day')
   const [attached, setAttached] = useState(true)
+
+  // The arrows walk whatever the page is counting in, exactly as they do on the
+  // day, week and month — this was the one dated view they had been left out
+  // of, so it was the one place they did nothing.
+  useArrowNav(useCallback(
+    (by) => navigate(`/notes/${scope === 'month'
+      ? addMonths(date, by)
+      : addDays(date, by * (scope === 'week' ? 7 : 1))}`),
+    [date, scope, navigate],
+  ))
 
   const span = useMemo(() => spanFor(scope, date), [scope, date])
   // /days/range is the only endpoint returning many `days` rows at once, so all
