@@ -199,12 +199,14 @@ try {
   // ---------------------------------------------------------- the pomodoro
   const pomo = () => document.querySelector('[data-pomo="toggle"]')
   check('the pomodoro has a hook the keyboard can find', !!pomo())
+  // zp, not a bare z: z is the fold prefix now (za/zo/zc), so the pomodoro
+  // shares it rather than either of them waiting to find out which it is.
   const wasRunning = pomo()?.getAttribute('title')
-  key('z'); await wait(500)
-  check('z works the pomodoro', pomo()?.getAttribute('title') !== wasRunning,
+  key('z'); await wait(120); key('p'); await wait(500)
+  check('zp works the pomodoro', pomo()?.getAttribute('title') !== wasRunning,
     `${wasRunning} -> ${pomo()?.getAttribute('title')}`)
-  key('z'); await wait(500)
-  check('and z again puts it back', pomo()?.getAttribute('title') === wasRunning,
+  key('z'); await wait(120); key('p'); await wait(500)
+  check('and zp again puts it back', pomo()?.getAttribute('title') === wasRunning,
     `${pomo()?.getAttribute('title')}`)
 
   // ------------------------------------------------------------- the help

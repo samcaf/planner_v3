@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useVim, parseDuration, parseWhen } from '../lib/vim.jsx'
+import {
+  useVim, parseDuration, parseWhen, yankText, yankMarkdown, columnOf, idsIn,
+} from '../lib/vim.jsx'
 import { GO_TO } from '../lib/nav.js'
 import Icon from './Icon.jsx'
 import '../styles/vim.css'
@@ -16,40 +18,51 @@ import '../styles/vim.css'
 
 const HELP = [
   ['Moving', [
-    ['j / k', 'next / previous task'],
+    ['j / k', 'next / previous task (3j for three)'],
+    ['h / l', 'the box to the left / right'],
     ['gg / G', 'first / last task'],
+    ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
     ['\u2190 / \u2192', 'the day before / after'],
     ['g then a / p / e', 'all tasks, projects, people'],
-    ['g then r / u / n', 'routines, uploads, notebook'],
-    ['h / l', 'fold / unfold the task’s children'],
-    ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
+    ['g then r / u / n / h', 'routines, uploads, notebook, dashboard'],
   ]],
   ['Changing', [
     ['Space or x', 'done / not done'],
     ['t', 'optional / committed'],
     ['dd', 'drop'],
     ['DD', 'delete (undoable)'],
+    ['J / K', 'move the task itself down / up'],
     ['o / O', 'new task below / above'],
     ['> / <', 'move to tomorrow / yesterday'],
     ['Enter or i', 'edit the title'],
+    ['za', 'fold / unfold what is under it'],
+    ['u / Ctrl-r', 'undo / redo'],
     ['Escape', 'back to normal mode'],
   ]],
   ['Selecting', [
-    ['v', 'visual mode — extend with j / k'],
-    ['y', 'yank the selection'],
+    ['v', 'select this task’s text'],
+    ['w / 3w', 'extend by a word / three'],
+    ['j or k in visual', 'switch to selecting whole tasks'],
+    ['V', 'select whole tasks straight away'],
+  ]],
+  ['Yanking', [
+    ['yy or y', 'the text: title, then its note'],
+    ['yt', 'as markdown, with its section and metadata'],
     ['p / P', 'paste below / above the cursor'],
     ['"a', 'use register a for the next yank or paste'],
   ]],
   ['Elsewhere', [
-    ['z', 'start or pause the pomodoro'],
+    ['zp', 'start or pause the pomodoro'],
     ['?', 'this list'],
     [':', 'command line'],
   ]],
   ['Commands', [
     [':done  :drop  :opt', 'change the task under the cursor'],
+    [':note', 'write or edit its note'],
     [':t 90   :t 1h30m', 'set its estimate'],
     [':mv tomorrow  :mv +3  :mv 2026-09-01', 'move it'],
     [':cp <when>', 'copy it to a day'],
+    [':y   :yt', 'yank as text / as markdown'],
     [':pomo', 'start or pause the pomodoro'],
     [':vim  :novim  :q', 'turn this off'],
     [':h  :help', 'this list'],
@@ -74,6 +87,10 @@ export default function VimLayer() {
   const seq = useRef('')
   /** Where the cursor was in the list, so a row leaving does not send it home. */
   const lastIndex = useRef(0)
+  /** Digits typed before a command: the 3 of `3j`, the 2 of `2w`. */
+  const count = useRef('')
+  /** Whether visual mode is selecting text inside one task, or whole tasks. */
+  const grain = useRef('text')
   const {
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,
     pending, setPending, command, setCommand, flash, say,
@@ -86,6 +103,59 @@ export default function VimLayer() {
     if (!el) return false
     el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ...init }))
     return true
+  }
+
+  /**
+   * Visual mode over the text of one task.
+   *
+   * A real DOM Selection rather than a private highlight, so it looks like a
+   * selection, reads as one to the browser, and copies with the usual keys.
+   * `w` walks it forward a word at a time; the count before it says how many.
+   */
+  const textNodesOf = (id) => {
+    const row = rowFor(id)
+    if (!row) return []
+    // Title first, then the note under it: that is the order they read in, and
+    // the order a yank of the pair should produce.
+    return ['.task-title', '.rich-view'].map((sel) => row.querySelector(sel)).filter(Boolean)
+  }
+
+  const selectText = (id, words) => {
+    const [head] = textNodesOf(id)
+    if (!head) return false
+    const sel = window.getSelection()
+    sel.removeAllRanges()
+    const range = document.createRange()
+    range.selectNodeContents(head)
+    sel.addRange(range)
+    if (words > 0) {
+      // Collapse to the start and walk forward, which is what gives `2w` two
+      // words rather than the whole line.
+      sel.collapseToStart()
+      for (let i = 0; i < words; i++) sel.modify?.('extend', 'forward', 'word')
+    }
+    return true
+  }
+
+  const clearText = () => window.getSelection()?.removeAllRanges()
+
+  /** The rows a yank should take, in the order they are drawn. */
+  const yankRows = () => {
+    const a = actions.current || {}
+    if (!a.taskById) return []
+    return selection.map((id) => a.taskById(id)).filter(Boolean)
+  }
+
+  const putInRegister = async (text, what) => {
+    registers.current[register.current] = text
+    register.current = '"'
+    // The clipboard too, or a yank is only useful inside this app.
+    try { await navigator.clipboard?.writeText(text) } catch { /* no permission */ }
+    say(`yanked ${what}`)
+    setMode('normal')
+    setAnchor(null)
+    grain.current = 'text'
+    clearText()
   }
 
   /** Everything a command or a key can ask for, in one place. */
@@ -117,13 +187,24 @@ export default function VimLayer() {
         setMode('insert')
         break
       case 'fold': {
-        const twist = ctrl(id, '.task-twist[aria-expanded="true"]')
-        if (twist) click(twist); else say('nothing to fold')
+        const twist = ctrl(id, '.task-twist[aria-expanded]')
+        if (twist) click(twist); else say('nothing under this to fold')
         break
       }
-      case 'unfold': {
-        const twist = ctrl(id, '.task-twist[aria-expanded="false"]')
-        if (twist) click(twist); else say('nothing to unfold')
+      case 'column': {
+        // Sideways through the three boxes, keeping roughly the same depth
+        // down the column so it feels like moving across a grid.
+        const at = columnOf(id)
+        if (!at) { say('this view has no columns'); return }
+        const step = arg === 'left' ? -1 : 1
+        const here = idsIn(at.cols[at.index]).indexOf(id)
+        for (let i = at.index + step; i >= 0 && i < at.cols.length; i += step) {
+          const there = idsIn(at.cols[i])
+          if (!there.length) continue
+          setCursor(there[Math.min(Math.max(0, here), there.length - 1)])
+          return
+        }
+        say(arg === 'left' ? 'no box to the left' : 'no box to the right')
         break
       }
       case 'estimate': {
@@ -147,14 +228,65 @@ export default function VimLayer() {
         break
       }
       case 'yank': {
-        if (!a.taskById) { say('nothing here to yank from') ; return }
-        const rowsOut = ids.map((t) => a.taskById(t)).filter(Boolean)
-          .map((t) => ({ title: t.title, estimate_min: t.estimate_min, priority: t.priority }))
-        registers.current[register.current] = rowsOut
-        register.current = '"'
-        say(`yanked ${rowsOut.length} ${rowsOut.length === 1 ? 'task' : 'tasks'}`)
-        setMode('normal')
-        setAnchor(null)
+        // Whatever is highlighted inside a task wins: `v` then `w` then `y`
+        // means those words, not the whole row.
+        const picked = String(window.getSelection() || '').trim()
+        if (mode === 'visual' && grain.current === 'text' && picked) {
+          await putInRegister(picked, picked.length === 1 ? '1 character' : `${picked.length} characters`)
+          return
+        }
+        const rowsOut = yankRows()
+        if (!rowsOut.length) { say('nothing here to yank from'); return }
+        await putInRegister(
+          yankText(rowsOut),
+          `${rowsOut.length} ${rowsOut.length === 1 ? 'task' : 'tasks'}`,
+        )
+        break
+      }
+      case 'yankMarkdown': {
+        const rowsOut = yankRows()
+        if (!rowsOut.length) { say('nothing here to yank from'); return }
+        await putInRegister(
+          yankMarkdown(rowsOut, { sectionName: a.sectionName }),
+          `${rowsOut.length} as markdown`,
+        )
+        break
+      }
+      case 'note': {
+        // The notes box, opened from the row's own control so the same state
+        // is used whether it was reached by mouse or by keyboard.
+        const row = rowFor(id)
+        const showing = row?.querySelector('.rich-view, .task-notes textarea')
+        if (!showing) {
+          const toggle = [...(row?.querySelectorAll('button') || [])]
+            .find((b2) => /notes/i.test(b2.getAttribute('title') || ''))
+          if (!toggle) { say('this row has no note to open'); return }
+          click(toggle)
+          await new Promise((r) => setTimeout(r, 60))
+        }
+        const box = rowFor(id)?.querySelector('.rich-view')
+        if (box) { click(box); setMode('insert') } else { say('could not open the note') }
+        break
+      }
+      case 'shift': {
+        // Move the task itself rather than the cursor, which is what J and K
+        // mean once j and k are taken.
+        if (!a.shift) { say('nothing here can reorder a task'); return }
+        await a.shift(id, arg === 'up' ? -1 : 1)
+        break
+      }
+      // Act, then report. canUndo/canRedo are computed from refs when the
+      // provider renders, so a copy lent to this layer goes stale the moment
+      // the stacks change without a render — and gating on it refused a redo
+      // that was perfectly available.
+      case 'undo': {
+        const op = await a.undo?.undo?.()
+        say(op ? `undone: ${op.label || 'last change'}` : 'nothing to undo')
+        break
+      }
+      case 'redo': {
+        const op = await a.undo?.redo?.()
+        say(op ? `redone: ${op.label || 'last change'}` : 'nothing to redo')
         break
       }
       case 'paste': {
@@ -190,6 +322,9 @@ export default function VimLayer() {
     if (verb === 'vim') { toggle(true); say('vim mode on'); return }
     if (['h', 'help'].includes(verb)) { setHelpOpen(true); return }
     if (verb === 'w') { say('nothing to save — every edit is already written'); return }
+    if (verb === 'note') return run('note')
+    if (verb === 'y' || verb === 'yank') return run('yank')
+    if (verb === 'yt') return run('yankMarkdown')
     if (verb === 'done') return run('done')
     if (verb === 'drop') return run('drop')
     if (['opt', 'optional'].includes(verb)) return run('optional')
@@ -222,10 +357,24 @@ export default function VimLayer() {
 
       // While the caret is in a field, the field owns every other key.
       if (typing() || mode === 'insert' || mode === 'command') return
-      // Leave the app's own chords alone: Ctrl-Z, Ctrl-K and the rest.
-      if (e.metaKey || (e.ctrlKey && !['d', 'u'].includes(e.key.toLowerCase()))) return
+      // Leave the app's own chords alone: Ctrl-Z, Ctrl-K and the rest. The three
+      // named here are ours — half a screen down, half a screen up, and redo —
+      // and leaving `r` out of this list is why Ctrl-r never reached its binding.
+      const MINE = ['d', 'u', 'r']
+      if (e.metaKey || (e.ctrlKey && !MINE.includes(e.key.toLowerCase()))) return
 
       const k = e.key
+
+      // A count typed before a command: the 3 of `3j`, the 2 of `2w`. A leading
+      // zero is not a count — vim keeps 0 for "start of line".
+      if (/^[1-9]$/.test(k) || (k === '0' && count.current)) {
+        e.preventDefault(); e.stopPropagation()
+        count.current += k
+        setPending(count.current)
+        return
+      }
+      const N = Math.max(1, Number(count.current) || 1)
+      const takeCount = () => { count.current = ''; }
 
       // --- two-key sequences ------------------------------------------------
       const held = seq.current
@@ -258,6 +407,22 @@ export default function VimLayer() {
         }
         return
       }
+      if (held === 'y') {
+        clear()
+        if (k === 'y') { e.preventDefault(); e.stopPropagation(); run('yank') }
+        else if (k === 't') { e.preventDefault(); e.stopPropagation(); run('yankMarkdown') }
+        return
+      }
+      if (held === 'z') {
+        clear()
+        e.preventDefault(); e.stopPropagation()
+        // za/zo/zc fold, as in vim. The pomodoro gets zp rather than a bare z:
+        // sharing the prefix means neither has to wait to find out which it is.
+        if (['a', 'c', 'o'].includes(k)) run('fold')
+        else if (k === 'p') run('pomodoro')
+        else say(`z${k} is not a fold`)
+        return
+      }
       if (['g', 'd', 'D', '"'].includes(k)) {
         e.preventDefault()
         e.stopPropagation()
@@ -271,18 +436,41 @@ export default function VimLayer() {
       // listens on window in the bubble phase, and preventDefault alone would
       // not stop it. It also stands down while this is on, so this is the belt
       // to that braces.
-      const go = (fn) => { e.preventDefault(); e.stopPropagation(); fn() }
-      if (k === 'j') return go(() => move('down'))
-      if (k === 'k') return go(() => move('up'))
+      const go = (fn) => {
+        e.preventDefault(); e.stopPropagation()
+        takeCount(); setPending('')
+        fn()
+      }
+
+      // Moving between tasks. In visual mode this is also the moment the
+      // selection stops being about the words in one task and becomes about
+      // whole tasks — which is what pressing j in the middle of a title means.
+      const coarsen = () => {
+        if (mode === 'visual' && grain.current === 'text') {
+          // The span starts where the text selection was, so switching grain
+          // keeps the task you were reading as one end of it.
+          grain.current = 'task'
+          clearText()
+          setAnchor(cursor)
+        }
+      }
+      if (k === 'j') return go(() => { coarsen(); move('down', N) })
+      if (k === 'k') return go(() => { coarsen(); move('up', N) })
       if (k === 'G') return go(() => move('last'))
-      if (k === 'h') return go(() => run('fold'))
-      if (k === 'l') return go(() => run('unfold'))
-      if (e.ctrlKey && k.toLowerCase() === 'd') {
-        return go(() => { for (let i = 0; i < 8; i++) move('down') })
+      if (k === 'h') return go(() => run('column', 'left'))
+      if (k === 'l') return go(() => run('column', 'right'))
+      if (k === 'J') return go(() => { coarsen(); run('shift', 'down') })
+      if (k === 'K') return go(() => { coarsen(); run('shift', 'up') })
+      if (k === 'u') return go(() => run('undo'))
+      if (e.ctrlKey && k.toLowerCase() === 'r') return go(() => run('redo'))
+      if (k === 'w') {
+        return go(() => {
+          if (mode !== 'visual' || grain.current !== 'text') { say('w extends a selection — press v first'); return }
+          selectText(cursor, N)
+        })
       }
-      if (e.ctrlKey && k.toLowerCase() === 'u') {
-        return go(() => { for (let i = 0; i < 8; i++) move('up') })
-      }
+      if (e.ctrlKey && k.toLowerCase() === 'd') return go(() => move('down', 8))
+      if (e.ctrlKey && k.toLowerCase() === 'u') return go(() => move('up', 8))
       if (k === ' ' || k === 'x') return go(() => run('done'))
       if (k === 't') return go(() => run('optional'))
       if (k === 'o') return go(() => run('new', 'below'))
@@ -290,16 +478,37 @@ export default function VimLayer() {
       if (k === '>') return go(() => run('move', 'tomorrow'))
       if (k === '<') return go(() => run('move', 'yesterday'))
       if (k === 'i' || k === 'Enter') return go(() => run('edit'))
-      if (k === 'v') {
+      if (k === 'v' || k === 'V') {
         return go(() => {
-          if (mode === 'visual') { setMode('normal'); setAnchor(null) }
-          else { setAnchor(cursor); setMode('visual') }
+          if (mode === 'visual') {
+            setMode('normal'); setAnchor(null); grain.current = 'text'; clearText()
+            return
+          }
+          // v starts inside the task, on its text. V starts on whole tasks,
+          // for when that is what you already know you want.
+          grain.current = k === 'V' ? 'task' : 'text'
+          setAnchor(cursor)
+          setMode('visual')
+          if (grain.current === 'text' && !selectText(cursor, 0)) {
+            grain.current = 'task'
+          }
         })
       }
-      if (k === 'y') return go(() => run('yank'))
+      if (k === 'y') {
+        // yy in normal mode, y on its own in visual — the same two forms vim
+        // uses. yt is the markdown one.
+        if (mode === 'visual') return go(() => run('yank'))
+        e.preventDefault(); e.stopPropagation()
+        seq.current = 'y'; setPending('y')
+        return
+      }
       if (k === 'p') return go(() => run('paste', 'below'))
       if (k === 'P') return go(() => run('paste', 'above'))
-      if (k === 'z') return go(() => run('pomodoro'))
+      if (k === 'z') {
+        e.preventDefault(); e.stopPropagation()
+        seq.current = 'z'; setPending('z')
+        return
+      }
       if (k === '?') return go(() => setHelpOpen(true))
       if (k === ':') {
         return go(() => {

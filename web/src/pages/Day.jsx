@@ -130,7 +130,43 @@ function DayView({ date }) {
   // over `d`, because at this point in the render there may not be any yet.
   useVimActions({
     date,
+    undo,
     taskById: (id) => (day.data?.tasks || []).find((t) => t.id === id),
+    /** Which band a task sits in, for a markdown yank that keeps its shape. */
+    sectionName: (t) => (day.data?.sections || [])
+      .find((sec) => sec.id === (t.section_id ?? null))?.name || null,
+    /** Move the task itself among its siblings — what J and K do. */
+    shift: async (id, by) => {
+      const all = day.data?.tasks || []
+      const me = all.find((t) => t.id === id)
+      if (!me) return
+      const siblings = all
+        .filter((t) => (t.parent_id ?? null) === (me.parent_id ?? null)
+          && (t.section_id ?? null) === (me.section_id ?? null)
+          && t.kind !== 'note')
+        .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
+        .map((t) => t.id)
+      const at = siblings.indexOf(id)
+      const to = at + by
+      if (at < 0 || to < 0 || to >= siblings.length) return
+      siblings.splice(to, 0, ...siblings.splice(at, 1))
+
+      // The order captured here rather than through the drag helpers: those are
+      // built below the early returns, and a handler lent from a render that
+      // returned early would reach for them before they exist.
+      const wasOrder = all
+        .filter((t) => siblings.includes(t.id))
+        .sort((a2, b2) => a2.sort - b2.sort || a2.id - b2.id)
+        .map((t) => t.id)
+      const apply = async () => { await api.post('/tasks/reorder', { ids: siblings }) }
+      await apply()
+      undo?.record?.({
+        label: 'move task',
+        undo: async () => { await api.post('/tasks/reorder', { ids: wasOrder }) },
+        redo: apply,
+      })
+      refresh()
+    },
     patch: (id, body) => patchTask(id, body),
     remove: (id) => removeTask(id),
     reschedule,
