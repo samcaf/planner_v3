@@ -43,7 +43,7 @@ const HELP = [
     ['o / O', 'new task below / above'],
     ['> / <', 'priority up / down'],
     ['] / [', 'move to tomorrow / yesterday'],
-    ['i', 'edit the title'],
+    ['i', 'edit the title — or rename the section'],
     ['u / Ctrl-r', 'undo / redo'],
     ['Escape', 'back to normal mode'],
   ]],
@@ -385,7 +385,7 @@ export default function VimLayer() {
         )
         return
       }
-      if (['undo', 'redo', 'pomodoro', 'section'].includes(what)) { /* fall through */ } else {
+      if (['undo', 'redo', 'pomodoro', 'section', 'edit'].includes(what)) { /* fall through */ } else {
         say('that is a section — j moves into it')
         return
       }
@@ -432,10 +432,20 @@ export default function VimLayer() {
         say(ids.length === 1 ? 'to the backlog' : `${ids.length} to the backlog`)
         break
       }
-      case 'edit':
-        click(ctrl(id, '.task-title'))
+      case 'edit': {
+        // Aim at the element that actually listens. The handler that opens a
+        // title for editing sits on the .rich-line INSIDE .task-title, and a
+        // click dispatched at a parent never reaches a child — so clicking
+        // .task-title, as this used to, did nothing at all. A section keeps
+        // its name in a button of its own; a note row has no title line and
+        // opens its body instead.
+        const el = isSectionKey(id)
+          ? ctrl(id, '.section-name')
+          : (ctrl(id, '.task-title .rich-line') || ctrl(id, '.rich-view'))
+        if (!click(el)) break
         setMode('insert')
         break
+      }
       case 'fold': {
         // A sub-section heading has no twist of its own — the band it heads
         // carries one, because the band is what draws the children.
@@ -693,15 +703,31 @@ export default function VimLayer() {
       if (e.key === 'Escape') {
         if (helpOpen) { setHelpOpen(false); return }
         if (mode === 'command' || mode === 'search') { setCommand(''); setMode('normal'); return }
-        if (typing()) { document.activeElement.blur(); setMode('normal'); return }
+        if (typing()) {
+          // Vim's contract: Escape leaves insert mode KEEPING what was typed,
+          // and blurring the field is what commits it. A field's own Escape
+          // means "cancel this edit" — the mouse convention — and the two
+          // fight over one keystroke, with the winner decided by listener
+          // order. Stop the event here so the vim reading is the one that
+          // happens, on purpose rather than by luck.
+          e.stopPropagation()
+          document.activeElement.blur()
+          setMode('normal')
+          return
+        }
         setMode('normal'); setAnchor(null); seq.current = ''; setPending('')
         lastSearch.current = ''
         window.CSS?.highlights?.delete('vim-find')
         return
       }
 
+      // A field can close without Escape — Enter commits a title and the row
+      // re-renders without the input. The mode has to follow it out, or every
+      // key from then on is swallowed by an insert mode with nothing to insert
+      // into, which reads as the whole mode having stopped working.
+      if (mode === 'insert' && !typing()) setMode('normal')
       // While the caret is in a field, the field owns every other key.
-      if (typing() || mode === 'insert' || mode === 'command' || mode === 'search') return
+      else if (typing() || mode === 'insert' || mode === 'command' || mode === 'search') return
       // Leave the app's own chords alone: Ctrl-Z, Ctrl-K and the rest. The three
       // named here are ours — half a screen down, half a screen up, and redo —
       // and leaving `r` out of this list is why Ctrl-r never reached its binding.
