@@ -37,7 +37,8 @@ const HELP = [
     ['Enter or x', 'done / not done'],
     ['t', 'optional / committed'],
     ['dd', 'drop'],
-    ['DD', 'delete (undoable)'],
+    ['DD', 'cut — deletes it, and p puts it back'],
+    ['bb', 'send it to the backlog'],
     ['Alt-j / Alt-k', 'move the task itself down / up'],
     ['o / O', 'new task below / above'],
     ['> / <', 'priority up / down'],
@@ -56,7 +57,7 @@ const HELP = [
     ['yy or y', 'the text: title, then its note'],
     ['yy on a section', 'everything in it'],
     ['yt', 'as markdown, with its section and metadata'],
-    ['p / P', 'paste below / above the cursor'],
+    ['p / P', 'paste the tasks below / above the cursor'],
     ['"a', 'use register a for the next yank or paste'],
   ]],
   ['Finding', [
@@ -72,6 +73,7 @@ const HELP = [
   ['Commands', [
     [':done  :drop  :opt', 'change the task under the cursor'],
     [':note', 'write or edit its note'],
+    [':bl', 'send it to the backlog'],
     [':t 90   :t 1h30m', 'set its estimate'],
     [':mv tomorrow  :mv +3  :mv 2026-09-01', 'move it'],
     [':pri high', 'set its priority outright'],
@@ -204,17 +206,35 @@ export default function VimLayer() {
     return out
   }
 
-  const putInRegister = async (text, what) => {
-    registers.current[register.current] = text
+  /**
+   * A register holds BOTH what was taken and what it was taken from.
+   *
+   * `text` is what goes to the clipboard and is what you want outside this app.
+   * `rows` is what `p` rebuilds, and it has to be the tasks themselves — with
+   * the register holding only text, paste iterated the string and made one task
+   * per character. Storing the pair is what lets one yank serve both.
+   */
+  const putInRegister = async (text, rows, what) => {
+    registers.current[register.current] = { text, rows: rows || [] }
     register.current = '"'
     // The clipboard too, or a yank is only useful inside this app.
     try { await navigator.clipboard?.writeText(text) } catch { /* no permission */ }
-    say(`yanked ${what}`)
+    if (what) say(`yanked ${what}`)
     setMode('normal')
     setAnchor(null)
     grain.current = 'text'
     clearText()
   }
+
+  /** What a task carries when it is copied: enough to rebuild it, not its id. */
+  const asRow = (t) => ({
+    title: t.title,
+    notes: t.notes,
+    estimate_min: t.estimate_min,
+    priority: t.priority,
+    intensity: t.intensity,
+    optional: t.optional,
+  })
 
   /**
    * Rows on this page whose text contains `q`.
@@ -272,6 +292,31 @@ export default function VimLayer() {
     return [...el.querySelectorAll('.task[data-task-id]')]
       .map((r) => a.taskById(Number(r.dataset.taskId)))
       .filter(Boolean)
+  }
+
+  /**
+   * Where the cursor should land when a row is about to leave.
+   *
+   * The row above it, staying inside the same box — walking into the box
+   * beside it would be as wrong here as it is for j. Failing that the section
+   * it was in, which is still on the page and is the nearest thing left.
+   */
+  const stopAbove = (key) => {
+    const el = rowFor(key)
+    if (!el) return null
+    const col = el.closest('.box-col')
+    if (col) {
+      const inCol = idsIn(col)
+      const at = inCol.indexOf(key)
+      if (at > 0) return inCol[at - 1]
+    } else {
+      const all = [...document.querySelectorAll('.task[data-task-id]')]
+        .map((r) => Number(r.dataset.taskId))
+      const at = all.indexOf(key)
+      if (at > 0) return all[at - 1]
+    }
+    const sec = el.closest('.panel.section[data-section-id]')
+    return sec ? `s${sec.dataset.sectionId}` : null
   }
 
   const sectionEl = (key) => (isSectionKey(key)
@@ -354,10 +399,34 @@ export default function VimLayer() {
       case 'drop':
         for (const t of ids) click(ctrl(t, '.task-check'), { shiftKey: true })
         break
-      case 'delete':
+      case 'delete': {
         if (!a.remove) { say('nothing here can delete a task'); return }
+
+        // Cut, not just delete — the same as dd in vim, so p puts it back or
+        // puts it somewhere else. The rows are taken before they are gone,
+        // because afterwards there is nothing to read them from.
+        const taken = ids.map((t) => a.taskById?.(t)).filter(Boolean)
+        if (taken.length) await putInRegister(yankText(taken), taken.map(asRow), null)
+
+        // Where to stand afterwards: the row above, and failing that the
+        // section it was in. Worked out AND moved to before the row goes —
+        // set afterwards, the cursor is briefly pointing at something that no
+        // longer exists, and the recovery that catches that fires first and
+        // puts it on the section instead.
+        const landing = stopAbove(ids[0])
+        if (landing != null) setCursor(landing)
         for (const t of ids) await a.remove(t)
+        say(taken.length === 1 ? 'cut 1 task' : `cut ${taken.length} tasks`)
         break
+      }
+      case 'backlog': {
+        if (!a.backlog) { say('nothing here can send a task to the backlog'); return }
+        const landing = stopAbove(ids[0])
+        if (landing != null) setCursor(landing)
+        for (const t of ids) await a.backlog(t)
+        say(ids.length === 1 ? 'to the backlog' : `${ids.length} to the backlog`)
+        break
+      }
       case 'edit':
         click(ctrl(id, '.task-title'))
         setMode('insert')
@@ -460,13 +529,14 @@ export default function VimLayer() {
         // means those words, not the whole row.
         const picked = String(window.getSelection() || '').trim()
         if (mode === 'visual' && grain.current === 'text' && picked) {
-          await putInRegister(picked, picked.length === 1 ? '1 character' : `${picked.length} characters`)
+          await putInRegister(picked, [], picked.length === 1 ? '1 character' : `${picked.length} characters`)
           return
         }
         const rowsOut = yankRows()
         if (!rowsOut.length) { say('nothing here to yank from'); return }
         await putInRegister(
           yankText(rowsOut),
+          rowsOut.map(asRow),
           `${rowsOut.length} ${rowsOut.length === 1 ? 'task' : 'tasks'}`,
         )
         break
@@ -476,6 +546,7 @@ export default function VimLayer() {
         if (!rowsOut.length) { say('nothing here to yank from'); return }
         await putInRegister(
           yankMarkdown(rowsOut, { sectionName: a.sectionName }),
+          rowsOut.map(asRow),
           `${rowsOut.length} as markdown`,
         )
         break
@@ -537,12 +608,24 @@ export default function VimLayer() {
         break
       }
       case 'paste': {
-        const held = registers.current[register.current] || []
+        const held = registers.current[register.current]
         register.current = '"'
-        if (!held.length) { say('register is empty'); return }
+        if (!held) { say('register is empty'); return }
         if (!a.addNear) { say('nothing here can add a task'); return }
-        for (const row of held) await a.addNear(id, row, arg === 'above' ? 'above' : 'below')
-        say(`pasted ${held.length}`)
+
+        // Whole tasks where the yank took whole tasks; otherwise one task
+        // named by whatever text was taken, which is what pasting a phrase
+        // into a list should mean.
+        const rows = held.rows?.length
+          ? held.rows
+          : (held.text ? [{ title: held.text.split('\n')[0] }] : [])
+        if (!rows.length) { say('register is empty'); return }
+        // In order, so a run pasted below the cursor keeps the order it was
+        // taken in rather than arriving upside down.
+        for (const row of (arg === 'above' ? rows : [...rows].reverse())) {
+          await a.addNear(id, row, arg === 'above' ? 'above' : 'below')
+        }
+        say(`pasted ${rows.length} ${rows.length === 1 ? 'task' : 'tasks'}`)
         break
       }
       case 'new': {
@@ -578,6 +661,7 @@ export default function VimLayer() {
       say(`priority ${want}`)
       return
     }
+    if (verb === 'bl' || verb === 'backlog') return run('backlog')
     if (verb === 'note') return run('note')
     if (verb === 'y' || verb === 'yank') return run('yank')
     if (verb === 'yt') return run('yankMarkdown')
@@ -670,6 +754,11 @@ export default function VimLayer() {
         }
         return
       }
+      if (held === 'b') {
+        clear()
+        if (k === 'b') { e.preventDefault(); e.stopPropagation(); run('backlog') }
+        return
+      }
       if (held === 'y') {
         clear()
         if (k === 'y') { e.preventDefault(); e.stopPropagation(); run('yank') }
@@ -686,7 +775,7 @@ export default function VimLayer() {
         else say(`z${k} is not a fold`)
         return
       }
-      if (['g', 'd', 'D', '"'].includes(k)) {
+      if (['g', 'd', 'D', 'b', '"'].includes(k)) {
         e.preventDefault()
         e.stopPropagation()
         seq.current = k

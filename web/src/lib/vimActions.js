@@ -59,6 +59,28 @@ export function makeVimActions({
       || t.project_name
       || null,
 
+    /**
+     * Off the calendar and into the backlog.
+     *
+     * Through /backlog rather than a date patch: the row leaves carrying copies
+     * of the parents it hung from, and only the server can build that path.
+     */
+    backlog: async (id) => {
+      const before = byId(id)
+      await api.post(`/tasks/${id}/backlog`, {})
+      undo?.record?.({
+        label: 'send to backlog',
+        undo: async () => {
+          await api.patch(`/tasks/${id}`, {
+            scheduled_date: before?.scheduled_date ?? null,
+            section_id: before?.section_id ?? null,
+          })
+        },
+        redo: async () => { await api.post(`/tasks/${id}/backlog`, {}) },
+      })
+      refresh?.()
+    },
+
     /** Move the task itself among its siblings — what Alt-j and Alt-k do. */
     shift: async (id, by) => {
       const me = byId(id)
@@ -85,6 +107,11 @@ export function makeVimActions({
       const near = byId(nearId)
       const created = await api.post('/tasks', {
         title: row.title || 'New task',
+        // Everything a copy should carry. Without the note a pasted task is
+        // the heading of the thing rather than the thing.
+        notes: row.notes || '',
+        ...(row.intensity ? { intensity: row.intensity } : {}),
+        ...(row.optional ? { optional: row.optional } : {}),
         // A page with no day of its own makes a dateless task, which is the
         // backlog — not a task quietly filed on today.
         ...(date ? { scheduled_date: date } : {}),
