@@ -23,7 +23,7 @@ const HELP = [
   ['Moving', [
     ['j / k', 'next / previous task, or section (3j for three)'],
     ['h / l', 'the box to the left / right'],
-    ['J / K', 'the next / previous section'],
+    ['J / K', 'select the next / previous section'],
     ['Space', 'fold / unfold — a task’s children, or a whole section'],
     ['Ctrl-Space', 'fold / unfold the section you are in'],
     ['gg / G', 'first / last task'],
@@ -39,7 +39,7 @@ const HELP = [
     ['dd', 'drop'],
     ['DD', 'cut — deletes it, and p puts it back'],
     ['bb', 'send it to the backlog'],
-    ['Alt-j / Alt-k', 'move the task itself down / up'],
+    ['Alt-j / Alt-k', 'move the task — or the section — itself down / up'],
     ['o / O', 'new task below / above'],
     ['> / <', 'priority up / down'],
     ['] / [', 'move to tomorrow / yesterday'],
@@ -361,6 +361,11 @@ export default function VimLayer() {
     // rather than silently doing nothing — except the handful that mean
     // something for a section too, which are handled below.
     if (isSectionKey(id)) {
+      if (what === 'shift') {
+        if (!a.shiftSection) { say('sections cannot be reordered here'); return }
+        await a.shiftSection(sectionIdOf(id), arg === 'up' ? -1 : 1)
+        return
+      }
       if (what === 'fold' || what === 'foldSection') {
         const el = rowFor(id)
         if (peeked.current?.id === sectionIdOf(id)) peeked.current = null
@@ -458,14 +463,12 @@ export default function VimLayer() {
           await new Promise((r) => setTimeout(r, 120))
           peeked.current = { id: target.dataset.sectionId, dirty: false }
         }
-        const fresh = document.querySelector(`.panel.section[data-section-id="${target.dataset.sectionId}"]`)
-        const first = fresh?.querySelector('.task[data-task-id]')
-        if (first) {
-          unpeek(Number(first.dataset.taskId))
-          setCursor(Number(first.dataset.taskId))
-        } else {
-          say('that section is empty')
-        }
+        // The section itself, not the first thing in it: J and K move BETWEEN
+        // sections, and landing a row inside one made the pair read as "into
+        // the next section" rather than "to it". j goes in from here.
+        const key = `s${target.dataset.sectionId}`
+        unpeek(key)
+        setCursor(key)
         break
       }
       case 'foldSection': {

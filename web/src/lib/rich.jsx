@@ -873,6 +873,22 @@ export function RichLine({
   // someone who has moved on.
   const [editing, setEditing] = useState(autoEdit)
   const [draft, setDraft] = useState(value || '')
+  const field = useRef(null)
+
+  // Focus and select once the field is really in the document, rather than
+  // leaving it to autoFocus and onFocus. A row that opens because it was just
+  // created — pasted, or added with o — mounts as its list is still settling,
+  // and the focus event arrived before the value did: the field ended up
+  // focused with the caret at the end and nothing selected, so typing appended
+  // to the title instead of replacing it. A layout effect runs after the DOM
+  // has the final value, which is the only moment selecting it means anything.
+  useLayoutEffect(() => {
+    if (!editing) return
+    const el = field.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [editing])
 
   function commit() {
     setEditing(false)
@@ -883,16 +899,17 @@ export function RichLine({
   if (editing) {
     return (
       <input
+        ref={field}
         className={`rich-line-input ${className}`}
-        autoFocus
         value={draft}
         placeholder={placeholder}
-        // Opening the field selects the whole title, so renaming is click-and-
-        // type with nothing to clear first. There is deliberately no handler on
-        // the second click: once the field has focus, the browser's own caret
-        // placement is what you want, and re-selecting everything made the text
-        // impossible to edit in the middle.
-        onFocus={(e) => { onEditing?.(true); e.target.select() }}
+        // The whole title is selected when the field opens, so renaming is
+        // click-and-type with nothing to clear first — done in the effect
+        // above. There is deliberately nothing on a second click: once the
+        // field has focus the browser's own caret placement is what you want,
+        // and re-selecting everything made the text impossible to edit in the
+        // middle.
+        onFocus={() => onEditing?.(true)}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {

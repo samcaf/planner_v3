@@ -23,6 +23,8 @@ export function makeVimActions({
   remove,
   reschedule,
   onAdded,
+  /** Only a day has sections to reorder, so only a day passes this. */
+  shiftSection,
 }) {
   const byId = (id) => tasks.find((t) => t.id === id)
 
@@ -53,6 +55,7 @@ export function makeVimActions({
     patch,
     remove,
     reschedule,
+    shiftSection,
 
     /** Which band a task sits in, for a markdown yank that keeps its shape. */
     sectionName: (t) => sections.find((s) => s.id === (t.section_id ?? null))?.name

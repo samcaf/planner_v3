@@ -140,6 +140,23 @@ function DayView({ date }) {
     date,
     undo,
     refresh,
+    /** Move a whole section up or down the day — Alt-j and Alt-k on one. */
+    shiftSection: async (sectionId, by) => {
+      const order = (day.data?.sections || []).map((sec) => sec.id)
+      const at = order.indexOf(Number(sectionId))
+      const to = at + by
+      if (at < 0 || to < 0 || to >= order.length) return
+      const wasOrder = [...order]
+      order.splice(to, 0, ...order.splice(at, 1))
+      const apply = async () => { await api.post('/sections/reorder', { ids: order }) }
+      await apply()
+      undo?.record?.({
+        label: 'move section',
+        undo: async () => { await api.post('/sections/reorder', { ids: wasOrder }) },
+        redo: apply,
+      })
+      refresh()
+    },
     patch: (id, body) => patchTask(id, body),
     remove: (id) => removeTask(id),
     reschedule,
