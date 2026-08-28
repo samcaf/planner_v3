@@ -5,6 +5,7 @@ import {
   keyOf, isSectionKey, sectionIdOf,
 } from '../lib/vim.jsx'
 import { GO_TO, GO_DATED, anchorOf } from '../lib/nav.js'
+import { PRIORITIES } from './Priority.jsx'
 import { today as todayIso } from '../lib/dates.js'
 import Icon from './Icon.jsx'
 import '../styles/vim.css'
@@ -39,7 +40,8 @@ const HELP = [
     ['DD', 'delete (undoable)'],
     ['Alt-j / Alt-k', 'move the task itself down / up'],
     ['o / O', 'new task below / above'],
-    ['> / <', 'move to tomorrow / yesterday'],
+    ['> / <', 'priority up / down'],
+    ['] / [', 'move to tomorrow / yesterday'],
     ['i', 'edit the title'],
     ['u / Ctrl-r', 'undo / redo'],
     ['Escape', 'back to normal mode'],
@@ -72,6 +74,7 @@ const HELP = [
     [':note', 'write or edit its note'],
     [':t 90   :t 1h30m', 'set its estimate'],
     [':mv tomorrow  :mv +3  :mv 2026-09-01', 'move it'],
+    [':pri high', 'set its priority outright'],
     [':cp <when>', 'copy it to a day'],
     [':y   :yt', 'yank as text / as markdown'],
     [':pomo', 'start or pause the pomodoro'],
@@ -493,6 +496,25 @@ export default function VimLayer() {
         if (box) { click(box); setMode('insert') } else { say('could not open the note') }
         break
       }
+      case 'priority': {
+        if (!a.patch) { say('nothing here can set a priority'); return }
+        // PRIORITIES runs lowest to highest, so `up` is simply forward through
+        // it — and the step is clamped rather than wrapping, because rolling
+        // from highest round to lowest is never what a keypress meant.
+        for (const t of ids) {
+          const task = a.taskById?.(t)
+          const at = PRIORITIES.indexOf(task?.priority || 'medium')
+          const want = Math.max(0, Math.min(PRIORITIES.length - 1,
+            (at < 0 ? PRIORITIES.indexOf('medium') : at) + (arg === 'up' ? 1 : -1)))
+          if (PRIORITIES[want] !== task?.priority) await a.patch(t, { priority: PRIORITIES[want] })
+        }
+        const now = a.taskById?.(ids[0])
+        say(ids.length === 1 ? `priority ${PRIORITIES[Math.max(0, Math.min(
+          PRIORITIES.length - 1,
+          PRIORITIES.indexOf(now?.priority || 'medium') + (arg === 'up' ? 1 : -1),
+        ))]}` : `${ids.length} tasks`)
+        break
+      }
       case 'shift': {
         // Move the task itself rather than the cursor, which is what J and K
         // mean once j and k are taken.
@@ -547,6 +569,15 @@ export default function VimLayer() {
     if (verb === 'vim') { toggle(true); say('vim mode on'); return }
     if (['h', 'help'].includes(verb)) { setHelpOpen(true); return }
     if (verb === 'w') { say('nothing to save — every edit is already written'); return }
+    if (verb === 'pri' || verb === 'priority') {
+      const want = arg.trim().toLowerCase()
+      if (!PRIORITIES.includes(want)) { say(`priority is one of ${PRIORITIES.join(', ')}`); return }
+      const a2 = actions.current || {}
+      if (!a2.patch) { say('nothing here can set a priority'); return }
+      for (const t of selection) await a2.patch(t, { priority: want })
+      say(`priority ${want}`)
+      return
+    }
     if (verb === 'note') return run('note')
     if (verb === 'y' || verb === 'yank') return run('yank')
     if (verb === 'yt') return run('yankMarkdown')
@@ -746,8 +777,12 @@ export default function VimLayer() {
       if (k === 't') return go(() => run('optional'))
       if (k === 'o') return go(() => run('new', 'below'))
       if (k === 'O') return go(() => run('new', 'above'))
-      if (k === '>') return go(() => run('move', 'tomorrow'))
-      if (k === '<') return go(() => run('move', 'yesterday'))
+      // > and < step the priority, the way they step an indent in vim.
+      if (k === '>') return go(() => run('priority', 'up'))
+      if (k === '<') return go(() => run('priority', 'down'))
+      // Moving a day either way took those keys; the brackets have it now.
+      if (k === ']') return go(() => run('move', 'tomorrow'))
+      if (k === '[') return go(() => run('move', 'yesterday'))
       if (k === 'i') return go(() => run('edit'))
       if (k === 'v' || k === 'V') {
         return go(() => {

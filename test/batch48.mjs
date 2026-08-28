@@ -93,6 +93,29 @@ try {
     onSection() === String(one.id) || onTask() === null,
     `section=${onSection()} task=${onTask()}`)
 
+  // ── > and < step the priority ---------------------------------------------
+  const pri = async () => (await json(`/api/tasks/${q1.id}`)).priority
+  check('back on a quick task for the priority', await walkTo(q1.id), `${onTask()}`)
+  check('it starts at medium', (await pri()) === 'medium', await pri())
+  key('>'); await wait(1000)
+  check('> raises the priority', (await pri()) === 'high', await pri())
+  key('>'); await wait(1000)
+  check('and again to the top', (await pri()) === 'highest', await pri())
+  key('>'); await wait(900)
+  check('but never past it', (await pri()) === 'highest', await pri())
+
+  key('<'); await wait(1000)
+  check('< lowers it again', (await pri()) === 'high', await pri())
+  for (let i = 0; i < 4; i++) { key('<'); await wait(700) }
+  check('down to the bottom and no further', (await pri()) === 'lowest', await pri())
+
+  // ── the brackets took the day-shifting -------------------------------------
+  check('still on it', await walkTo(q1.id), `${onTask()}`)
+  key(']'); await wait(1400)
+  check('] moves the task to the next day',
+    (await json(`/api/tasks/${q1.id}`)).scheduled_date === '2031-02-03',
+    (await json(`/api/tasks/${q1.id}`)).scheduled_date)
+
   check('no key threw', errors.length === 0, errors.slice(0, 2).join(' | '))
   void later
 } catch (e) {
@@ -104,9 +127,11 @@ try {
     if (!ok) bad++
   }
   console.log(bad ? `\n${bad} failed` : '\nall checks passed')
-  const day = await json(`/api/days/${D}`).catch(() => ({ tasks: [], sections: [] }))
-  for (const t of day.tasks) await del(`/api/tasks/${t.id}`)
-  for (const s of day.sections) await del(`/api/sections/${s.id}`)
+  for (const when of [D, '2031-02-03']) {
+    const day = await json(`/api/days/${when}`).catch(() => ({ tasks: [], sections: [] }))
+    for (const t of day.tasks) await del(`/api/tasks/${t.id}`)
+    for (const s of day.sections) await del(`/api/sections/${s.id}`)
+  }
   console.log('cleanup: probe day cleared')
   for (const d of doms) { try { d.window.close() } catch {} }
   // Non-zero so the runner, and CI, can tell a red suite from a green one.
