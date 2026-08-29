@@ -167,3 +167,10 @@ body:has(.vim-bar) .main { padding-bottom: 30px; }
 /* A sub-section heading stands for its band, so the band lights with it: that
    is what a yank from there would take. */
 .subsec.vim-on-band { background: var(--accent-soft); border-radius: var(--radius-sm); }
+
+/* A card is a whole panel you can open — a project, say. Outlined rather than
+   barred, for the same reason a section is: what is under the cursor is the
+   whole thing, not a line in it. */
+.vim-on-card {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-pop);
+}

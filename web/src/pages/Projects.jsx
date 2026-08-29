@@ -165,6 +165,10 @@ export default function Projects() {
                     dropAt?.id === p.id ? `pj-drop-${dropAt.side}` : '',
                   ].filter(Boolean).join(' ')}
                   draggable
+                  // Where this card goes, said once: it is what shift-click
+                  // opens in a new tab, what Enter opens in vim mode, and what
+                  // makes the card a place the cursor can stop at all.
+                  data-open={`/projects/${p.id}`}
                   onClick={() => navigate(`/projects/${p.id}`)}
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/project-id', String(p.id))

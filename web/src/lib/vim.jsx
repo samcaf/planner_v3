@@ -49,23 +49,60 @@ const MODES = { normal: 'NORMAL', insert: 'INSERT', visual: 'VISUAL', command: '
  * share one cursor: `12` is a task, `'s12'` a section. Keys are compared with
  * `===` throughout, so the two can never be mistaken for one another.
  */
-const STOPS = '.panel.section[data-section-id], .task[data-task-id]'
+const STOPS = '.panel.section[data-section-id], .task[data-task-id], [data-open]'
 
 const stopEls = () => [...document.querySelectorAll(STOPS)]
 
-export const keyOf = (el) => (el?.dataset?.sectionId
-  ? `s${el.dataset.sectionId}`
-  : Number(el?.dataset?.taskId))
+export const keyOf = (el) => {
+  if (el?.dataset?.sectionId) return `s${el.dataset.sectionId}`
+  // A card is keyed by where it goes. That is already unique on the page, and
+  // it starts with a slash, so it can never be read as a section key or a task
+  // id no matter what else is on screen.
+  if (el?.dataset?.open) return el.dataset.open
+  return Number(el?.dataset?.taskId)
+}
 
 export const isSectionKey = (key) => typeof key === 'string' && key.startsWith('s')
 export const sectionIdOf = (key) => (isSectionKey(key) ? key.slice(1) : null)
+export const isCardKey = (key) => typeof key === 'string' && key.startsWith('/')
 
 const idsOnScreen = () => stopEls().map(keyOf)
 
 /** The element a key points at, whichever kind it is. */
-const rowFor = (key) => (isSectionKey(key)
-  ? document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
-  : document.querySelector(`.task[data-task-id="${key}"]`))
+const rowFor = (key) => {
+  if (isSectionKey(key)) {
+    return document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
+  }
+  // Matched by scanning rather than by an attribute selector: the key is a
+  // path, and building a selector out of it would need escaping — CSS.escape
+  // is not everywhere, and these lists are a dozen cards long.
+  if (isCardKey(key)) {
+    return [...document.querySelectorAll('[data-open]')].find((el) => el.dataset.open === key) || null
+  }
+  return document.querySelector(`.task[data-task-id="${key}"]`)
+}
+
+/**
+ * How many cards sit side by side in one row of a card grid.
+ *
+ * Read off the page, because the grid is `auto-fill` and the answer changes
+ * with the window. Cards on the same row share a top edge; counting them gives
+ * j and k a stride, so they move down a row rather than one card along.
+ *
+ * Falls back to one — a single column — when the page has not been laid out,
+ * which is also what makes this behave sensibly under a test runner that does
+ * no layout at all.
+ */
+export function cardsAcross(els) {
+  const rects = els.map((el) => el.getBoundingClientRect())
+  // Nothing has been laid out — every box is zero. Then every card shares a
+  // top edge and they would all read as one enormous row, so say one column
+  // instead, which is what an unlaid page most resembles.
+  if (!rects.some((r) => r.width > 0)) return 1
+  const first = Math.round(rects[0].top)
+  const n = rects.filter((r) => Math.round(r.top) === first).length
+  return n > 1 ? n : 1
+}
 
 /**
  * Which of a section's three boxes a row is drawn in, and where among them.
@@ -268,11 +305,21 @@ export function VimProvider({ children }) {
     else if (typeof to === 'number') next = Math.max(0, Math.min(ids.length - 1, to))
     else if (at < 0) next = 0
     else {
-      const dir = to === 'down' ? 1 : -1
+      const dir = to === 'down' || to === 'right' ? 1 : -1
       const col = els[at]?.closest?.('.box-col')
       const grid = col?.parentElement
 
-      if (col && grid) {
+      // A grid of cards is not a list. j and k step down and up a row, which
+      // is a whole row's worth of cards along in document order; h and l, one
+      // card, and those come through as a count of one either way.
+      if (isCardKey(ids[at])) {
+        const cards = els.filter((el) => el.dataset?.open)
+        const here = cards.indexOf(els[at])
+        const stride = to === 'down' || to === 'up' ? cardsAcross(cards) : 1
+        const want = here + dir * stride * steps
+        const landed = cards[Math.max(0, Math.min(cards.length - 1, want))]
+        next = ids.indexOf(keyOf(landed))
+      } else if (col && grid) {
         const inCol = idsIn(col)
         const i = inCol.indexOf(cursor)
         const want = i + dir * steps

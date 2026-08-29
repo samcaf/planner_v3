@@ -108,3 +108,8 @@
 .st-vim-toggle { display: flex; gap: var(--space-4); align-items: flex-start; cursor: pointer; }
 .st-vim-toggle input { margin-top: 3px; }
 .st-vim-toggle .st-hint { display: block; margin-top: 2px; }
+
+/* Adding a page name: the word, the address, the button. */
+.st-name-add { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
+.st-name-add .input:first-child { max-width: 160px; }
+.st-name-add .input { flex: 1; min-width: 0; }

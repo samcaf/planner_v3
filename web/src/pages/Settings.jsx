@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Empty, Field, Panel } from '../components/ui.jsx'
 import { HELP } from '../components/VimLayer.jsx'
@@ -26,7 +27,7 @@ const ACCENTS = [
 
 // Settings edited by a control above; the raw dump would only repeat them.
 const HANDLED = [
-  'deep_capacity_min', 'column_labels',
+  'deep_capacity_min', 'column_labels', 'page_names',
   'pomodoro_work', 'pomodoro_short', 'pomodoro_long', 'pomodoro_before_long',
 ]
 
@@ -189,6 +190,8 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
             </div>
           </Panel>
 
+          <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />
+
           <Keys />
 
           <button className="btn ghost sm st-raw-toggle" onClick={() => setShowRaw(!showRaw)}>
@@ -212,6 +215,81 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Nicknames for pages.
+ *
+ * The same list `:goto` reads. Editable here because a name you set months ago
+ * from the command line is otherwise something you can only discover by
+ * guessing it, and a nickname you cannot remember is no use at all.
+ */
+function PageNames({ names, onSave }) {
+  const [name, setName] = useState('')
+  const [path, setPath] = useState('')
+
+  const list = (() => {
+    try {
+      const parsed = JSON.parse(names || '{}')
+      return parsed && typeof parsed === 'object' ? Object.entries(parsed) : []
+    } catch { return [] }
+  })()
+
+  const write = (pairs) => onSave(JSON.stringify(Object.fromEntries(pairs)))
+
+  function add() {
+    const n = name.trim().toLowerCase()
+    let p = path.trim()
+    if (!n || !p) return
+    if (!p.startsWith('/')) p = `/${p}`
+    write([...list.filter(([k]) => k !== n), [n, p]])
+    setName('')
+    setPath('')
+  }
+
+  return (
+    <Panel title="Page names">
+      <p className="st-hint">
+        A word for a page you keep coming back to. In vim mode, <code>:goto thesis</code> goes
+        there, and <code>:namepage thesis</code> names whatever page you are on.
+      </p>
+      {list.length === 0 && <Empty>No pages have names yet.</Empty>}
+      {list.map(([n, p]) => (
+        <div key={n} className="kv st-raw-row">
+          <dt><code>{n}</code></dt>
+          <dd className="muted st-raw-val">
+            <Link to={p}>{p}</Link>
+            <button
+              className="btn ghost sm danger"
+              aria-label={`Forget ${n}`}
+              onClick={() => write(list.filter(([k]) => k !== n))}
+            >
+              <Icon name="trash" size={12} />
+            </button>
+          </dd>
+        </div>
+      ))}
+      <div className="row st-name-add">
+        <input
+          className="input"
+          placeholder="thesis"
+          aria-label="Page name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+        />
+        <input
+          className="input"
+          placeholder="/projects/17"
+          aria-label="Page address"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+        />
+        <button className="btn" onClick={add} disabled={!name.trim() || !path.trim()}>Add</button>
+      </div>
+    </Panel>
   )
 }
 

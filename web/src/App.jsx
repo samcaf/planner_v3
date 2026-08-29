@@ -9,6 +9,7 @@ import { Modal } from './components/ui.jsx'
 import { ToastHost } from './components/Toast.jsx'
 import { UndoButtons, UndoProvider } from './lib/undo.jsx'
 import { refreshAll } from './lib/api.js'
+import { installShiftOpen } from './lib/openIn.js'
 import { addDays, addMonths, today } from './lib/dates.js'
 import Day from './pages/Day.jsx'
 import Week from './pages/Week.jsx'
@@ -90,6 +91,11 @@ export default function App() {
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
   }, [theme])
+
+  // Shift-click means "open in a new tab", for links and for cards alike.
+  // Installed once, at the root, because it is a property of the whole app
+  // rather than of any page.
+  useEffect(installShiftOpen, [])
 
   return (
     <UndoProvider onChange={refreshAll}>

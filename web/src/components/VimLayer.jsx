@@ -2,9 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useVim, parseDuration, parseWhen, yankText, yankMarkdown, columnOf, idsIn,
+  isCardKey,
   keyOf, isSectionKey, sectionIdOf,
 } from '../lib/vim.jsx'
 import { GO_TO, GO_DATED, anchorOf } from '../lib/nav.js'
+import { openTab } from '../lib/openIn.js'
+import { loadNames, saveNames, namesFor, normalise } from '../lib/pageNames.js'
 import { PRIORITIES } from './Priority.jsx'
 import { today as todayIso } from '../lib/dates.js'
 import Icon from './Icon.jsx'
@@ -65,6 +68,12 @@ const HELP = [
     ['n / N', 'the next / previous match'],
     ['Ctrl-/', 'search everything, not just this page'],
   ]],
+  ['Cards', [
+    ['hjkl', 'across a grid of cards — projects, say'],
+    ['Enter', 'open the one under the cursor'],
+    ['Shift-Enter', 'open it in a new tab'],
+    ['Shift-click', 'open anything in a new tab, mode or no mode'],
+  ]],
   ['Elsewhere', [
     ['zp', 'start or pause the pomodoro'],
     ['?', 'this list'],
@@ -80,6 +89,9 @@ const HELP = [
     [':cp <when>', 'copy it to a day'],
     [':y   :yt', 'yank as text / as markdown'],
     [':pomo', 'start or pause the pomodoro'],
+    [':namepage foo', 'nickname this page — bare, it says its name'],
+    [':goto foo', 'go to a page you have nicknamed'],
+    [':unname foo', 'forget a nickname'],
     [':vim  :novim  :q', 'turn this off'],
     [':h  :help', 'this list'],
   ]],
@@ -139,9 +151,18 @@ export default function VimLayer() {
     actions, registers, register, helpOpen, setHelpOpen, setAnchor,
   } = vim
 
-  const rowFor = (key) => (isSectionKey(key)
-    ? document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
-    : document.querySelector(`.task[data-task-id="${key}"]`))
+  const rowFor = (key) => {
+    if (isSectionKey(key)) {
+      return document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
+    }
+    // Matched by scanning rather than by an attribute selector: the key is a
+    // path, and building a selector out of it would need escaping — CSS.escape
+    // is not everywhere, and these lists are a dozen cards long.
+    if (isCardKey(key)) {
+      return [...document.querySelectorAll('[data-open]')].find((el) => el.dataset.open === key) || null
+    }
+    return document.querySelector(`.task[data-task-id="${key}"]`)
+  }
   const ctrl = (id, sel) => rowFor(id)?.querySelector(sel)
   const click = (el, init) => {
     if (!el) return false
@@ -356,6 +377,24 @@ export default function VimLayer() {
     // dead with no explanation, which looked like the mode had stopped working.
     const NEEDS_TASK = !['pomodoro', 'undo', 'redo', 'section', 'foldSection'].includes(what)
     if (id == null && NEEDS_TASK) { say('no task under the cursor'); return }
+
+    // A card is a whole panel you can open — a project, say. Almost nothing
+    // that acts on a task means anything for one, so the few keys that do are
+    // named here and the rest say why they did nothing.
+    if (isCardKey(id)) {
+      if (what === 'open') {
+        const el = rowFor(id)
+        if (!el) { say('nothing under the cursor') ; return }
+        if (arg === 'tab') { openTab(id); say('opened in a new tab'); return }
+        click(el)
+        return
+      }
+      if (what === 'column') { move(arg === 'left' ? 'left' : 'right'); return }
+      if (['undo', 'redo', 'pomodoro'].includes(what)) { /* fall through */ } else {
+        say('that is a card — Enter opens it')
+        return
+      }
+    }
 
     // With a section under the cursor, the keys that act on one task say so
     // rather than silently doing nothing — except the handful that mean
@@ -665,6 +704,54 @@ export default function VimLayer() {
     if (verb === 'vim') { toggle(true); say('vim mode on'); return }
     if (['h', 'help'].includes(verb)) { setHelpOpen(true); return }
     if (verb === 'w') { say('nothing to save — every edit is already written'); return }
+
+    // Nicknames for pages. `:namepage` here, `:goto` from anywhere.
+    if (['goto', 'gt'].includes(verb)) {
+      const want = normalise(arg)
+      if (!want) { say('goto where? — :goto <name>'); return }
+      const names = await loadNames()
+      const there = names[want]
+      if (!there) {
+        const known = Object.keys(names)
+        say(known.length
+          ? `nothing called "${want}" — try ${known.slice(0, 6).join(', ')}`
+          : 'no page has a name yet — :namepage <name> gives this one one')
+        return
+      }
+      navigate(there)
+      say(`→ ${want}`)
+      return
+    }
+    if (['namepage', 'np'].includes(verb)) {
+      const names = await loadNames()
+      const here = window.location.pathname
+      if (!arg.trim()) {
+        const mine = namesFor(names, here)
+        say(mine.length
+          ? `this page is "${mine.join('", "')}"`
+          : 'this page has no name — :namepage <name> gives it one')
+        return
+      }
+      const want = normalise(arg)
+      // One name, one page. Reusing a name re-points it rather than making a
+      // second entry you could never tell apart.
+      await saveNames({ ...names, [want]: here })
+      say(`named "${want}"`)
+      return
+    }
+    if (verb === 'unname') {
+      const names = await loadNames()
+      const here = window.location.pathname
+      // With no argument it drops this page's names, which is what you want
+      // when you cannot remember what you called it.
+      const going = arg.trim() ? [normalise(arg)] : namesFor(names, here)
+      if (!going.length) { say('nothing to unname here'); return }
+      const left = { ...names }
+      for (const n of going) delete left[n]
+      await saveNames(left)
+      say(`unnamed "${going.join('", "')}"`)
+      return
+    }
     if (verb === 'pri' || verb === 'priority') {
       const want = arg.trim().toLowerCase()
       if (!PRIORITIES.includes(want)) { say(`priority is one of ${PRIORITIES.join(', ')}`); return }
@@ -850,7 +937,7 @@ export default function VimLayer() {
       // back to scrolling, which is what they do in a pager and what your hands
       // will try anyway.
       const noRows = () => !document.querySelector(
-        '.panel.section[data-section-id], .task[data-task-id]',
+        '.panel.section[data-section-id], .task[data-task-id], [data-open]',
       )
       /** scrollBy where it exists, scrollTop where it does not. */
       const scrollPage = (by) => {
@@ -891,6 +978,11 @@ export default function VimLayer() {
       // Enter is what ticks a task off, and x with it for the vim habit.
       if (k === ' ' && e.ctrlKey) return go(() => run('foldSection'))
       if (k === ' ') return go(() => run('fold'))
+      // Enter opens what can be opened and ticks what cannot. Shift-Enter
+      // opens in a new tab, the keyboard's spelling of shift-click.
+      if (k === 'Enter' && isCardKey(cursor)) {
+        return go(() => run('open', e.shiftKey ? 'tab' : null))
+      }
       if (k === 'Enter' || k === 'x') return go(() => run('done'))
       if (k === 't') return go(() => run('optional'))
       if (k === 'o') return go(() => run('new', 'below'))
@@ -1013,13 +1105,15 @@ export default function VimLayer() {
       // produces reads like a bug in whatever was being tested at the time.
       if (typeof document === 'undefined' || !document?.querySelectorAll) return
 
-      for (const el of document.querySelectorAll('.vim-on, .vim-sel, .vim-on-section, .vim-on-band')) {
-        el.classList.remove('vim-on', 'vim-sel', 'vim-on-section', 'vim-on-band')
+      for (const el of document.querySelectorAll(
+        '.vim-on, .vim-sel, .vim-on-section, .vim-on-band, .vim-on-card',
+      )) {
+        el.classList.remove('vim-on', 'vim-sel', 'vim-on-section', 'vim-on-band', 'vim-on-card')
       }
       if (!enabled) return
 
       const ids = [...document.querySelectorAll(
-        '.panel.section[data-section-id], .task[data-task-id]',
+        '.panel.section[data-section-id], .task[data-task-id], [data-open]',
       )].map(keyOf)
 
       // Adopt the first row when there is nothing to point at yet. This lives
@@ -1030,7 +1124,7 @@ export default function VimLayer() {
       if (cursor == null) {
         // The first TASK, not the first stop: opening a day on its first
         // section heading would mean a keypress before you could do anything.
-        const first = document.querySelector('.task[data-task-id]')
+        const first = document.querySelector('.task[data-task-id], [data-open]')
         if (first) setCursor(keyOf(first))
         else if (ids.length) setCursor(ids[0])
         return
@@ -1067,7 +1161,11 @@ export default function VimLayer() {
       for (const id of selection) rowFor(id)?.classList.add('vim-sel')
 
       const at = rowFor(cursor)
-      if (isSectionKey(cursor)) {
+      if (isCardKey(cursor)) {
+        // A card is already a panel, so it is outlined whole rather than given
+        // the thin bar a row gets — the same reasoning as a section.
+        at?.classList.add('vim-on-card')
+      } else if (isSectionKey(cursor)) {
         // The whole section, not a line inside it: what is selected is the
         // container, and saying so with the same thin bar a row gets would
         // read as "this heading" rather than "all of this".
