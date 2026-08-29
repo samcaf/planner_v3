@@ -69,7 +69,7 @@ try {
     return onTask() === id
   }
 
-  for (let i = 0; i < 60 && onTask() === null && onSection() === null; i++) await wait(150)
+  for (let i = 0; i < 150 && onTask() === null && onSection() === null; i++) await wait(150)
 
   // ── yy then p rebuilds the task, not one per character ---------------------
   check('aimed at alpha', await aim(a.id, 'ZZ alpha'), `${onTask()}`)

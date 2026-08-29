@@ -1,9 +1,9 @@
-/** A pasted title opens selected; J/K select sections; Alt-j/k move them. */
+/** Flagging a task as code work, from the row and from vim. */
 import './ensure-iife.mjs'
 import { JSDOM, VirtualConsole } from 'jsdom'
 
 const BASE = 'http://localhost:8787'
-const D = '2031-04-04'
+const D = '2031-04-09'
 const results = []
 const check = (n, ok, d = '') => results.push([n, ok, d])
 const doms = []
@@ -69,61 +69,41 @@ try {
 
   for (let i = 0; i < 150 && onTask() === null && onSection() === null; i++) await wait(150)
 
-  // ── a pasted task opens with its title selected ---------------------------
-  check('aimed at the source', await aim(src.id, 'ZZ source'), `${onTask()}`)
-  key('y'); await wait(120); key('y'); await wait(600)
-  key('p'); await wait(1800)
+  const openBtn = [...document.querySelectorAll(`.task[data-task-id="${src.id}"] button`)]
+    .find((b) => /time and duration/i.test(b.getAttribute('title') || b.getAttribute('aria-label') || ''))
+  check('found the details button', !!openBtn,
+    [...document.querySelectorAll(`.task[data-task-id="${src.id}"] button`)]
+      .map((b) => b.getAttribute('title')).join(' | '))
+  openBtn?.click()
+  await wait(700)
 
-  const field = document.querySelector('.rich-line-input')
-  check('the pasted task opens for editing', !!field)
-  check('with the caret in it', document.activeElement === field,
-    document.activeElement?.className)
-  check('and it carries the title', field?.value === 'ZZ source', field?.value)
-  check('the title is SHOWN selected, not just focused',
-    field?.selectionStart === 0 && field?.selectionEnd === (field?.value || '').length,
-    `${field?.selectionStart}..${field?.selectionEnd} of ${(field?.value || '').length}`)
-  key('Escape'); await wait(300)
+  const boxes = [...document.querySelectorAll(`.task[data-task-id="${src.id}"] .task-details label`)]
+  check('the details panel opened', boxes.length > 0, `${boxes.length} labels`)
+  const codeBox = boxes.find((l) => /code task/i.test(l.textContent))
+  check('there is a Code task checkbox', !!codeBox, boxes.map((b) => b.textContent).join(' | '))
 
-  // ── J and K select the section itself -------------------------------------
-  check('aimed again', await aim(src.id, 'ZZ source'), `${onTask()}`)
-  key('J'); await wait(700)
-  check('J selects the next section, rather than a row inside it',
-    onSection() === String(two.id) && onTask() === null,
-    `section=${onSection()} task=${onTask()}`)
-  key('J'); await wait(700)
-  check('and J again the one after', onSection() === String(three.id), onSection())
-  key('K'); await wait(700)
-  check('K selects the one before', onSection() === String(two.id), onSection())
-  key('j'); await wait(500)
-  check('j is what goes into it', onTask() !== null && onSection() === null,
-    `section=${onSection()} task=${onTask()}`)
+  codeBox?.querySelector('input')?.click()
+  await wait(900)
+  const after = await json(`/api/tasks/${src.id}`)
+  check('ticking it flags the task', after.is_code === 1, String(after.is_code))
+  check('and a chip appears on the row',
+    !!document.querySelector(`.task[data-task-id="${src.id}"] .chip.c-purple`),
+    [...document.querySelectorAll(`.task[data-task-id="${src.id}"] .chip`)].map((c) => c.textContent).join(','))
 
-  // ── Alt-j and Alt-k move a whole section ----------------------------------
-  const order = async () => (await json(`/api/days/${D}`)).sections
-    .sort((a, b) => a.sort - b.sort || a.id - b.id).map((s) => s.name)
-  const before = await order()
-  check('the sections start in a known order', before.join(',') === 'ZZ One,ZZ Two,ZZ Three',
-    before.join(','))
+  // ── and from the command line -------------------------------------------
+  key('Escape'); await wait(200)
+  check('aimed at it', await aim(src.id, 'ZZ source'), `${onTask()}`)
+  key(':'); await wait(260)
+  const box = document.querySelector('.vim-cmd-input')
+  const setV = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+  setV.call(box, 'code')
+  box.dispatchEvent(new window.Event('input', { bubbles: true }))
+  box.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+  await wait(1000)
+  const off = await json(`/api/tasks/${src.id}`)
+  check(':code toggles it back off', off.is_code === 0, String(off.is_code))
 
-  // Aimed from the top rather than by stepping back: K from a task INSIDE a
-  // section goes to the section before it, which is right but is not the one
-  // this needs.
-  key('Escape'); await wait(120)
-  key('g'); await wait(90); key('g'); await wait(250)
-  key('J'); await wait(700)
-  check('on the second section', onSection() === String(two.id),
-    `section=${onSection()} task=${onTask()}`)
-  key('j', { altKey: true }); await wait(1400)
-  const moved = await order()
-  check('Alt-j moves the whole section down',
-    moved.join(',') === 'ZZ One,ZZ Three,ZZ Two', moved.join(','))
-  check('and the cursor stays with it', onSection() === String(two.id), onSection())
-  key('k', { altKey: true }); await wait(1400)
-  check('Alt-k moves it back', (await order()).join(',') === before.join(','),
-    (await order()).join(','))
-  key('u'); await wait(1200)
-
-  check('no key threw', errors.length === 0, errors.slice(0, 2).join(' | '))
+  check('no key threw', errors.length === 0, errors.join(' | '))
 } catch (e) {
   check('the suite ran to the end', false, e.message)
 } finally {

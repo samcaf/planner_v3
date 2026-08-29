@@ -108,7 +108,7 @@ try {
     return cursorId() === id
   }
 
-  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 150 && cursorId() === null; i++) await wait(150)
   check('the cursor starts somewhere', cursorId() !== null, 'no cursor')
 
   // 1 ── counts before a movement -------------------------------------------

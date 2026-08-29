@@ -72,7 +72,7 @@ try {
   // network, so this settles rather than sampling once.
   // Generous, because the whole suite runs these back to back and the page has
   // to fetch its day before there is a row for the cursor to take.
-  for (let i = 0; i < 60 && cursorId() === null; i++) await wait(150)
+  for (let i = 0; i < 150 && cursorId() === null; i++) await wait(150)
   check('the cursor starts on the first row', cursorId() !== null, 'no cursor')
 
   // ------------------------------------------------------------- navigation

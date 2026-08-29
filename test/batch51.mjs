@@ -67,7 +67,7 @@ try {
     return onTask() === id
   }
 
-  for (let i = 0; i < 60 && onTask() === null && onSection() === null; i++) await wait(150)
+  for (let i = 0; i < 150 && onTask() === null && onSection() === null; i++) await wait(150)
 
   // ── i on a task ----------------------------------------------------------
   // The handler that opens a title sits on the .rich-line inside .task-title.

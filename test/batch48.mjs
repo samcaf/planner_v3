@@ -62,7 +62,7 @@ try {
     return onTask() === id
   }
 
-  for (let i = 0; i < 60 && onTask() === null && onSection() === null; i++) await wait(150)
+  for (let i = 0; i < 150 && onTask() === null && onSection() === null; i++) await wait(150)
 
   check('the two quick tasks are in the first box', await walkTo(q1.id) && colOf() === 0,
     `col ${colOf()}`)
