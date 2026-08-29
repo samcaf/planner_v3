@@ -22,6 +22,7 @@ r.get('/:date', h((req) => {
     // schedule panel would otherwise render every one as unattended.
     tasks: db.prepare(`
       SELECT t.*, p.name AS project_name, p.color AS project_color,
+             (SELECT COUNT(*) FROM task_comments c WHERE c.task_id = t.id) AS comment_count,
              g.name AS group_name
       FROM tasks t
       LEFT JOIN projects p ON p.id = t.project_id

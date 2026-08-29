@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { db } from '../db.js'
-import { badRequest, crud, h, nextSort } from './_helpers.js'
+import { badRequest, crud, h, nextSort, notFound } from './_helpers.js'
 
 const FIELDS = [
   'title', 'notes', 'project_id', 'milestone_id', 'status', 'priority',
@@ -35,6 +35,7 @@ function detachFromForeignSection(id) {
 // without needing a second round-trip per section.
 const WITH_PROJECT = `
   SELECT t.*, p.name AS project_name, p.color AS project_color,
+         (SELECT COUNT(*) FROM task_comments c WHERE c.task_id = t.id) AS comment_count,
          s.name AS section_name, s.routine_id AS routine_id,
          g.name AS group_name, g.meeting_url AS group_meeting_url,
          COALESCE(rt.hide_from_all_tasks, 0) AS hide_from_all_tasks
@@ -129,14 +130,120 @@ r.get('/', h((req) => {
     args.push(...list)
   }
 
+  // The rest of the filters exist for the MCP query language, which turns a
+  // written query into these. They are ordinary query parameters, so the web
+  // app can use any of them too.
+  const { priority, intensity, optional, is_code, section_id, parent_id } = req.query
+  const { due_from, due_to, archived, has_notes, order, limit, offset } = req.query
+
+  const oneOf = (col, value) => {
+    const list = String(value).split(',').filter(Boolean)
+    if (!list.length) return
+    where.push(`t.${col} IN (${list.map(() => '?').join(',')})`)
+    args.push(...list)
+  }
+  if (priority) oneOf('priority', priority)
+  if (intensity) oneOf('intensity', intensity)
+  if (optional !== undefined) { where.push('t.optional = ?'); args.push(Number(optional) ? 1 : 0) }
+  if (is_code !== undefined) { where.push('t.is_code = ?'); args.push(Number(is_code) ? 1 : 0) }
+  if (section_id) { where.push('t.section_id = ?'); args.push(section_id) }
+  if (parent_id) { where.push('t.parent_id = ?'); args.push(parent_id) }
+  if (due_from) { where.push('t.due_date >= ?'); args.push(due_from) }
+  if (due_to) { where.push('t.due_date <= ?'); args.push(due_to) }
+  // Archived rows are hidden unless asked for, the same as everywhere else.
+  if (archived === undefined) where.push('t.archived = 0')
+  else if (archived !== 'any') { where.push('t.archived = ?'); args.push(Number(archived) ? 1 : 0) }
+  if (has_notes !== undefined) {
+    where.push(Number(has_notes) ? "TRIM(t.notes) <> ''" : "TRIM(t.notes) = ''")
+  }
+
+  // Only these, spelled out: an ORDER BY built from a query string is an
+  // injection waiting to happen, and a fixed list costs nothing.
+  const ORDERS = {
+    date: 't.scheduled_date IS NULL, t.scheduled_date, t.sort, t.id',
+    '-date': 't.scheduled_date IS NULL, t.scheduled_date DESC, t.sort, t.id',
+    created: 't.created_at, t.id',
+    '-created': 't.created_at DESC, t.id DESC',
+    due: 't.due_date IS NULL, t.due_date, t.id',
+    // Highest first, which is the only direction anyone means by "by priority".
+    priority: `CASE t.priority WHEN 'highest' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
+               WHEN 'low' THEN 3 ELSE 4 END, t.scheduled_date IS NULL, t.scheduled_date, t.id`,
+    estimate: 't.estimate_min IS NULL, t.estimate_min DESC, t.id',
+  }
+  const by = ORDERS[order] || ORDERS.date
+
+  // Bound rather than sliced afterwards, so a wide query cannot drag the whole
+  // table through the process to throw most of it away.
+  const take = Math.min(Math.max(Number(limit) || 200, 1), 500)
+  const skip = Math.max(Number(offset) || 0, 0)
+
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   return withPeople(db.prepare(`
-    ${WITH_PROJECT} ${clause}
-    ORDER BY t.scheduled_date IS NULL, t.scheduled_date, t.sort, t.id
-  `).all(...args))
+    ${WITH_PROJECT} ${clause} ORDER BY ${by} LIMIT ? OFFSET ?
+  `).all(...args, take, skip))
 }))
 
 r.get('/:id', h((req) => readTask(req.params.id)))
+
+/**
+ * Comments on a task.
+ *
+ * Separate from `notes`, which is yours. See the table's own note in db.js for
+ * why that separation is the point rather than an implementation detail.
+ */
+r.get('/:id/comments', h((req) => db
+  .prepare('SELECT * FROM task_comments WHERE task_id = ? ORDER BY id')
+  .all(req.params.id)))
+
+r.post('/:id/comments', h((req) => {
+  const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(req.params.id)
+  if (!task) throw notFound('no such task')
+  const body = String(req.body?.body || '').trim()
+  if (!body) throw badRequest('a comment needs a body')
+  const info = db.prepare(`
+    INSERT INTO task_comments (task_id, author, body, kind, minutes)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    task.id,
+    String(req.body.author || 'me').slice(0, 80),
+    body,
+    req.body.kind === 'worklog' ? 'worklog' : 'comment',
+    req.body.minutes == null ? null : Math.max(0, Math.round(Number(req.body.minutes) || 0)),
+  )
+  return db.prepare('SELECT * FROM task_comments WHERE id = ?').get(info.lastInsertRowid)
+}))
+
+r.delete('/:id/comments/:commentId', h((req) => {
+  db.prepare('DELETE FROM task_comments WHERE id = ? AND task_id = ?')
+    .run(req.params.commentId, req.params.id)
+  return null
+}))
+
+/**
+ * Time spent, recorded against the task's own timer and as a worklog comment.
+ *
+ * Both, deliberately: the timer is what the day's totals read, and the comment
+ * is what says where the time went. One without the other is either a number
+ * with no story or a story that does not count.
+ */
+r.post('/:id/worklog', h((req) => {
+  const task = db.prepare('SELECT id, timer_elapsed_ms FROM tasks WHERE id = ?').get(req.params.id)
+  if (!task) throw notFound('no such task')
+  const minutes = Math.round(Number(req.body?.minutes))
+  if (!Number.isFinite(minutes) || minutes <= 0) throw badRequest('minutes must be a positive number')
+
+  db.prepare('UPDATE tasks SET timer_elapsed_ms = ? WHERE id = ?')
+    .run((task.timer_elapsed_ms || 0) + minutes * 60_000, task.id)
+  db.prepare(`
+    INSERT INTO task_comments (task_id, author, body, kind, minutes) VALUES (?, ?, ?, 'worklog', ?)
+  `).run(
+    task.id,
+    String(req.body.author || 'me').slice(0, 80),
+    String(req.body.comment || '').trim() || `Logged ${minutes}m`,
+    minutes,
+  )
+  return readTask(task.id)
+}))
 
 r.post('/', h((req) => {
   const body = { ...(req.body || {}) }

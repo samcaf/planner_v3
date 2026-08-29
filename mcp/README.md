@@ -1,7 +1,9 @@
 # The planner, as MCP tools
 
-Five tools that let a coding agent see the code work you have planned for a day,
-and write back what it actually did.
+Shaped after [Atlassian's Jira MCP server](https://support.atlassian.com/rovo/docs/getting-started-with-the-atlassian-remote-mcp-server/):
+one search tool over a query language, metadata tools that say what is legal
+before you act, transitions rather than status assignment, comments and
+worklogs separate from the body, and read/write/search scopes.
 
 ## Adding it
 
@@ -9,58 +11,79 @@ and write back what it actually did.
 claude mcp add planner -- node ~/Documents/planner_v3/mcp/server.js
 ```
 
-Or, by hand, in `~/.claude.json` (or any MCP client's config):
+The API must be running; the tools talk to `http://localhost:8787`.
 
-```json
-{
-  "mcpServers": {
-    "planner": {
-      "command": "node",
-      "args": ["/home/samaf/Documents/planner_v3/mcp/server.js"]
-    }
-  }
-}
-```
-
-The API server must be running — the tools talk to `http://localhost:8787`, or
-to `PLANNER_API` if you set it.
+| variable | |
+|---|---|
+| `PLANNER_API` | where the API is (default `http://localhost:8787`) |
+| `PLANNER_WEB` | what to build task URLs from (default `http://localhost:5173`) |
+| `PLANNER_MCP_SCOPES` | `read,write,search` — drop `write` for a server that cannot change anything |
+| `PLANNER_MCP_AUTHOR` | who comments are attributed to (default `claude`) |
 
 ## The tools
 
+**read** — `get_task`, `get_transitions`, `get_projects`, `get_comments`, `describe`
+**search** — `search_tasks`
+**write** — `create_task`, `update_task`, `transition_task`, `add_comment`, `add_worklog`
+
+A tool outside the granted scopes is not merely missing from the list; calling
+it by name says which scope it needed.
+
+## The query language
+
+Terms separated by spaces, ANDed together. Bare words match the title or the
+notes. **With no `status:` or `is:` term, only open tasks come back.**
+
+```
+is:code date:today order:priority
+project:"Planner v3" priority:high has:notes
+drag date:2026-08-01..2026-08-31 limit:10
+is:done date:week
+```
+
 | | |
 |---|---|
-| `code_tasks` | the day's code tasks, with notes, subtasks, project and repo |
-| `task` | one task in full, code or not |
-| `start` | mark it as being worked on now |
-| `log` | append what you found — never overwrites |
-| `finish` | close it, recording what was done |
+| `is:` / `not:` | `code` `deep` `light` `optional` `committed` `open` `done` `closed` `archived` |
+| `status:` | `todo` `doing` `done` `moved` `dropped` — comma for OR |
+| `priority:` | `lowest` `low` `medium` `high` `highest` |
+| `date:` `due:` | `today` `tomorrow` `yesterday` `week` `overdue` `none` `YYYY-MM-DD` `A..B` |
+| `project:` `section:` | by name, quoted if it has spaces |
+| `has:` | `notes` `comments` |
+| `order:` | `date` `-date` `created` `-created` `due` `priority` `estimate` |
+| `limit:` `offset:` | paging — the result says `has_more` and `next_offset` |
 
-## Flagging a task as code work
+A wrong term is an error that names the valid ones, rather than an empty
+result. `describe` returns the same grammar, so a client can read it once
+instead of being told.
 
-In the task's details panel there is a **Code task** checkbox; in vim mode,
-`:code` toggles it. Give the project a **Repository** path on its own page and
-every code task under it knows where to work.
+## Why it is shaped this way
 
-## Why these five, and not more
+**One search tool, not a tool per question.** A tool per question can only
+answer the questions someone thought of.
 
-The same HTTP API is one `curl` away, so a tool list earns its keep by what it
-refuses. This one can work a day's code tasks and say what happened. It cannot
-create, delete, reschedule or reorganise anything — an agent given the run of
-your planner will eventually reorganise it.
+**Metadata before action.** `describe` and `get_transitions` exist so the model
+asks what is legal instead of guessing an enum and learning from a 400.
 
-`log` appends and never replaces, so nothing written here can erase a note you
-wrote.
+**Transitions, not status assignment.** A transition is a named move with its
+own required arguments. Sending a task to another day needs a date, and setting
+`status='moved'` without one leaves a task that has gone nowhere — a bug this
+project has actually shipped. An enumerated transition cannot express it.
 
-## The part that matters
+**Comments are not the notes.** A task's notes are your prose. What an agent did
+is a comment. Merged, you cannot tell a week later which sentences you wrote —
+which is exactly why Jira keeps description and comments apart. `update_task`
+can replace notes if you ask it to; `add_comment` never can.
 
-The tools run in two directions:
+**Worklogs are real time.** `add_worklog` adds to the task's own timer, so the
+day's totals see it, and leaves a comment saying where the time went.
 
-- **context in** — a title like "fix the drag-drop bug" is not a specification.
-  `code_tasks` carries the notes, the subtasks, the project's description and
-  the working copy, because that is what is actually missing.
-- **evidence out** — `start`, `log` and `finish` put back what happened. This is
-  the half nobody does by hand, and it is the reason this beats pasting a list
-  into a chat.
+What is deliberately **not** copied: OAuth, multi-tenancy, cloud ids. This talks
+to one planner over loopback, and an identity layer for a single-user app on
+localhost would be ceremony, not security. Keep it on localhost — there is no
+authentication because nothing needs to cross a network.
 
-A task closed with no summary is indistinguishable from one nobody did, which
-is why `finish` requires one.
+## Flagging code work
+
+A **Code task** checkbox in the task's details, or `:code` in vim mode. Give a
+project a **Repository** path on its own page and every code task under it
+reports where to work.

@@ -105,6 +105,35 @@ addColumn('routines', 'auto', 'INTEGER NOT NULL DEFAULT 0')
 // is not enough to act on.
 addColumn('tasks', 'is_code', 'INTEGER NOT NULL DEFAULT 0')
 addColumn('projects', 'repo_path', "TEXT NOT NULL DEFAULT ''")
+
+/*
+ * Comments, kept apart from the task's own notes.
+ *
+ * The notes field is yours: your thinking, written in your words. A comment is
+ * a thing that happened to the task — an agent reporting what it did, a
+ * worklog entry, a note to your later self. Merging the two means an agent
+ * appending to your prose, and after a week you cannot tell which sentences
+ * you wrote. Jira separates description from comments for exactly this reason,
+ * and the separation is the whole value.
+ *
+ * `author` is free text rather than a person id: the writer is usually not
+ * someone in the people table but a piece of software, and inventing rows for
+ * software to satisfy a foreign key would corrupt the thing the people table
+ * is for.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_comments (
+    id         INTEGER PRIMARY KEY,
+    task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    author     TEXT    NOT NULL DEFAULT 'me',
+    body       TEXT    NOT NULL,
+    kind       TEXT    NOT NULL DEFAULT 'comment'
+                 CHECK (kind IN ('comment','worklog')),
+    minutes    INTEGER,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS task_comments_task ON task_comments(task_id, id);
+`)
 addColumn('routine_items', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL')
 addColumn('routine_items', 'start_time', 'TEXT')
 addColumn('routine_items', 'shelved', 'INTEGER NOT NULL DEFAULT 0')

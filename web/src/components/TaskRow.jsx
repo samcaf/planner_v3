@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
+import TaskComments from './TaskComments.jsx'
 import Popover from './Popover.jsx'
 import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
@@ -610,6 +611,14 @@ export default function TaskRow({
                 onEditing={(on) => { setTexting(on); if (!on) setOpeningNote(false) }}
               />
             </div>
+          )}
+
+          {/* What happened to this task, kept apart from what you think about
+              it. Below the notes because it is a record rather than a
+              thought — and because most tasks have none, it shows nothing at
+              all until there is something to show. */}
+          {!isNote && (
+            <TaskComments taskId={task.id} count={task.comment_count || 0} />
           )}
 
           {/* A task with nothing written keeps a sliver of reserved space rather
