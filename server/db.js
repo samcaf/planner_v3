@@ -98,6 +98,13 @@ addColumn('tasks', 'location', "TEXT NOT NULL DEFAULT ''")
 // was renamed and quietly duplicated the chore on every day.
 addColumn('tasks', 'routine_item_id', 'INTEGER')
 addColumn('routines', 'auto', 'INTEGER NOT NULL DEFAULT 0')
+
+// A task that is work in a repository, and the repository a project's work
+// happens in. Together they are what lets a coding agent be told "these are
+// today's code tasks, and here is where each one lives" — a title on its own
+// is not enough to act on.
+addColumn('tasks', 'is_code', 'INTEGER NOT NULL DEFAULT 0')
+addColumn('projects', 'repo_path', "TEXT NOT NULL DEFAULT ''")
 addColumn('routine_items', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL')
 addColumn('routine_items', 'start_time', 'TEXT')
 addColumn('routine_items', 'shelved', 'INTEGER NOT NULL DEFAULT 0')

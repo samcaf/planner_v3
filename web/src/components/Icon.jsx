@@ -38,6 +38,8 @@ const PATHS = {
   keyboard: 'M2.5 6h19v12h-19z M6 9.5h.01 M9.5 9.5h.01 M13 9.5h.01 M16.5 9.5h.01'
     + ' M6 12.5h.01 M9.5 12.5h.01 M13 12.5h.01 M16.5 12.5h.01 M7.5 15.5h9',
   paperclip: 'M21.4 11l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
+  /* Angle brackets and a slash — what everyone draws for code. */
+  code: 'M8.5 17.5L3 12l5.5-5.5 M15.5 6.5L21 12l-5.5 5.5 M13.5 4.5l-3 15',
 
   /*
    * Six teeth with flat tops, tip radius 9.6 on a root of 6.6. Teeth need the

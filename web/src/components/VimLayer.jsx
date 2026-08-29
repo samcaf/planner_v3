@@ -83,6 +83,7 @@ const HELP = [
     [':done  :drop  :opt', 'change the task under the cursor'],
     [':note', 'write or edit its note'],
     [':bl', 'send it to the backlog'],
+    [':code', 'mark it as code work, or unmark it'],
     [':t 90   :t 1h30m', 'set its estimate'],
     [':mv tomorrow  :mv +3  :mv 2026-09-01', 'move it'],
     [':pri high', 'set its priority outright'],
@@ -704,6 +705,14 @@ export default function VimLayer() {
     if (verb === 'vim') { toggle(true); say('vim mode on'); return }
     if (['h', 'help'].includes(verb)) { setHelpOpen(true); return }
     if (verb === 'w') { say('nothing to save — every edit is already written'); return }
+    if (verb === 'code') {
+      const a2 = actions.current || {}
+      const t = a2.taskById?.(cursor)
+      if (!t) { say('no task under the cursor'); return }
+      await a2.patch?.(cursor, { is_code: t.is_code ? 0 : 1 })
+      say(t.is_code ? 'no longer a code task' : 'a code task')
+      return
+    }
 
     // Nicknames for pages. `:namepage` here, `:goto` from anywhere.
     if (['goto', 'gt'].includes(verb)) {

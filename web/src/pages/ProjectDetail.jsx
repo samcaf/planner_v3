@@ -637,6 +637,24 @@ export default function ProjectDetail() {
                     : 'New tasks here start light. Mark the deep ones from the task row.'}
                 </span>
               </Field>
+              {/* Where this project's code lives. A code task carries its title
+                  and its notes, but an agent also has to know which working
+                  copy to open — and that is a property of the project, not of
+                  each task. */}
+              <Field label="Repository">
+                <input
+                  className="input"
+                  placeholder="~/Documents/planner_v3"
+                  defaultValue={p.repo_path || ''}
+                  onBlur={(e) => {
+                    const next = e.target.value.trim()
+                    if (next !== (p.repo_path || '')) patch({ repo_path: next })
+                  }}
+                />
+                <span className="pj-hint">
+                  Read by the MCP server, so a code task here says where to work.
+                </span>
+              </Field>
               <Field label="Start">
                 <input className="input" type="date" value={p.start_date || ''}
                   onChange={(e) => patch({ start_date: e.target.value || null })} />

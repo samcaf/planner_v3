@@ -1,0 +1,11 @@
+{
+  "name": "planner-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The planner's code tasks, as MCP tools",
+  "bin": { "planner-mcp": "server.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

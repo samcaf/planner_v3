@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db } from '../db.js'
 import { badRequest, crud, h, nextSort, notFound } from './_helpers.js'
 
-const FIELDS = ['name', 'type_id', 'color', 'description', 'status', 'start_date', 'due_date', 'sort', 'default_intensity']
+const FIELDS = ['name', 'type_id', 'color', 'description', 'status', 'start_date', 'due_date', 'sort', 'default_intensity', 'repo_path']
 const M_FIELDS = ['project_id', 'title', 'notes', 'due_date', 'done', 'sort']
 const T_FIELDS = ['name', 'color', 'sort']
 

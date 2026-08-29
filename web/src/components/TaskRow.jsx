@@ -464,6 +464,19 @@ export default function TaskRow({
             {/* Always shown, next to the clock: priority is set from here now,
                 so hiding the common case would hide the control too. */}
             <PriorityChip level={task.priority} onChange={(p) => onChange({ priority: p })} />
+            {/* Shown only when set. Unlike deep/light, most tasks are not code
+                tasks, so an always-present toggle would be clutter on every
+                row to serve a few. */}
+            {!!task.is_code && (
+              <button
+                className="chip c-purple"
+                title="A code task — click to unmark"
+                onClick={() => onChange({ is_code: 0 })}
+              >
+                <Icon name="code" size={11} />
+                code
+              </button>
+            )}
             {/* One click, because tagging every task by hand is what kills these
                 systems — the default arrives by inheritance. */}
             <button
@@ -819,6 +832,20 @@ function TaskDetails({ task, derived, onChange, onDone, focusTime = false }) {
           onChange={(e) => onChange({ fixed_time: e.target.checked ? 1 : 0 })}
         />
         <span>Fixed length</span>
+      </label>
+
+      {/* Work that happens in a repository. Marked here rather than guessed
+          from the wording, because what makes a task a code task is that you
+          intend to sit down and write code for it — not that its title
+          mentions a file. What reads it is the MCP server: an agent asking
+          what today's code work is gets these, with the project's repo. */}
+      <label className="td-fixed">
+        <input
+          type="checkbox"
+          checked={!!task.is_code}
+          onChange={(e) => onChange({ is_code: e.target.checked ? 1 : 0 })}
+        />
+        <span>Code task</span>
       </label>
 
       {!!task.fixed_time && <TaskTimer task={task} onChange={onChange} />}
