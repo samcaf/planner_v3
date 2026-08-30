@@ -4,6 +4,7 @@ import Icon from '../components/Icon.jsx'
 import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
 import AiSwitches from '../components/AiSwitches.jsx'
 import { threadMap } from '../lib/threads.js'
+import { stack } from '../lib/aiSwitches.js'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
   SelectAllBox, SelectionBar, SelectionProvider, bulkPatch, draggedIds,
@@ -185,6 +186,9 @@ function DayView({ date }) {
   const capacity = raw === undefined ? 330 : Number(raw)
 
   const columnLabels = labelsFor(settings.data)
+  // Your defaults for how an AI task should be worked, under every section
+  // and every task in them. Set in Settings.
+  const aiDefaults = settings.data?.ai_switch_defaults || ''
 
   function refresh() {
     day.reload()
@@ -652,6 +656,7 @@ function DayView({ date }) {
               tasks={inSection(section.id)}
               projects={projects.data || []}
               columnLabels={columnLabels}
+              aiDefaults={aiDefaults}
               rowProps={rowProps}
               onAdd={(kind) => addTo(section.id, kind)}
               onAddMeeting={() => setMeetingFor({ section: section.id })}
@@ -1559,7 +1564,7 @@ function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
 }
 
 function SectionPanel({
-  section, tasks, projects, columnLabels, rowProps,
+  section, tasks, projects, columnLabels, aiDefaults, rowProps,
   onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn, onPlace,
   dragging, dropAt, onDragSection, onDragSectionEnd, onDragOverSection, onDropSection,
 }) {
@@ -1596,6 +1601,7 @@ function SectionPanel({
   const rowPropsIn = (task) => ({
     ...rowProps(task),
     section,
+    aiInherited: dialogue ? stack(aiDefaults, section.ai_switches) : null,
     thread: threads?.get(task.id) || null,
     threadLit: threads && litThread != null && threads.get(task.id)?.key === litThread,
     onThread: setLitThread,
@@ -1800,9 +1806,10 @@ function SectionPanel({
             in it inherits them, which is why most rows show no chips at all. */}
         {dialogue && (
           <AiSwitches
-            task={{}}
-            section={section}
-            onChange={({ ai_switches }) => onPatch({ ai_switches })}
+            label={`Terms for everything in ${section.name}`}
+            value={section.ai_switches}
+            inherited={stack(aiDefaults)}
+            onChange={(ai_switches) => onPatch({ ai_switches })}
           />
         )}
 

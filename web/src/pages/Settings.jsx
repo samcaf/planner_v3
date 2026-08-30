@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Empty, Field, Panel } from '../components/ui.jsx'
 import { HELP } from '../components/VimLayer.jsx'
+import AiSwitches from '../components/AiSwitches.jsx'
+import { BUILT_IN } from '../lib/aiSwitches.js'
 import { useVim } from '../lib/vim.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
@@ -27,7 +29,7 @@ const ACCENTS = [
 
 // Settings edited by a control above; the raw dump would only repeat them.
 const HANDLED = [
-  'deep_capacity_min', 'column_labels', 'page_names',
+  'deep_capacity_min', 'column_labels', 'page_names', 'ai_switch_defaults',
   'pomodoro_work', 'pomodoro_short', 'pomodoro_long', 'pomodoro_before_long',
 ]
 
@@ -188,6 +190,21 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
                 <span className="st-hint">Tints the sidebar, links and controls.</span>
               </Field>
             </div>
+          </Panel>
+
+          {/* The bottom layer of the four. A conversation overrides these, and
+              a task overrides its conversation. */}
+          <Panel title="AI defaults">
+            <p className="st-hint">
+              How a task in an AI conversation is worked unless it, or the conversation
+              it is in, says otherwise. Hover any option for what it means.
+            </p>
+            <AiSwitches
+              label="Default terms for every AI task"
+              value={s.ai_switch_defaults}
+              inherited={BUILT_IN}
+              onChange={(v) => save('ai_switch_defaults', v)}
+            />
           </Panel>
 
           <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />

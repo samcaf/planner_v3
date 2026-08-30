@@ -158,6 +158,10 @@ export default function TaskRow({
   thread = null,
   threadLit = false,
   onThread,
+  // What this row's terms fall back to: the conversation's, and under that
+  // your defaults from Settings. Resolved by the section, which is the only
+  // thing that knows both.
+  aiInherited = null,
   showProject = true,
   // Whether the subtree is drawn here. A sub-section band already lays its
   // children out beneath the heading, so the heading itself must not repeat
@@ -541,9 +545,10 @@ export default function TaskRow({
                 duration to speak of; what matters is how it should be worked. */}
             {dialogue && (
               <AiSwitches
-                task={task}
-                section={section}
-                onChange={onChange}
+                label="How the AI should work this task"
+                value={task.ai_switches}
+                inherited={aiInherited || {}}
+                onChange={(ai_switches) => onChange({ ai_switches })}
               />
             )}
             {!dialogue && timed && (
@@ -752,6 +757,7 @@ export default function TaskRow({
           // parent — it is drawn from inside this row rather than from the
           // section, so it has no other way to learn either.
           section={section}
+          aiInherited={aiInherited}
           thread={thread}
           threadLit={threadLit}
           onThread={onThread}

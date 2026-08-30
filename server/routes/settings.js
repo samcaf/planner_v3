@@ -19,4 +19,16 @@ r.patch('/', h((req) => {
   return Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((s) => [s.key, s.value]))
 }))
 
+/**
+ * Forget a setting entirely.
+ *
+ * Distinct from patching it to '': an empty row reads the same to every
+ * consumer but is residue, and the next person to look at the table has to
+ * work out whether it means "off" or "never set".
+ */
+r.delete('/:key', h((req) => {
+  db.prepare('DELETE FROM settings WHERE key = ?').run(req.params.key)
+  return null
+}))
+
 export default r

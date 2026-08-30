@@ -139,30 +139,60 @@ try {
     row(brief.id).querySelectorAll('.ais-chip').length === 0,
     String(row(brief.id).querySelectorAll('.ais-chip').length))
 
-  // A section default reaches every row without being written on any of them.
+  // A conversation's terms are stated once, on the conversation. Stamping them
+  // on every row in it would be noise: what a row shows is what is unusual
+  // about THAT row.
+  const sectionChips = [...(panel(termed.id)?.querySelectorAll('.section-h .ais-chip') || [])]
+    .map((c) => c.textContent)
+  check('the conversation states its own terms', sectionChips.includes('build'),
+    sectionChips.join(','))
   const chips = [...(row(under.id)?.querySelectorAll('.ais-chip') || [])].map((c) => c.textContent)
-  check('a section default shows on its rows', chips.includes('build'), chips.join(','))
-  check('marked as inherited rather than set here',
-    row(under.id)?.querySelector('.ais-chip')?.classList.contains('is-inherited'),
-    row(under.id)?.querySelector('.ais-chip')?.className)
+  check('and a row inheriting them shows nothing', chips.length === 0, chips.join(','))
   const stored = await json(`/api/tasks/${under.id}`)
   check('and nothing was written on the task itself', !stored.ai_switches, stored.ai_switches)
 
-  // ── setting one from the row ─────────────────────────────────────────────
+  // ── setting from the row, several in a row ───────────────────────────────
   row(under.id).querySelector('.ais-open').click()
   await wait(700)
-  const opt = [...document.querySelectorAll('.ais-menu .ais-row')]
-    .find((r) => /^Verify/.test(r.textContent))
-    ?.querySelector('button[aria-checked="false"]')
-  check('the terms open for editing', !!opt,
-    [...document.querySelectorAll('.ais-menu .ais-row')].map((r) => r.textContent.slice(0, 12)).join('|'))
-  opt?.click()
-  await wait(1200)
+
+  const pick = (name, want) => [...document.querySelectorAll('.ais-menu .ais-row')]
+    .find((r) => r.querySelector('.ais-name')?.textContent === name)
+    ?.querySelector(`button[aria-checked="false"]${want ? '' : ''}`)
+  const pickValue = (name, want) => [...document.querySelectorAll('.ais-menu .ais-row')]
+    .find((r) => r.querySelector('.ais-name')?.textContent === name)
+    ?.querySelector([...document.querySelectorAll('.ais-menu button')].length ? 'button' : 'button')
+
+  const option = (name, want) => {
+    const r = [...document.querySelectorAll('.ais-menu .ais-row')]
+      .find((x) => x.querySelector('.ais-name')?.textContent === name)
+    return [...(r?.querySelectorAll('button') || [])].find((b) => b.textContent.trim() === want)
+  }
+
+  check('the terms open for editing', !!option('Verify', 'reproduce'),
+    [...document.querySelectorAll('.ais-menu .ais-name')].map((r) => r.textContent).join('|'))
+  check('every option carries its own explanation',
+    (option('Depth', '0')?.getAttribute('title') || '').length > 20,
+    option('Depth', '0')?.getAttribute('title'))
+  check('and the switch itself explains what it is',
+    ([...document.querySelectorAll('.ais-menu .ais-name')]
+      .find((n) => n.textContent === 'Budget')?.getAttribute('title') || '').length > 60,
+    [...document.querySelectorAll('.ais-menu .ais-name')]
+      .find((n) => n.textContent === 'Budget')?.getAttribute('title'))
+
+  // Three clicks with no pause. Each used to be computed from the row as the
+  // server last described it, so the second wiped the first.
+  option('Verify', 'reproduce')?.click()
+  option('Depth', '0')?.click()
+  option('Sign-off', 'none')?.click()
+  await wait(1800)
+
   const afterSet = await json(`/api/tasks/${under.id}`)
-  check('changing one writes only that one', /verify/.test(afterSet.ai_switches || ''),
+  const stored2 = JSON.parse(afterSet.ai_switches || '{}')
+  check('three clicked in a row all stick',
+    stored2.verify === 'reproduce' && stored2.depth === '0' && stored2.sign_off === 'none',
     afterSet.ai_switches)
-  check('and does not copy the inherited ones down',
-    !/mode/.test(afterSet.ai_switches || ''), afterSet.ai_switches)
+  check('and none copied the inherited ones down', stored2.mode === undefined,
+    afterSet.ai_switches)
 
   // ── dragging hands the turn over ─────────────────────────────────────────
   // The same gesture that re-times a task in an ordinary section. Nothing here

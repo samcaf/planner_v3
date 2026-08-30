@@ -2196,3 +2196,10 @@ kbd {
 
 .chip.thread-link { color: var(--thread, var(--muted)); border-color: var(--thread, var(--line)); }
 .chip.thread-link:hover { background: var(--hover); }
+
+.ais-foot {
+  margin: var(--space-3) 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
