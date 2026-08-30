@@ -29,6 +29,13 @@ r.post('/', h((req) => {
   })
 }))
 
+/**
+ * One section. Needed by anything that has a task and wants the terms it is
+ * worked under — the section is the middle layer, and reaching it through the
+ * whole day just to read one field is a lot of rows for one answer.
+ */
+r.get('/:id', h((req) => sections.get(req.params.id)))
+
 r.patch('/:id', h((req) => sections.update(req.params.id, req.body)))
 
 /**

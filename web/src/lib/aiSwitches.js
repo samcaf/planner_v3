@@ -66,6 +66,11 @@ export const ENFORCED = [
     key: 'depth',
     label: 'Depth',
     values: ['0', '1', '2', '3', '4'],
+    // The buttons offer these; the field accepts any whole number in range.
+    // The UI can only click what it draws, but the API and an agent cannot,
+    // and a value quietly replaced by the default is a limit nobody set and
+    // nobody can see they are running under.
+    numeric: { min: 0, max: 8 },
     fallback: '2',
     hint: 'How far the agent may nest tasks it raises FOR ITSELF while working '
       + 'this one — its own trail, not the follow-ups it leaves you. Depth 1 means '
@@ -83,6 +88,7 @@ export const ENFORCED = [
     key: 'budget',
     label: 'Budget',
     values: ['4', '8', '12', '20', '40'],
+    numeric: { min: 1, max: 500 },
     fallback: '12',
     hint: 'The most tasks the agent may create in one run, counting everything — '
       + 'its own steps, its answer, and your follow-ups. The ceiling on how much '
@@ -199,11 +205,24 @@ export function read(raw) {
   }
 }
 
-/** Keep only recognised keys with values the switch actually offers. */
+/**
+ * Keep only recognised keys with values the switch will accept.
+ *
+ * A switch with `numeric` bounds takes any whole number inside them, not only
+ * the ones it draws buttons for: the panel can offer 4, 8, 12, 20, 40 and
+ * still let something set 6 through the API. Anything else is dropped, because
+ * a stored value nothing understands is worse than no value at all.
+ */
 export function clean(obj) {
   const out = {}
-  for (const [k, v] of Object.entries(obj || {})) {
-    if (BY_KEY[k]?.values.includes(String(v))) out[k] = String(v)
+  for (const [k, raw] of Object.entries(obj || {})) {
+    const sw = BY_KEY[k]
+    if (!sw) continue
+    const v = String(raw)
+    if (sw.values.includes(v)) { out[k] = v; continue }
+    if (!sw.numeric || !/^\d+$/.test(v)) continue
+    const n = Number(v)
+    if (n >= sw.numeric.min && n <= sw.numeric.max) out[k] = v
   }
   return out
 }

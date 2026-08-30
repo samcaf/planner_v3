@@ -46,6 +46,21 @@ export function badRequest(message) {
   return err
 }
 
+/**
+ * A refusal the caller is expected to handle, rather than a mistake it made.
+ *
+ * `code` is what it keys on. An agent that has spent its budget must do
+ * something different from one that sent a malformed field, and telling them
+ * apart by reading the sentence is how a protocol becomes a guessing game.
+ */
+export function refused(code, message, detail) {
+  const err = new Error(message)
+  err.status = 409
+  err.code = code
+  if (detail) err.detail = detail
+  return err
+}
+
 export function notFound(message = 'not found') {
   const err = new Error(message)
   err.status = 404

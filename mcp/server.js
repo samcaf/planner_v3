@@ -41,14 +41,20 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { parse, today } from './query.js'
+// The same resolver the app and the server use. One definition of what the
+// switches mean, so what an agent plans against is what gets enforced.
+import { stack } from '../web/src/lib/aiSwitches.js'
 
 const BASE = process.env.PLANNER_API || 'http://localhost:8787'
 const WEB = process.env.PLANNER_WEB || 'http://localhost:5173'
 const AUTHOR = process.env.PLANNER_MCP_AUTHOR || 'claude'
 
-/** read, write, search — the same three Jira grants, same names. */
+/**
+ * read, write, search — the same three Jira grants, same names — plus `dialogue`,
+ * which is the five moves that hold a conversation in tasks.
+ */
 const SCOPES = new Set(
-  (process.env.PLANNER_MCP_SCOPES || 'read,write,search')
+  (process.env.PLANNER_MCP_SCOPES || 'read,write,search,dialogue')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 )
 
@@ -290,7 +296,111 @@ const WRITE = [
   },
 ]
 
-const GROUPS = { read: READ, search: SEARCH, write: WRITE }
+/**
+ * The dialogue: five moves, held in tasks rather than in a chat.
+ *
+ * You write a brief. An agent CLAIMS it, ASKS what it needs to ask, raises
+ * STEPs to track its own path, and REPORTS back — a heading saying what it
+ * did, notes on how, and follow-up tasks for you. Every move is a row you can
+ * see, argue with, and undo.
+ *
+ * The shape of the protocol is what makes it safe to run. An agent may only
+ * spend what the brief's budget allows, and the two moves that hand the turn
+ * back — asking and reporting — are never refused. So an agent that runs out
+ * cannot fail silently: its only remaining moves put something in your column.
+ */
+const DIALOGUE = [
+  {
+    name: 'claim',
+    description:
+      'Take a brief and start working it. Returns the task in full, the terms it is to '
+      + 'be worked under, and how many tasks the run may create. Call this first — '
+      + 'every other move needs the run it opens.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'number', description: 'The brief to take.' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'ask',
+    description:
+      'Ask the user something you need answered before you can go on. Puts the question '
+      + 'in their column and hands the turn over, so YOU STOP HERE. Never refused, even '
+      + 'with the budget spent — if you are stuck, this is always available.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'The task you are working.' },
+        question: { type: 'string', description: 'What you need to know, and why it blocks you.' },
+      },
+      required: ['id', 'question'],
+    },
+  },
+  {
+    name: 'step',
+    description:
+      'Raise a task for YOURSELF — a step on the way, so your path is visible rather than '
+      + 'hidden in a transcript. Subject to the run\'s depth and budget; when one is spent '
+      + 'you will be told, and asking is what is left.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'The task this is a step of.' },
+        title: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['id', 'title'],
+    },
+  },
+  {
+    name: 'report',
+    description:
+      'Say what you did. Writes a heading describing the work, your notes underneath, and '
+      + 'the follow-ups as tasks for the user. Then hands the brief back for sign-off, or '
+      + 'closes it if the terms allow. This is how a piece of work ENDS.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'The brief you are answering.' },
+        heading: { type: 'string', description: 'What you did, in a line. Becomes the band title.' },
+        notes: { type: 'string', description: 'How, and anything the next reader needs.' },
+        followups: {
+          type: 'array',
+          description: 'Tasks for the user: what to check, what is still open. '
+            + 'Each becomes a subtask under the heading.',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              notes: { type: 'string' },
+              kind: {
+                type: 'string',
+                enum: ['followup', 'check'],
+                description: 'followup — something to do next. check — something to verify yourself.',
+              },
+            },
+            required: ['title'],
+          },
+        },
+      },
+      required: ['id', 'heading', 'notes'],
+    },
+  },
+  {
+    name: 'run_state',
+    description:
+      'What this run has spent and what it may still create. Ask before a long stretch of '
+      + 'steps rather than discovering the ceiling by hitting it.',
+    inputSchema: {
+      type: 'object',
+      properties: { run_id: { type: 'string' } },
+      required: ['run_id'],
+    },
+  },
+]
+
+const GROUPS = { read: READ, search: SEARCH, write: WRITE, dialogue: DIALOGUE }
 const TOOLS = Object.entries(GROUPS)
   .filter(([scope]) => SCOPES.has(scope))
   .flatMap(([, list]) => list)
@@ -512,6 +622,156 @@ async function run(name, args = {}) {
       }
       if (args.comment) await comment(args.id, args.comment)
       return shape(await get(`/tasks/${args.id}`), await projectsById())
+    }
+
+    // ── the dialogue ─────────────────────────────────────────────────────
+    case 'claim': {
+      const t = await get(`/tasks/${args.id}`)
+      // A run that already exists is joined rather than replaced: claiming
+      // twice is a resumed session, not a fresh start, and a new id would
+      // silently reset the budget the first one had spent.
+      const runId = t.run_id || `run-${t.id}-${Date.now().toString(36)}`
+      await patch(`/tasks/${args.id}`, {
+        status: 'doing', waiting_on: 'ai', run_id: runId, ai_role: t.ai_role || 'brief',
+      })
+      const [full, state] = await Promise.all([
+        get(`/tasks/${args.id}`), get(`/tasks/runs/${runId}`),
+      ])
+      return {
+        ...shape(full, await projectsById()),
+        run_id: runId,
+        terms: state.terms,
+        budget: { spent: state.spent, of: state.budget, remaining: state.remaining },
+        note: 'Work under these terms. mode says what you may do at all; verify says what '
+          + 'you must show. When you are done, report. When you are stuck, ask.',
+      }
+    }
+
+    case 'run_state':
+      return get(`/tasks/runs/${args.run_id}`)
+
+    case 'ask': {
+      const t = await get(`/tasks/${args.id}`)
+      const made = await post('/tasks', {
+        title: args.question,
+        scheduled_date: t.scheduled_date,
+        section_id: t.section_id,
+        parent_id: t.id,
+        origin: 'ai',
+        ai_role: 'question',
+        run_id: t.run_id,
+        waiting_on: 'human',
+        seen: 0,
+      })
+      // The task you were working waits on them too. A question that left the
+      // brief looking like yours to get on with would be a question nobody
+      // knew was blocking anything.
+      await patch(`/tasks/${args.id}`, { waiting_on: 'human' })
+      return {
+        asked: made.id,
+        url: urlFor(made),
+        stop: true,
+        note: 'The turn is theirs. Stop here — do not keep working this brief until it '
+          + 'comes back to you.',
+      }
+    }
+
+    case 'step': {
+      const parent = await get(`/tasks/${args.id}`)
+      if (!parent.run_id) throw new Error('claim the brief first — a step needs a run')
+      const made = await post('/tasks', {
+        title: args.title,
+        notes: args.notes || '',
+        scheduled_date: parent.scheduled_date,
+        section_id: parent.section_id,
+        parent_id: parent.id,
+        origin: 'ai',
+        ai_role: 'step',
+        run_id: parent.run_id,
+        ai_depth: (parent.ai_depth || 0) + 1,
+        waiting_on: 'ai',
+        seen: 0,
+      })
+      return { id: made.id, title: made.title, depth: made.ai_depth, url: urlFor(made) }
+    }
+
+    case 'report': {
+      const t = await get(`/tasks/${args.id}`)
+      const byProject = await projectsById()
+
+      // The heading is a band: a sub-section whose children are the follow-ups,
+      // pointing back at the brief it answers.
+      const band = await post('/tasks', {
+        title: args.heading,
+        notes: args.notes,
+        scheduled_date: t.scheduled_date,
+        section_id: t.section_id,
+        subsection: 1,
+        origin: 'ai',
+        ai_role: 'answer',
+        answers_id: t.id,
+        run_id: t.run_id,
+        waiting_on: 'human',
+        seen: 0,
+      })
+
+      // Follow-ups are NOT exempt from the budget, so a run that has spent
+      // itself can still say what it did but cannot leave twenty new tasks
+      // behind. What could not be written is said in the band rather than
+      // dropped quietly.
+      const wanted = args.followups || []
+      const written = []
+      let stopped = null
+      for (const f of wanted) {
+        try {
+          const made = await post('/tasks', {
+            title: f.title,
+            notes: f.notes || '',
+            scheduled_date: t.scheduled_date,
+            section_id: t.section_id,
+            parent_id: band.id,
+            origin: 'ai',
+            ai_role: f.kind === 'check' ? 'check' : 'followup',
+            run_id: t.run_id,
+            waiting_on: 'human',
+            seen: 0,
+          })
+          written.push(made.id)
+        } catch (e) {
+          stopped = e.message
+          break
+        }
+      }
+      if (stopped) {
+        const missed = wanted.slice(written.length).map((f) => `- ${f.title}`).join('\n')
+        await patch(`/tasks/${band.id}`, {
+          notes: `${args.notes}\n\n_${wanted.length - written.length} follow-ups could not be `
+            + `written — the run's budget is spent. They were:_\n\n${missed}`,
+        })
+      }
+
+      // Sign-off decides who closes it. Required means it comes back to you
+      // with the work done but the calling of it done left to you.
+      const defaults = await get('/settings').catch(() => ({}))
+      const section = t.section_id ? await get(`/sections/${t.section_id}`).catch(() => null) : null
+      const terms = stack(defaults?.ai_switch_defaults, section?.ai_switches, t.ai_switches)
+      const signOff = terms.sign_off === 'required'
+
+      await patch(`/tasks/${args.id}`, signOff
+        ? { waiting_on: 'human' }
+        : { status: 'done', waiting_on: null })
+
+      return {
+        reported: band.id,
+        url: urlFor(band),
+        followups_written: written.length,
+        followups_dropped: wanted.length - written.length,
+        budget_note: stopped,
+        brief: signOff ? 'handed back for sign-off' : 'closed',
+        note: signOff
+          ? 'They sign it off. Do not close it yourself.'
+          : 'Closed, as the terms allow.',
+      }
     }
 
     case 'add_comment':

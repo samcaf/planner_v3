@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { db } from '../db.js'
-import { badRequest, crud, h, nextSort, notFound } from './_helpers.js'
+import { badRequest, crud, h, nextSort, notFound, refused } from './_helpers.js'
+// One definition of what the switches mean and how they stack. See runState.
+import { stack } from '../../web/src/lib/aiSwitches.js'
 
 const FIELDS = [
   'title', 'notes', 'project_id', 'milestone_id', 'status', 'priority',
@@ -149,6 +151,9 @@ r.get('/', h((req) => {
   if (optional !== undefined) { where.push('t.optional = ?'); args.push(Number(optional) ? 1 : 0) }
   if (is_code !== undefined) { where.push('t.is_code = ?'); args.push(Number(is_code) ? 1 : 0) }
   if (section_id) { where.push('t.section_id = ?'); args.push(section_id) }
+  const { waiting_on } = req.query
+  if (waiting_on === 'none') where.push('t.waiting_on IS NULL')
+  else if (waiting_on) oneOf('waiting_on', waiting_on)
   if (parent_id) { where.push('t.parent_id = ?'); args.push(parent_id) }
   if (due_from) { where.push('t.due_date >= ?'); args.push(due_from) }
   if (due_to) { where.push('t.due_date <= ?'); args.push(due_to) }
@@ -185,7 +190,99 @@ r.get('/', h((req) => {
   `).all(...args, take, skip))
 }))
 
+/**
+ * What one run has spent and what it is still allowed.
+ *
+ * Two segments, so it cannot be mistaken for a task id. Exists so the tool
+ * server does not have to re-derive the terms itself — the answer an agent
+ * plans against and the answer the server enforces have to be the same one.
+ */
+r.get('/runs/:runId', h((req) => {
+  const state = runState(req.params.runId)
+  if (!state) throw notFound('no such run')
+  const budget = Number(state.terms.budget)
+  return {
+    run_id: req.params.runId,
+    brief: { id: state.root.id, title: state.root.title },
+    terms: state.terms,
+    spent: state.spent,
+    budget,
+    remaining: Math.max(0, budget - state.spent),
+    always_allowed: ALWAYS_ALLOWED,
+  }
+}))
+
 r.get('/:id', h((req) => readTask(req.params.id)))
+
+/**
+ * The terms in force for one run, and what it has spent.
+ *
+ * A run is every task carrying the same `run_id`. Its terms come from the
+ * brief it started with, falling back to the conversation, then to the user's
+ * defaults, then to the built-ins — the same four layers the row shows, and
+ * literally the same code: the resolver is imported from the web module rather
+ * than restated here, because two copies of a precedence rule is two rules
+ * that will eventually disagree, and the one the server enforces would be the
+ * one nobody was looking at.
+ */
+function runState(runId) {
+  const rows = db.prepare(`
+    SELECT t.*, s.ai_switches AS section_switches
+    FROM tasks t LEFT JOIN sections s ON s.id = t.section_id
+    WHERE t.run_id = ? ORDER BY t.id
+  `).all(runId)
+  if (!rows.length) return null
+
+  const root = rows.find((r) => r.ai_role === 'brief') || rows[0]
+  const defaults = db.prepare("SELECT value FROM settings WHERE key = 'ai_switch_defaults'").get()
+  const terms = stack(defaults?.value, root.section_switches, root.ai_switches)
+  return { rows, root, terms, spent: rows.length }
+}
+
+/**
+ * What a run is allowed to create next.
+ *
+ * Enforced HERE rather than in the tool server, because "the planner refuses"
+ * is the promise the switch panel makes, and a limit applied by whatever is
+ * calling is a limit the caller can decline to apply.
+ *
+ * Two roles are exempt from the budget — counted, but never refused: a
+ * question, and the answer that reports what was done. They are the two moves
+ * that COMMUNICATE, and both hand the turn back to you. Refusing them would
+ * turn a spent budget into a silent stop: an agent that cannot ask has no way
+ * to say it is stuck, and one that cannot report has done the work and left no
+ * record of it. Everything else — its own steps, the follow-ups it would like
+ * you to do — is what the ceiling is actually for.
+ */
+const ALWAYS_ALLOWED = ['question', 'answer']
+
+function checkRunAllows(body) {
+  if (!body.run_id || body.origin !== 'ai') return
+  const state = runState(body.run_id)
+  if (!state) return
+
+  const depth = Number(state.terms.depth)
+  const wanted = Number(body.ai_depth || 0)
+  if (body.ai_role === 'step' && wanted > depth) {
+    throw refused(
+      'depth',
+      `depth ${wanted} is past the ${depth} this run allows`,
+      { depth, allowed: depth },
+    )
+  }
+
+  if (ALWAYS_ALLOWED.includes(body.ai_role)) return
+
+  const budget = Number(state.terms.budget)
+  if (state.spent >= budget) {
+    throw refused(
+      'budget',
+      `budget spent — ${state.spent} of ${budget} tasks in this run. `
+        + 'Report what you have, or ask a question: neither is ever refused.',
+      { spent: state.spent, budget },
+    )
+  }
+}
 
 /**
  * Comments on a task.
@@ -256,6 +353,8 @@ r.post('/', h((req) => {
     const project = db.prepare('SELECT default_intensity FROM projects WHERE id = ?').get(body.project_id)
     if (project) body.intensity = project.default_intensity
   }
+  checkRunAllows(body)
+
   // A task written into an AI section starts as the AI's move, because that is
   // what writing one means. Set at creation rather than inferred later: a task
   // with no turn is invisible on a board whose columns ARE the turn, and

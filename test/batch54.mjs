@@ -100,9 +100,9 @@ try {
 
   const names = (await c.list()).map((t) => t.name).sort()
   const want = [
-    'add_comment', 'add_worklog', 'create_task', 'describe', 'get_comments',
-    'get_projects', 'get_task', 'get_transitions', 'search_tasks',
-    'transition_task', 'update_task',
+    'add_comment', 'add_worklog', 'ask', 'claim', 'create_task', 'describe',
+    'get_comments', 'get_projects', 'get_task', 'get_transitions', 'report',
+    'run_state', 'search_tasks', 'step', 'transition_task', 'update_task',
   ]
   check('it lists the full tool set', names.join(',') === want.join(','), names.join(','))
 

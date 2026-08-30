@@ -55,7 +55,13 @@ if (existsSync(dist)) {
 // Any thrown error becomes a JSON response rather than an HTML stack page.
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(err.status || 500).json({ error: err.message || 'server error' })
+  // `code` rides along when the caller set one. A refusal an agent has to act
+  // on differently from a typo — a spent budget, say — should be recognisable
+  // without matching on the wording of a sentence.
+  const body = { error: err.message || 'server error' }
+  if (err.code) body.code = err.code
+  if (err.detail) body.detail = err.detail
+  res.status(err.status || 500).json(body)
 })
 
 app.listen(PORT, () => {

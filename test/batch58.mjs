@@ -58,6 +58,17 @@ try {
   check('an impossible value is dropped', clean({ mode: 'sideways' }).mode === undefined,
     JSON.stringify(clean({ mode: 'sideways' })))
 
+  // The panel offers presets; the API can send anything. A number quietly
+  // replaced by the default is a limit nobody set and nobody can see.
+  check('a budget the buttons do not offer is still accepted',
+    clean({ budget: '5' }).budget === '5', JSON.stringify(clean({ budget: '5' })))
+  check('a depth likewise', clean({ depth: '6' }).depth === '6')
+  check('but not one outside the bounds', clean({ budget: '9999' }).budget === undefined,
+    JSON.stringify(clean({ budget: '9999' })))
+  check('and not a number where an enum is meant',
+    clean({ mode: '3' }).mode === undefined, JSON.stringify(clean({ mode: '3' })))
+  check('nor nonsense in a numeric one', clean({ budget: 'lots' }).budget === undefined)
+
   // ── four layers ──────────────────────────────────────────────────────────
   const defaults = JSON.stringify({ mode: 'build', verify: 'reproduce' })
   const section = { ai_switches: JSON.stringify({ budget: '20' }) }

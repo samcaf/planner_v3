@@ -73,6 +73,12 @@ const CLOSED = 'done,dropped,moved'
 
 const FLAGS = {
   code: { is_code: 1 },
+  // Whose move it is, in a conversation. The three most useful questions an
+  // agent can ask of a board it is working: what is mine, what is theirs, what
+  // is settled.
+  mine: { waiting_on: 'ai' },
+  theirs: { waiting_on: 'human' },
+  settled: { waiting_on: 'none' },
   deep: { intensity: 'deep' },
   light: { intensity: 'light' },
   optional: { optional: 1 },
@@ -83,6 +89,13 @@ const FLAGS = {
   archived: { archived: 1 },
 }
 
+/**
+ * `is:mine` reads from the agent's side of the table.
+ *
+ * A task waiting on the AI is the agent's to do — so from a tool server, "mine"
+ * is `waiting_on: ai`. Named for the caller rather than the column, because the
+ * caller is who has to get it right at three in the morning.
+ */
 export const FIELDS = [
   'is', 'status', 'priority', 'project', 'section', 'date', 'due', 'has',
   'order', 'limit', 'offset', 'parent', 'text',

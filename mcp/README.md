@@ -17,7 +17,7 @@ The API must be running; the tools talk to `http://localhost:8787`.
 |---|---|
 | `PLANNER_API` | where the API is (default `http://localhost:8787`) |
 | `PLANNER_WEB` | what to build task URLs from (default `http://localhost:5173`) |
-| `PLANNER_MCP_SCOPES` | `read,write,search` — drop `write` for a server that cannot change anything |
+| `PLANNER_MCP_SCOPES` | `read,write,search,dialogue` — drop `write` and `dialogue` for a server that cannot change anything |
 | `PLANNER_MCP_AUTHOR` | who comments are attributed to (default `claude`) |
 
 ## The tools
@@ -25,6 +25,7 @@ The API must be running; the tools talk to `http://localhost:8787`.
 **read** — `get_task`, `get_transitions`, `get_projects`, `get_comments`, `describe`
 **search** — `search_tasks`
 **write** — `create_task`, `update_task`, `transition_task`, `add_comment`, `add_worklog`
+**dialogue** — `claim`, `ask`, `step`, `report`, `run_state`
 
 A tool outside the granted scopes is not merely missing from the list; calling
 it by name says which scope it needed.
@@ -44,6 +45,7 @@ is:done date:week
 | | |
 |---|---|
 | `is:` / `not:` | `code` `deep` `light` `optional` `committed` `open` `done` `closed` `archived` |
+| `is:mine` `is:theirs` `is:settled` | whose move it is in a conversation |
 | `status:` | `todo` `doing` `done` `moved` `dropped` — comma for OR |
 | `priority:` | `lowest` `low` `medium` `high` `highest` |
 | `date:` `due:` | `today` `tomorrow` `yesterday` `week` `overdue` `none` `YYYY-MM-DD` `A..B` |
@@ -55,6 +57,34 @@ is:done date:week
 A wrong term is an error that names the valid ones, rather than an empty
 result. `describe` returns the same grammar, so a client can read it once
 instead of being told.
+
+## The dialogue
+
+Five moves that hold a conversation in tasks rather than in a chat window. You
+write a brief in an AI section; an agent works it and writes back.
+
+```
+claim   take a brief, open a run, learn the terms it is worked under
+ask     ask the user something — puts it in their column, and you STOP
+step    raise a task for yourself, so your path is visible
+report  a heading saying what you did, notes, and follow-ups for the user
+```
+
+**The ceiling is what makes this safe to turn on.** A run may create at most
+`budget` tasks and nest its own steps at most `depth` deep, and the *planner*
+refuses past either — not the tool server, which is only whatever happens to be
+calling.
+
+Two roles are exempt: **a question, and the answer that reports what was done.**
+They are the two moves that communicate, and both hand the turn back to you.
+Refusing them would turn a spent budget into a silent stop — an agent that
+cannot ask has no way to say it is stuck, and one that cannot report has done
+the work and left no record. Follow-ups are *not* exempt, so a spent run can
+still say what it did but cannot leave twenty new tasks behind; what it had to
+drop is written into the answer rather than disappearing.
+
+`run_state` says what has been spent and what is left, so a long stretch of
+steps can be planned rather than discovering the ceiling by hitting it.
 
 ## Why it is shaped this way
 
