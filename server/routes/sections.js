@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db } from '../db.js'
 import { badRequest, crud, h, nextSort, notFound } from './_helpers.js'
 
-const FIELDS = ['date', 'name', 'project_id', 'layout', 'color', 'collapsed', 'sort']
+const FIELDS = ['date', 'name', 'project_id', 'layout', 'color', 'collapsed', 'sort', 'kind', 'ai_switches']
 const sections = crud('sections', FIELDS)
 
 const r = Router()
@@ -22,6 +22,9 @@ r.post('/', h((req) => {
   if (!body.date || !body.name) throw badRequest('date and name required')
   return sections.create({
     sort: nextSort('sections', 'WHERE date = ?', [body.date]),
+    // An AI section is a board of who owes whom a move, so it is three-box by
+    // nature — a list would have nowhere to show the turn.
+    ...(body.kind === 'ai' ? { layout: 'columns' } : {}),
     ...body,
   })
 }))

@@ -5,6 +5,18 @@
  * real server, because the bugs worth catching here are interaction bugs that a
  * green build and a passing curl both miss.
  *
+ * The keyboard suites walk the cursor by pressing a key and waiting for the
+ * repaint. Those waits are deliberately generous: the cursor is painted from a
+ * mutation observer, and a press that lands before the repaint walks from a
+ * stale position — which passes on an idle machine and fails intermittently
+ * behind forty other suites. Every such loop leaves as soon as it arrives, so
+ * the slack costs nothing when things are quick.
+ *
+ * Do not run two of these at once, and do not rebuild `web/dist` while one is
+ * running. The asset filename is hashed, so a page that fetched index.html
+ * before a rebuild 404s on its script after it, and the second run's restore
+ * of the production bundle breaks the first run outright.
+ *
  * Requires `npm run dev` to be up. Rows are created on far-future dates and
  * deleted by id at the end of each suite, so nothing of yours is touched — but
  * a suite killed part-way leaves its probe rows behind and the next run will

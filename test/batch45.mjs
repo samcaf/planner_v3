@@ -121,7 +121,7 @@ try {
   }
   for (let i = 0; i < 150 && cursorId() === null; i++) await wait(150)
   key(window, 'g'); await wait(90); key(window, 'g'); await wait(200)
-  for (let i = 0; i < 16 && cursorId() !== withNote.id; i++) { key(window, 'j'); await wait(90) }
+  for (let i = 0; i < 24 && cursorId() !== withNote.id; i++) { key(window, 'j'); await wait(160) }
   check('aimed at the task with a note', cursorId() === withNote.id, `${cursorId()}`)
   key(window, 'y'); await wait(120); key(window, 'y'); await wait(700)
   check('yy carries the note as well as the title',

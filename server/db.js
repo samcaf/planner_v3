@@ -121,6 +121,38 @@ addColumn('projects', 'repo_path', "TEXT NOT NULL DEFAULT ''")
  * software to satisfy a foreign key would corrupt the thing the people table
  * is for.
  */
+/*
+ * A dialogue with an AI, conducted in tickets.
+ *
+ * An AI section is an ordinary section that means something different: the
+ * three boxes stop being Quick/Focused/Deep and become whose move it is. All
+ * the machinery — bands, nesting, drag and drop, the vim cursor — is reused
+ * unchanged, because the only thing that decided which box a task sat in was
+ * one grading function.
+ *
+ * `waiting_on` is the spine. A task waits on the human, or on the AI, or on
+ * nobody, and that is the whole turn-taking protocol. Everything else here
+ * hangs off it.
+ */
+addColumn('sections', 'kind', "TEXT NOT NULL DEFAULT 'work'")
+addColumn('sections', 'ai_switches', "TEXT NOT NULL DEFAULT ''")
+
+addColumn('tasks', 'waiting_on', 'TEXT')
+addColumn('tasks', 'origin', "TEXT NOT NULL DEFAULT 'human'")
+// brief | question | answer | step | followup | check. `step` is the agent's
+// own trail — the one role written for itself rather than for you, which is
+// why it is the one that folds away by default. An `audience` column would say
+// the same thing twice.
+addColumn('tasks', 'ai_role', 'TEXT')
+addColumn('tasks', 'ai_switches', "TEXT NOT NULL DEFAULT ''")
+// One excursion, so a run can be read — or thrown away — as a unit.
+addColumn('tasks', 'run_id', 'TEXT')
+addColumn('tasks', 'answers_id', 'INTEGER')
+addColumn('tasks', 'ai_depth', 'INTEGER NOT NULL DEFAULT 0')
+// The conversation is asynchronous: work arrives while you are elsewhere, and
+// without this there is no way to see what is new since you last looked.
+addColumn('tasks', 'seen', 'INTEGER NOT NULL DEFAULT 1')
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS task_comments (
     id         INTEGER PRIMARY KEY,

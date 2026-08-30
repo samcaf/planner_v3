@@ -38,6 +38,9 @@ const PATHS = {
   keyboard: 'M2.5 6h19v12h-19z M6 9.5h.01 M9.5 9.5h.01 M13 9.5h.01 M16.5 9.5h.01'
     + ' M6 12.5h.01 M9.5 12.5h.01 M13 12.5h.01 M16.5 12.5h.01 M7.5 15.5h9',
   paperclip: 'M21.4 11l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
+  /* A four-pointed star with a small companion: the mark that has come to mean
+     "a machine did this". Two strokes, so it reads at 11px. */
+  sparkle: 'M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z M18 16.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z',
   /* Angle brackets and a slash — what everyone draws for code. */
   code: 'M8.5 17.5L3 12l5.5-5.5 M15.5 6.5L21 12l-5.5 5.5 M13.5 4.5l-3 15',
 

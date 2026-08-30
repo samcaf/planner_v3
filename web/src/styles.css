@@ -2118,3 +2118,81 @@ kbd {
 .tc-when { font-size: 11px; }
 .tc-add { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
 .tc-add textarea { width: 100%; resize: vertical; }
+
+/* ── A dialogue with an AI ────────────────────────────────────────────────
+   An AI section is an ordinary section that means something different: its
+   three boxes are whose move it is, and its rows carry terms instead of
+   times. Marked quietly — it is still your day, not a chat window. */
+.panel.section.is-dialogue { border-color: var(--accent); }
+.panel.section.is-dialogue > .section-h { background: var(--accent-soft); }
+
+.task.is-ai.by-ai { box-shadow: inset 2px 0 0 var(--accent); }
+.task.is-ai.is-unread .task-title::after {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: var(--space-2);
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.chip.ai-badge { color: var(--accent); border-color: var(--accent); }
+.chip.ai-role { text-transform: lowercase; }
+
+/* A step is the agent's own trail — a record of how it got somewhere, not
+   something addressed to you. Quieter, so the exchange stays readable. */
+.task.role-step { opacity: .72; font-size: 12px; }
+
+/* The switches. Most rows show only the button; a row that differs from the
+   conversation's terms shows what differs, and nothing else. */
+.ai-switches { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.chip.ais-chip { background: var(--hover); }
+.chip.ais-chip.is-inherited { opacity: .7; }
+.chip.ais-open { color: var(--muted); }
+
+.ais-menu { padding: var(--space-3); }
+.ais-head {
+  margin: 0 0 var(--space-2);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.ais-head-soft { margin-top: var(--space-4); color: var(--muted); }
+.ais-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.ais-name { flex: 0 0 78px; font-size: 12px; }
+.ais-opts { display: flex; gap: 2px; flex-wrap: wrap; }
+.ais-opts .btn { font-size: 11px; padding: 2px 6px; }
+
+/* ── One exchange, spread across three columns ────────────────────────────
+   The board puts a brief and the follow-ups it produced as far apart as it
+   can — the brief waits on the AI, the follow-ups wait on you. A rule down
+   the side in a colour shared by the whole exchange is what says they are one
+   thing; pointing at any of them lights the rest. */
+.task.in-thread { border-left: 3px solid var(--thread); padding-left: var(--space-3); }
+.task.thread-0 { --thread: var(--blue); }
+.task.thread-1 { --thread: var(--purple); }
+.task.thread-2 { --thread: var(--teal); }
+.task.thread-3 { --thread: var(--amber); }
+.task.thread-4 { --thread: var(--green); }
+.task.thread-5 { --thread: var(--red); }
+
+.task.thread-lit,
+.task.thread-cursor { background: var(--hover); }
+.task.thread-lit.in-thread,
+.task.thread-cursor.in-thread { border-left-width: 5px; }
+
+/* Following a link across columns leaves you at the far end with no idea which
+   of a dozen cards you were sent to, so the destination says so itself. */
+@keyframes task-flash {
+  0%   { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+.task.is-flashed { animation: task-flash 1.4s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .task.is-flashed { animation: none; box-shadow: 0 0 0 3px var(--accent); }
+}
+
+.chip.thread-link { color: var(--thread, var(--muted)); border-color: var(--thread, var(--line)); }
+.chip.thread-link:hover { background: var(--hover); }

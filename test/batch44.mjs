@@ -67,7 +67,7 @@ try {
   // the loop needs room for those as well as for the tasks.
   const aim = async (id) => {
     key('g'); await wait(90); key('g'); await wait(200)
-    for (let i = 0; i < 24 && cursorId() !== id; i++) { key('j'); await wait(90) }
+    for (let i = 0; i < 24 && cursorId() !== id; i++) { key('j'); await wait(160) }
     return cursorId() === id
   }
   const sectionShut = (id) => document

@@ -2,12 +2,15 @@ import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import TaskComments from './TaskComments.jsx'
+import AiSwitches from './AiSwitches.jsx'
 import Popover from './Popover.jsx'
 import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
 import { isSectionDrag, useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
-import { Rich, RichEditor, RichLine } from '../lib/rich.jsx'
+import { isDialogue } from '../lib/columns.js'
+import { flashTask } from '../lib/threads.js'
+import { Rich, RichEditor, RichLine, plainTitle } from '../lib/rich.jsx'
 import { cls } from './ui.jsx'
 import { addDays, minutesLabel, shortDate, today } from '../lib/dates.js'
 
@@ -124,6 +127,16 @@ function StatusBox({ status, optional, meeting, onClick, onToggleOptional, onDro
   )
 }
 
+/** What each kind of row in an exchange is, said in words when hovered. */
+const AI_ROLE_HINT = {
+  brief: 'what you asked for',
+  question: 'a question the AI needs answered before it can go on',
+  answer: 'what the AI did',
+  step: 'a step the AI raised for itself',
+  followup: 'something the AI suggests doing next',
+  check: 'something the AI wants you to look at yourself',
+}
+
 export default function TaskRow({
   task,
   subtasks = [],
@@ -135,6 +148,16 @@ export default function TaskRow({
   // Move or copy this task to another day. The server does it, because either
   // way the task's section has to be found or made on the far side.
   onReschedule,
+  // The section this row is drawn in, when it is drawn in one. Only a dialogue
+  // section changes anything: its rows carry the AI's terms instead of a
+  // duration, and say who wrote them.
+  section = null,
+  // Which exchange this row belongs to, and whether that exchange is currently
+  // being pointed at. See lib/threads.js — the board separates a brief from
+  // its follow-ups on purpose, so something has to say they are one thing.
+  thread = null,
+  threadLit = false,
+  onThread,
   showProject = true,
   // Whether the subtree is drawn here. A sub-section band already lays its
   // children out beneath the heading, so the heading itself must not repeat
@@ -223,6 +246,7 @@ export default function TaskRow({
   const picked = !!sel?.has(task.id)
   const isNote = task.kind === 'note'
   const isMeeting = task.kind === 'meeting'
+  const dialogue = isDialogue(section)
   const attendees = task.people || []
   const accepts = !!(onDropTask || onNest)
   const notesShown = !!task.notes && !task.notes_hidden
@@ -309,12 +333,30 @@ export default function TaskRow({
         // Keyboard control finds its cursor by reading these off the page, so
         // every view that draws tasks gets it without knowing that it has.
         data-task-id={task.id}
+        data-answers={task.answers_id ?? undefined}
+        // Read by the vim layer, so moving the cursor onto a row lights the
+        // rest of its exchange the way pointing at it does. An attribute
+        // rather than shared state: the two layers do not otherwise know
+        // about each other, and this is the whole of what they need to.
+        data-thread={thread?.size > 1 ? thread.key : undefined}
         className={[
           'task', task.status, isNote ? 'is-note' : '', isMeeting ? 'is-meeting' : '',
           task.optional ? 'is-optional' : '', zone ? `drop-${zone}` : '',
           picked ? 'sel-on' : '', sel?.size ? 'sel-armed' : '',
-        ].join(' ')}
+          dialogue ? 'is-ai' : '',
+          // Only an exchange with more than one row is worth marking; a lone
+          // task would carry a rule that pointed at nothing.
+          dialogue && thread?.size > 1 ? `in-thread thread-${thread.tint}` : '',
+          threadLit ? 'thread-lit' : '',
+          dialogue && task.origin === 'ai' ? 'by-ai' : '',
+          dialogue && task.ai_role ? `role-${task.ai_role}` : '',
+          dialogue && !task.seen ? 'is-unread' : '',
+        ].filter(Boolean).join(' ')}
         style={depth ? { marginLeft: depth * 22 } : undefined}
+        // Pointing at any row in an exchange lights the rest of it, wherever on
+        // the board they happen to have been dealt.
+        onMouseEnter={thread?.size > 1 ? () => onThread?.(thread.key) : undefined}
+        onMouseLeave={thread?.size > 1 ? () => onThread?.(null) : undefined}
         draggable={draggable && !texting}
         // Releasing the drag on focus is too late to select text with the
         // mouse: the gesture that selects begins with the mousedown, and by
@@ -456,7 +498,55 @@ export default function TaskRow({
           )}
 
           <div className="task-meta" hidden={isNote}>
-            {timed && (
+            {/* Who wrote this, but only where it could be either of you. */}
+            {dialogue && task.origin === 'ai' && (
+              <span className="chip ai-badge" title="Written by the AI">
+                <Icon name="sparkle" size={11} />
+                AI
+              </span>
+            )}
+            {/* The concrete half of the association: where this came from, and
+                what came of it. A tint says "these belong together"; this says
+                which one, and takes you there. */}
+            {dialogue && thread?.answers && (
+              <button
+                className="chip thread-link"
+                title={`Answers “${plainTitle(thread.answers.title)}” — click to go to it`}
+                onClick={(e) => { e.stopPropagation(); flashTask(thread.answers.id) }}
+              >
+                <Icon name="subtask" size={11} />
+                {plainTitle(thread.answers.title).slice(0, 28) || 'the brief'}
+              </button>
+            )}
+            {dialogue && thread?.replies > 0 && (
+              <button
+                className="chip thread-link"
+                title={`${thread.replies} ${thread.replies === 1 ? 'reply' : 'replies'} — click to go to the first`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const reply = document.querySelector(`.task[data-answers="${task.id}"]`)
+                  if (reply) flashTask(Number(reply.dataset.taskId))
+                }}
+              >
+                <Icon name="arrowRight" size={11} />
+                {thread.replies} {thread.replies === 1 ? 'reply' : 'replies'}
+              </button>
+            )}
+            {dialogue && task.ai_role && (
+              <span className="chip ai-role" title={`This is ${AI_ROLE_HINT[task.ai_role] || 'part of the exchange'}`}>
+                {task.ai_role}
+              </span>
+            )}
+            {/* Terms in place of a clock. A conversational task has no
+                duration to speak of; what matters is how it should be worked. */}
+            {dialogue && (
+              <AiSwitches
+                task={task}
+                section={section}
+                onChange={onChange}
+              />
+            )}
+            {!dialogue && timed && (
               <span className="chip c-blue">
                 <Icon name="clock" size={11} />
                 {task.start_time || '—'}{task.end_time ? `–${task.end_time}` : ''}
@@ -658,6 +748,13 @@ export default function TaskRow({
           onAddChild={onAddChild}
           onReschedule={onReschedule}
           showProject={showProject}
+          // A child is in the same conversation and the same exchange as its
+          // parent — it is drawn from inside this row rather than from the
+          // section, so it has no other way to learn either.
+          section={section}
+          thread={thread}
+          threadLit={threadLit}
+          onThread={onThread}
           autoEditId={autoEditId}
           // Forwarded, not defaulted: a list that does not accept drops turns
           // dragging off, and a child left draggable there is an affordance

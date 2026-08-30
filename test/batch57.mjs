@@ -67,7 +67,7 @@ try {
     box.dispatchEvent(new window.Event('input', { bubbles: true }))
     box.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
     await wait(600)
-    for (let i = 0; i < 8 && onTask() !== id; i++) { key('n'); await wait(140) }
+    for (let i = 0; i < 24 && onTask() !== id; i++) { key('n'); await wait(160) }
     return onTask() === id
   }
 

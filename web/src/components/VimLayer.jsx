@@ -1115,9 +1115,11 @@ export default function VimLayer() {
       if (typeof document === 'undefined' || !document?.querySelectorAll) return
 
       for (const el of document.querySelectorAll(
-        '.vim-on, .vim-sel, .vim-on-section, .vim-on-band, .vim-on-card',
+        '.vim-on, .vim-sel, .vim-on-section, .vim-on-band, .vim-on-card, .thread-cursor',
       )) {
-        el.classList.remove('vim-on', 'vim-sel', 'vim-on-section', 'vim-on-band', 'vim-on-card')
+        el.classList.remove(
+          'vim-on', 'vim-sel', 'vim-on-section', 'vim-on-band', 'vim-on-card', 'thread-cursor',
+        )
       }
       if (!enabled) return
 
@@ -1185,6 +1187,17 @@ export default function VimLayer() {
         // it — that is the thing a yank from here would take.
         at?.closest('.subsec')?.classList.add('vim-on-band')
       }
+      // A row in a conversation belongs to an exchange whose other halves are
+      // in other columns. Landing on one lights the rest, the same as pointing
+      // at it — a separate class from the one React manages, so the two are
+      // not fighting over the same attribute on every render.
+      const thread = at?.dataset?.thread
+      if (thread) {
+        for (const el of document.querySelectorAll(`.task[data-thread="${thread}"]`)) {
+          el.classList.add('thread-cursor')
+        }
+      }
+
       // Ranges point at text nodes, which a redraw replaces, so the highlight
       // has to be laid down again alongside the cursor.
       if (lastSearch.current) paintMatches(lastSearch.current)

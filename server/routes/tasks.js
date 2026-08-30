@@ -8,6 +8,8 @@ const FIELDS = [
   'parent_id', 'start_time', 'end_time', 'col_index', 'section_id', 'kind',
   'moved_to_date', 'notes_hidden', 'intensity', 'optional', 'url', 'location',
   'subsection', 'archived', 'group_id', 'is_code',
+  'waiting_on', 'origin', 'ai_role', 'ai_switches', 'run_id', 'answers_id',
+  'ai_depth', 'seen',
   'scaffold', 'fixed_time', 'timer_started_at', 'timer_elapsed_ms',
   // Present so a deleted routine task keeps its link when restored, the same
   // reason from_template is here.
@@ -254,6 +256,15 @@ r.post('/', h((req) => {
     const project = db.prepare('SELECT default_intensity FROM projects WHERE id = ?').get(body.project_id)
     if (project) body.intensity = project.default_intensity
   }
+  // A task written into an AI section starts as the AI's move, because that is
+  // what writing one means. Set at creation rather than inferred later: a task
+  // with no turn is invisible on a board whose columns ARE the turn, and
+  // deciding it on read would guess differently in different places.
+  if (body.waiting_on === undefined && body.section_id) {
+    const section = db.prepare('SELECT kind FROM sections WHERE id = ?').get(body.section_id)
+    if (section?.kind === 'ai') body.waiting_on = 'ai'
+  }
+
   const sort = nextSort(
     'tasks',
     body.scheduled_date ? 'WHERE scheduled_date = ?' : 'WHERE scheduled_date IS NULL',

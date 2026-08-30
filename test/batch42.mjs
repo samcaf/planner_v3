@@ -109,7 +109,7 @@ try {
   }
 
   const aim = async () => {
-    key('g'); await wait(90); key('g'); await wait(200)
+    key('g'); await wait(160); key('g'); await wait(400)
     return cursorId()
   }
 
@@ -157,7 +157,12 @@ try {
   const walkTo = async (id) => {
     await openFoldFor(id)
     await aim()
-    for (let i = 0; i < 16 && cursorId() !== id; i++) { key('j'); await wait(80) }
+    // Eighty milliseconds a step was enough on an idle machine and not enough
+    // behind forty other suites: the cursor is repainted from a mutation
+    // observer, and a press that lands before the repaint walks from a stale
+    // position. The loop leaves as soon as it arrives, so the larger numbers
+    // cost nothing in the ordinary case.
+    for (let i = 0; i < 40 && cursorId() !== id; i++) { key('j'); await wait(160) }
     return cursorId() === id
   }
   check('the ticked task can be reached again', await walkTo(target), `${cursorId()} want ${target}`)

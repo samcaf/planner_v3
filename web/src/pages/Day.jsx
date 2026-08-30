@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
+import AiSwitches from '../components/AiSwitches.jsx'
+import { threadMap } from '../lib/threads.js'
 import QuickMeeting from '../components/QuickMeeting.jsx'
 import {
   SelectAllBox, SelectionBar, SelectionProvider, bulkPatch, draggedIds,
@@ -25,6 +27,7 @@ import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
 import {
   COLUMN_MINUTES, columnFor, columnLabels as labelsFor, ownMinutes,
+  isDialogue, TURN_LABELS, TURN_BY_COLUMN,
 } from '../lib/columns.js'
 
 const UNSECTIONED = 'loose'
@@ -334,20 +337,34 @@ function DayView({ date }) {
    * section is null under a parent whose section is set is not in the list its
    * parent is nested from, and disappears from the day entirely.
    */
-  const moveToColumn = (ids, col, retime, under, section, labels) => dropTasks(
-    ids,
-    {
-      col_index: col,
-      section_id: section.id,
-      scheduled_date: date,
-      // Only when the drag was held there, and only for rows already in this
-      // section: re-timing something arriving from elsewhere would overwrite
-      // an estimate you had just made somewhere else.
-      ...(retime ? { estimate_min: COLUMN_MINUTES[col] } : {}),
-    },
-    retime ? `re-time to ${labels[col]}` : `move to ${labels[col]}`,
-    under,
-  )
+  const moveToColumn = (ids, col, retime, under, section, labels) => {
+    // In a dialogue the columns ARE the turn, so dropping a card into one
+    // hands the move over. col_index is left alone deliberately: it means a
+    // duration here, and writing it would leave a wrong answer behind if the
+    // section were ever turned back into ordinary work.
+    if (isDialogue(section)) {
+      return dropTasks(
+        ids,
+        { waiting_on: TURN_BY_COLUMN[col], section_id: section.id, scheduled_date: date },
+        `hand to ${labels[col].toLowerCase()}`,
+        under,
+      )
+    }
+    return dropTasks(
+      ids,
+      {
+        col_index: col,
+        section_id: section.id,
+        scheduled_date: date,
+        // Only when the drag was held there, and only for rows already in this
+        // section: re-timing something arriving from elsewhere would overwrite
+        // an estimate you had just made somewhere else.
+        ...(retime ? { estimate_min: COLUMN_MINUTES[col] } : {}),
+      },
+      retime ? `re-time to ${labels[col]}` : `move to ${labels[col]}`,
+      under,
+    )
+  }
 
   /**
    * Put one or more top-level rows at a new position in a section.
@@ -511,13 +528,13 @@ function DayView({ date }) {
     refresh()
   }
 
-  async function addSection(e) {
+  async function addSection(e, kind = 'work') {
     e.preventDefault()
     const name = sectionName.trim()
     if (!name) { setAddingSection(false); return }
     setSectionName('')
     setAddingSection(false)
-    await api.post('/sections', { date, name })
+    await api.post('/sections', { date, name, kind })
     refresh()
   }
 
@@ -711,21 +728,38 @@ function DayView({ date }) {
           </Panel>
 
           {addingSection ? (
-            <form onSubmit={addSection} className="panel" style={{ padding: 10 }}>
+            <form
+              onSubmit={(e) => addSection(e, addingSection === 'ai' ? 'ai' : 'work')}
+              className="panel"
+              style={{ padding: 10 }}
+            >
               <input
                 className="input"
                 autoFocus
-                placeholder="Section name — e.g. Deep work, Admin, Teleonomy…"
+                placeholder={addingSection === 'ai'
+                  ? 'What are you working out? — e.g. Drag-and-drop rewrite'
+                  : 'Section name — e.g. Deep work, Admin, Teleonomy…'}
                 value={sectionName}
                 onChange={(e) => setSectionName(e.target.value)}
-                onBlur={addSection}
+                onBlur={(e) => addSection(e, addingSection === 'ai' ? 'ai' : 'work')}
                 onKeyDown={(e) => { if (e.key === 'Escape') { setSectionName(''); setAddingSection(false) } }}
               />
             </form>
           ) : (
-            <button className="btn ghost" onClick={() => setAddingSection(true)}>
-              <Icon name="plus" size={14} /> Add a section to this day
-            </button>
+            <div className="row">
+              <button className="btn ghost" onClick={() => setAddingSection(true)}>
+                <Icon name="plus" size={14} /> Add a section to this day
+              </button>
+              {/* A conversation, rather than a list of work. Its three boxes are
+                  whose move it is, and its tasks carry terms instead of times. */}
+              <button
+                className="btn ghost"
+                title="A section for working something out with an AI, in tasks"
+                onClick={() => { setAddingSection('ai'); setSectionName('') }}
+              >
+                <Icon name="sparkle" size={14} /> AI conversation
+              </button>
+            </div>
           )}
 
           <Panel title="Day notes" actions={<Link className="btn ghost sm" to={`/notes/${date}`}>Open</Link>}>
@@ -1170,12 +1204,12 @@ function blocksOf(tree) {
  * sub-sections — rather than the single grid it used to have.
  */
 function ColumnGrid({
-  tasks, columnLabels, rowProps, armed, watchColumn, stopWatching,
+  tasks, columnLabels, section, rowProps, armed, watchColumn, stopWatching,
   inSection, onMoveToColumn, onSettle, onPlaceBand,
 }) {
   const [bandOver, setBandOver] = useState(false)
   const cols = [[], [], []]
-  for (const t of tasks) cols[columnFor(t)].push(t)
+  for (const t of tasks) cols[columnFor(t, section)].push(t)
   const colIds = cols.map(visibleIds)
 
   return (
@@ -1262,7 +1296,7 @@ function ColumnGrid({
  * Rules above, between and below make the band read as one unit.
  */
 function SubSection({
-  task, columnLabels, rowProps, onMoveToColumn,
+  task, columnLabels, section, rowProps, onMoveToColumn,
   onPlace, dragging, over, onDragState, tone,
 }) {
   // Which edge a task is hovering over, so the strip it will land on lights up.
@@ -1277,10 +1311,10 @@ function SubSection({
   // with its subtree — the band below is that — but it is still the sum of it,
   // so a heading over two hours of work reads as two hours.
   const head = [[], [], []]
-  head[columnFor(task)].push(task)
+  head[columnFor(task, section)].push(task)
 
   const kids = [[], [], []]
-  for (const c of children) kids[columnFor(c)].push(c)
+  for (const c of children) kids[columnFor(c, section)].push(c)
 
   const row = (groups, opts = {}) => (
     <div className="box-cols">
@@ -1546,7 +1580,30 @@ function SectionPanel({
   const [folded, setFolded] = useState(false)
   const wasDone = useRef(null)
   const tree = nestTasks(tasks)
-  const isColumns = section.layout === 'columns'
+  const dialogue = isDialogue(section)
+  // Which rows belong to the same exchange. Computed for the section rather
+  // than the day: an exchange lives inside one conversation, and threading
+  // across sections would tie together rows that only look related.
+  const threads = useMemo(() => (dialogue ? threadMap(tasks) : null), [dialogue, tasks])
+  // The exchange the pointer is over, so the rest of it can light up. On a
+  // board that deliberately puts a brief and its follow-ups in different
+  // columns, this is what says they are one thing.
+  const [litThread, setLitThread] = useState(null)
+
+  // Every row in this section learns which section it is in, so it can show the
+  // AI's terms in place of a duration. Wrapped here rather than threaded from
+  // the day, which does not know one section from another.
+  const rowPropsIn = (task) => ({
+    ...rowProps(task),
+    section,
+    thread: threads?.get(task.id) || null,
+    threadLit: threads && litThread != null && threads.get(task.id)?.key === litThread,
+    onThread: setLitThread,
+  })
+  // A dialogue is three-box by nature: the boxes are the turn, and a list has
+  // nowhere to show it.
+  const isColumns = section.layout === 'columns' || dialogue
+  const labels = dialogue ? TURN_LABELS : columnLabels
 
   const live = tasks.filter((t) => t.kind !== 'note' && t.status !== 'dropped' && !t.optional)
   const complete = live.length > 0 && live.every((t) => t.status === 'done')
@@ -1665,7 +1722,7 @@ function SectionPanel({
       data-section-id={section.id}
       data-section-shut={shut ? '1' : '0'}
       className={[
-        'panel section', cls(tone),
+        'panel section', cls(tone), dialogue ? 'is-dialogue' : '',
         complete ? 'is-complete' : '',
         over ? 'sel-drop-on' : '',
         dragging === section.id ? 'sec-dragging' : '',
@@ -1739,6 +1796,19 @@ function SectionPanel({
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
 
+        {/* The terms for the whole conversation. Set once here and every task
+            in it inherits them, which is why most rows show no chips at all. */}
+        {dialogue && (
+          <AiSwitches
+            task={{}}
+            section={section}
+            onChange={({ ai_switches }) => onPatch({ ai_switches })}
+          />
+        )}
+
+        {/* A dialogue has no list form — its columns are the turn — so the
+            layout switch would only offer a way to break it. */}
+        {!dialogue && (
         <button
           className={`btn ghost sm ${!isColumns ? 'is-on' : ''}`}
           title="List"
@@ -1746,6 +1816,8 @@ function SectionPanel({
         >
           <Icon name="list" size={13} />
         </button>
+        )}
+        {!dialogue && (
         <button
           className={`btn ghost sm ${isColumns ? 'is-on' : ''}`}
           title="Three columns"
@@ -1753,6 +1825,7 @@ function SectionPanel({
         >
           <Icon name="columns" size={13} />
         </button>
+        )}
         <button className="btn ghost sm" title="Add task" onClick={() => onAdd('task')}>
           <Icon name="plus" size={13} />
         </button>
@@ -1781,8 +1854,9 @@ function SectionPanel({
             <SubSection
               key={`band-${block.task.id}`}
               task={block.task}
-              columnLabels={columnLabels}
-              rowProps={rowProps}
+              columnLabels={labels}
+              section={section}
+              rowProps={rowPropsIn}
               dragging={bandDrag === block.task.id}
               over={bandOver === block.task.id}
               onDragState={(what, id) => {
@@ -1803,8 +1877,9 @@ function SectionPanel({
             <ColumnGrid
               key={`grid-${block.tasks[0]?.id ?? 'empty'}`}
               tasks={block.tasks}
-              columnLabels={columnLabels}
-              rowProps={rowProps}
+              columnLabels={labels}
+              section={section}
+              rowProps={rowPropsIn}
               armed={armed}
               watchColumn={watchColumn}
               stopWatching={stopWatching}
@@ -1822,7 +1897,7 @@ function SectionPanel({
           {notes.length > 0 && (
             <div className="section-notes">
               {notes.map((t) => (
-                <TaskRow key={t.id} {...rowProps(t)} showProject={false} listIds={noteIds} />
+                <TaskRow key={t.id} {...rowPropsIn(t)} showProject={false} listIds={noteIds} />
               ))}
             </div>
           )}
@@ -1831,7 +1906,7 @@ function SectionPanel({
           <div style={{ padding: 6, minHeight: 44 }}>
             {tasks.length === 0
               ? <Empty>Empty — add a task or drag one here.</Empty>
-              : <TaskList tasks={tasks} rowProps={rowProps} />}
+              : <TaskList tasks={tasks} rowProps={rowPropsIn} />}
           </div>
         )}
       </div>

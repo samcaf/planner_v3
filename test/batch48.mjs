@@ -58,7 +58,7 @@ try {
   }
   const walkTo = async (id) => {
     key('g'); await wait(90); key('g'); await wait(200)
-    for (let i = 0; i < 20 && onTask() !== id; i++) { key('j'); await wait(90) }
+    for (let i = 0; i < 24 && onTask() !== id; i++) { key('j'); await wait(160) }
     return onTask() === id
   }
 

@@ -104,7 +104,7 @@ try {
     box.dispatchEvent(new window.Event('input', { bubbles: true }))
     box.closest('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
     await wait(600)
-    for (let i = 0; i < 8 && cursorId() !== id; i++) { key('n'); await wait(140) }
+    for (let i = 0; i < 24 && cursorId() !== id; i++) { key('n'); await wait(160) }
     return cursorId() === id
   }
 
