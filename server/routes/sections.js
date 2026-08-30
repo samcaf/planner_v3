@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db } from '../db.js'
 import { badRequest, crud, h, nextSort, notFound } from './_helpers.js'
 
-const FIELDS = ['date', 'name', 'project_id', 'layout', 'color', 'collapsed', 'sort', 'kind', 'ai_switches']
+const FIELDS = ['date', 'name', 'project_id', 'layout', 'color', 'collapsed', 'sort', 'kind', 'ai_switches', 'ai_prompt']
 const sections = crud('sections', FIELDS)
 
 const r = Router()

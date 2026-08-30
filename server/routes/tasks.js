@@ -11,7 +11,7 @@ const FIELDS = [
   'moved_to_date', 'notes_hidden', 'intensity', 'optional', 'url', 'location',
   'subsection', 'archived', 'group_id', 'is_code',
   'waiting_on', 'origin', 'ai_role', 'ai_switches', 'run_id', 'answers_id',
-  'ai_depth', 'seen',
+  'ai_depth', 'seen', 'ai_prompt',
   'scaffold', 'fixed_time', 'timer_started_at', 'timer_elapsed_ms',
   // Present so a deleted routine task keeps its link when restored, the same
   // reason from_template is here.

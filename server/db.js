@@ -153,6 +153,25 @@ addColumn('tasks', 'ai_depth', 'INTEGER NOT NULL DEFAULT 0')
 // without this there is no way to see what is new since you last looked.
 addColumn('tasks', 'seen', 'INTEGER NOT NULL DEFAULT 1')
 
+/*
+ * Instructions for whoever works this, as opposed to what it is about.
+ *
+ * `notes` is the task: the observation, the spec, what you want. It is written
+ * for a reader, and a person picking the task up would read it too. A prompt
+ * is addressed to the agent and to nobody else — how to go about it, what to
+ * prefer, what not to touch. Keeping them apart means the notes stay readable
+ * as a description of the work, and the standing instructions do not have to
+ * be repeated into every task's prose to take effect.
+ *
+ * Three of them, and they STACK rather than override: what you want said about
+ * every AI task, what you want said about this conversation, and what you want
+ * said about this one task. A general instruction and a specific one should
+ * both apply — which is the opposite of how the switches resolve, and the
+ * reason these are a separate mechanism rather than another switch.
+ */
+addColumn('tasks', 'ai_prompt', "TEXT NOT NULL DEFAULT ''")
+addColumn('sections', 'ai_prompt', "TEXT NOT NULL DEFAULT ''")
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS task_comments (
     id         INTEGER PRIMARY KEY,

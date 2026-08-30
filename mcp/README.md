@@ -58,6 +58,27 @@ A wrong term is an error that names the valid ones, rather than an empty
 result. `describe` returns the same grammar, so a client can read it once
 instead of being told.
 
+## Instructions, as opposed to notes
+
+A task's **notes** say what it is about — the observation, the spec, what you
+want. A **prompt** is addressed to the agent and to nobody else: how to go
+about it, what to prefer, what not to touch.
+
+Three of them, and they **stack** rather than override:
+
+| where | what it is for |
+|---|---|
+| Settings → *Standing instructions* | what holds for every AI task |
+| the conversation's header | what holds for this whole exchange |
+| a task's `prompt` chip | what holds for this one task |
+
+All three apply at once, most general first, each labelled with where it came
+from — an agent that cannot tell a standing rule from a one-off cannot weigh
+them when they disagree. `claim` and `get_task` return them assembled as
+`prompt`, and taken apart as `prompt_parts`. A search result carries only
+`has_prompt`, because fetching every row's instructions to answer a question
+about one is a request per row.
+
 ## The dialogue
 
 Five moves that hold a conversation in tasks rather than in a chat window. You

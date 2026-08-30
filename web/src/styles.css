@@ -2203,3 +2203,35 @@ kbd {
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* Instructions written for the agent, not about the work. Marked when there is
+   something in it, folded away when there is not. */
+.ai-prompt { display: inline-flex; flex-direction: column; gap: var(--space-2); }
+.chip.aip-open { color: var(--muted); }
+.chip.aip-open.is-set { color: var(--accent); border-color: var(--accent); }
+
+.aip-body {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.aip-text { width: 100%; resize: vertical; font-size: 12px; }
+.aip-hint { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* What already applies from above, so it is clear these stack rather than
+   compete for the same slot. */
+.aip-above {
+  border-left: 2px solid var(--line);
+  padding-left: var(--space-3);
+  font-size: 12px;
+}
+.aip-above p { margin: 2px 0 0; color: var(--muted); white-space: pre-wrap; }
+.aip-from {
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.st-prompt { width: 100%; resize: vertical; }

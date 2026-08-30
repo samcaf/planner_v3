@@ -3,6 +3,8 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import TaskRow, { nestTasks, visibleIds } from '../components/TaskRow.jsx'
 import AiSwitches from '../components/AiSwitches.jsx'
+import AiPrompt from '../components/AiPrompt.jsx'
+import { promptParts } from '../lib/aiPrompt.js'
 import { threadMap } from '../lib/threads.js'
 import { stack } from '../lib/aiSwitches.js'
 import QuickMeeting from '../components/QuickMeeting.jsx'
@@ -189,6 +191,8 @@ function DayView({ date }) {
   // Your defaults for how an AI task should be worked, under every section
   // and every task in them. Set in Settings.
   const aiDefaults = settings.data?.ai_switch_defaults || ''
+  // Standing instructions for every AI task, under each conversation's own.
+  const aiPrompt = settings.data?.ai_prompt || ''
 
   function refresh() {
     day.reload()
@@ -657,6 +661,7 @@ function DayView({ date }) {
               projects={projects.data || []}
               columnLabels={columnLabels}
               aiDefaults={aiDefaults}
+              aiPrompt={aiPrompt}
               rowProps={rowProps}
               onAdd={(kind) => addTo(section.id, kind)}
               onAddMeeting={() => setMeetingFor({ section: section.id })}
@@ -1564,7 +1569,7 @@ function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
 }
 
 function SectionPanel({
-  section, tasks, projects, columnLabels, aiDefaults, rowProps,
+  section, tasks, projects, columnLabels, aiDefaults, aiPrompt, rowProps,
   onAdd, onAddMeeting, onPatch, onDelete, onDropLoose, onMoveToColumn, onPlace,
   dragging, dropAt, onDragSection, onDragSectionEnd, onDragOverSection, onDropSection,
 }) {
@@ -1602,6 +1607,7 @@ function SectionPanel({
     ...rowProps(task),
     section,
     aiInherited: dialogue ? stack(aiDefaults, section.ai_switches) : null,
+    aiPromptAbove: dialogue ? promptParts({ defaults: aiPrompt, section }) : [],
     thread: threads?.get(task.id) || null,
     threadLit: threads && litThread != null && threads.get(task.id)?.key === litThread,
     onThread: setLitThread,
@@ -1804,6 +1810,15 @@ function SectionPanel({
 
         {/* The terms for the whole conversation. Set once here and every task
             in it inherits them, which is why most rows show no chips at all. */}
+        {dialogue && (
+          <AiPrompt
+            value={section.ai_prompt}
+            onChange={(ai_prompt) => onPatch({ ai_prompt })}
+            label={`Instructions for everything in ${section.name}`}
+            placeholder="What holds for this whole conversation."
+            inherited={promptParts({ defaults: aiPrompt })}
+          />
+        )}
         {dialogue && (
           <AiSwitches
             label={`Terms for everything in ${section.name}`}

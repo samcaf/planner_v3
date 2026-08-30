@@ -29,7 +29,7 @@ const ACCENTS = [
 
 // Settings edited by a control above; the raw dump would only repeat them.
 const HANDLED = [
-  'deep_capacity_min', 'column_labels', 'page_names', 'ai_switch_defaults',
+  'deep_capacity_min', 'column_labels', 'page_names', 'ai_switch_defaults', 'ai_prompt',
   'pomodoro_work', 'pomodoro_short', 'pomodoro_long', 'pomodoro_before_long',
 ]
 
@@ -205,6 +205,26 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
               inherited={BUILT_IN}
               onChange={(v) => save('ai_switch_defaults', v)}
             />
+
+            {/* Standing instructions, under every conversation's and every
+                task's. These stack rather than being overridden — what is set
+                here always applies. */}
+            <Field label="Standing instructions">
+              <textarea
+                className="input st-prompt"
+                rows={4}
+                defaultValue={s.ai_prompt || ''}
+                placeholder="What you want said to the AI about every task — conventions to follow, things not to touch."
+                onBlur={(e) => {
+                  const next = e.target.value.trim()
+                  if (next !== (s.ai_prompt || '')) save('ai_prompt', next)
+                }}
+              />
+              <span className="st-hint">
+                Handed to the agent with every AI task, above the conversation's instructions
+                and the task's own. All three apply.
+              </span>
+            </Field>
           </Panel>
 
           <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />

@@ -44,6 +44,7 @@ import { parse, today } from './query.js'
 // The same resolver the app and the server use. One definition of what the
 // switches mean, so what an agent plans against is what gets enforced.
 import { stack } from '../web/src/lib/aiSwitches.js'
+import { promptParts, promptText } from '../web/src/lib/aiPrompt.js'
 
 const BASE = process.env.PLANNER_API || 'http://localhost:8787'
 const WEB = process.env.PLANNER_WEB || 'http://localhost:5173'
@@ -101,12 +102,38 @@ function shape(t, byProject = {}, extra = {}) {
     deep_work: t.intensity === 'deep',
     optional: !!t.optional,
     is_code: !!t.is_code,
+    // Whether there is anything written FOR you on this task. The text itself
+    // comes from get_task or claim — a search that fetched every task's
+    // instructions would be a request per row to answer a question about one.
+    has_prompt: !!String(t.ai_prompt || '').trim(),
     scheduled_date: t.scheduled_date,
     due_date: t.due_date || null,
     parent_id: t.parent_id ?? null,
     project: project ? { id: project.id, name: project.name, repo: project.repo_path || null } : null,
     url: urlFor(t),
     ...extra,
+  }
+}
+
+/**
+ * The terms and the standing instructions for one task, from all three layers.
+ *
+ * Assembled here rather than left to the caller, because a tool that returned
+ * the pieces and trusted whoever called it to put them together would be
+ * handing out an instruction that only sometimes applies.
+ */
+async function context(task) {
+  const [settings, section] = await Promise.all([
+    get('/settings').catch(() => ({})),
+    task.section_id ? get(`/sections/${task.section_id}`).catch(() => null) : null,
+  ])
+  const terms = stack(settings?.ai_switch_defaults, section?.ai_switches, task.ai_switches)
+  const layers = { defaults: settings?.ai_prompt, section, task }
+  const parts = promptParts(layers)
+  return {
+    terms,
+    prompt: promptText(layers) || null,
+    prompt_parts: parts.length ? parts : undefined,
   }
 }
 
@@ -478,6 +505,10 @@ async function run(name, args = {}) {
           default: 'with no status term, only open tasks are returned',
         },
         transitions: ['start', 'complete', 'reopen', 'drop', 'move', 'backlog'],
+        prompts: 'A task may carry instructions written for you, separate from its notes. '
+          + 'They stack: settings, then the conversation, then the task, all applying at '
+          + 'once and labelled by where they came from. claim and get_task return them as '
+          + '`prompt`; a search result says only whether there are any (`has_prompt`).',
         updatable_fields: [
           'title', 'notes', 'priority', 'estimate_min', 'due_date', 'is_code', 'deep_work',
           'optional', 'project',
@@ -545,8 +576,11 @@ async function run(name, args = {}) {
         get(`/tasks/${args.id}/comments`).catch(() => []),
         get(`/tasks?${qs({ parent_id: args.id, status: 'todo,doing,done,dropped,moved' })}`).catch(() => []),
       ])
+      const ctx = await context(t)
       return shape(t, byProject, {
         project_description: byProject[t.project_id]?.description || null,
+        prompt: ctx.prompt,
+        prompt_parts: ctx.prompt_parts,
         subtasks: kids.map((k) => ({ id: k.id, title: k.title, status: k.status })),
         comments: comments.map((c) => ({
           id: c.id, author: c.author, kind: c.kind, minutes: c.minutes, body: c.body, at: c.created_at,
@@ -637,13 +671,18 @@ async function run(name, args = {}) {
       const [full, state] = await Promise.all([
         get(`/tasks/${args.id}`), get(`/tasks/runs/${runId}`),
       ])
+      const ctx = await context(full)
       return {
         ...shape(full, await projectsById()),
         run_id: runId,
         terms: state.terms,
         budget: { spent: state.spent, of: state.budget, remaining: state.remaining },
-        note: 'Work under these terms. mode says what you may do at all; verify says what '
-          + 'you must show. When you are done, report. When you are stuck, ask.',
+        prompt: ctx.prompt,
+        prompt_parts: ctx.prompt_parts,
+        note: 'Work under these terms, and follow `prompt` — it is written for you, and the '
+          + 'parts are labelled so you can tell a standing rule from a one-off. mode says '
+          + 'what you may do at all; verify says what you must show. When you are done, '
+          + 'report. When you are stuck, ask.',
       }
     }
 

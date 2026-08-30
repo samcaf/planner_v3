@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import TaskComments from './TaskComments.jsx'
 import AiSwitches from './AiSwitches.jsx'
+import AiPrompt from './AiPrompt.jsx'
 import Popover from './Popover.jsx'
 import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
@@ -162,6 +163,10 @@ export default function TaskRow({
   // your defaults from Settings. Resolved by the section, which is the only
   // thing that knows both.
   aiInherited = null,
+  // The instruction layers above this task — the conversation's and yours —
+  // shown alongside its own so it is clear they all apply rather than
+  // competing. Resolved by the section, which is the only thing that knows.
+  aiPromptAbove = [],
   showProject = true,
   // Whether the subtree is drawn here. A sub-section band already lays its
   // children out beneath the heading, so the heading itself must not repeat
@@ -544,6 +549,15 @@ export default function TaskRow({
             {/* Terms in place of a clock. A conversational task has no
                 duration to speak of; what matters is how it should be worked. */}
             {dialogue && (
+              <AiPrompt
+                value={task.ai_prompt}
+                onChange={(ai_prompt) => onChange({ ai_prompt })}
+                label="Instructions for the AI, on this task"
+                placeholder="How to go about it — what to prefer, what not to touch."
+                inherited={aiPromptAbove}
+              />
+            )}
+            {dialogue && (
               <AiSwitches
                 label="How the AI should work this task"
                 value={task.ai_switches}
@@ -758,6 +772,7 @@ export default function TaskRow({
           // section, so it has no other way to learn either.
           section={section}
           aiInherited={aiInherited}
+          aiPromptAbove={aiPromptAbove}
           thread={thread}
           threadLit={threadLit}
           onThread={onThread}
