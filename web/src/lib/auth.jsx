@@ -10,28 +10,67 @@ import { SIGNED_OUT, api } from './api.js'
  * out and that phone's next request is a 401, which lands here and puts the
  * login page up without anything having to poll.
  *
- * `setup` is its own state rather than a kind of signed-out. Before the first
- * account exists there is nothing to sign in to, and a login box would be a
- * dead end — what that moment needs is the one command that makes an owner.
+ * WAITING FOR THAT ANSWER IS THE EXPENSIVE PART, and it does not have to be
+ * waited for. Blocking the app on it put two round trips in front of every page
+ * load — first who are you, and only then the page's own data — where there had
+ * been one. That is a real cost on a phone over a tailnet, and it showed up
+ * first as keyboard suites intermittently finding no cursor because the day had
+ * not drawn yet.
+ *
+ * So this remembers, in localStorage, whether this browser was signed in last
+ * time, and draws accordingly while the real answer is in flight:
+ *
+ *   the flag is set    draw the app at once. Its data starts loading in
+ *                      parallel with the check. If the check comes back
+ *                      "nobody" — revoked, or signed out elsewhere — the login
+ *                      page replaces it, which is exactly what a 401 from any
+ *                      other request would have done anyway.
+ *   the flag is unset  draw the login page at once. It has nothing to fetch,
+ *                      so nothing is lost by it waiting for `known` before
+ *                      choosing its wording.
+ *
+ * The flag is not a credential and grants nothing: the cookie is HttpOnly and
+ * every request is still checked by the server. It is a hint about what to
+ * paint, and the worst case of it being wrong is one wasted render.
  */
 const AuthContext = createContext(null)
+
+const SEEN = 'planner_signed_in'
+
+const remember = (yes) => {
+  try {
+    if (yes) localStorage.setItem(SEEN, '1')
+    else localStorage.removeItem(SEEN)
+  } catch { /* private mode: the app still works, it just always waits */ }
+}
+
+const wasSignedIn = () => {
+  try { return localStorage.getItem(SEEN) === '1' } catch { return false }
+}
 
 export const useAuth = () => useContext(AuthContext)
 
 export function AuthProvider({ children }) {
-  // `loading` is a third state on purpose. Rendering the login page while the
-  // answer is still in flight would flash it at somebody who is signed in.
-  const [state, setState] = useState({ loading: true, user: null, setup: false })
+  const [state, setState] = useState(() => ({
+    // Whether the server has answered yet. The login page waits for it; the app
+    // does not.
+    known: false,
+    assumed: wasSignedIn(),
+    user: null,
+    setup: false,
+  }))
 
   const check = useCallback(async () => {
     try {
       const me = await api.get('/auth/me')
-      setState({ loading: false, user: me.user, setup: !!me.setup })
+      remember(!!me.user)
+      setState({ known: true, assumed: !!me.user, user: me.user, setup: !!me.setup })
     } catch {
-      // The server is unreachable or answered something unexpected. Treat it as
-      // signed out: the login page is at least a page, and it says what failed
-      // when you try.
-      setState({ loading: false, user: null, setup: false })
+      // Unreachable, or an answer we did not understand. Treat it as signed
+      // out: the login page is at least a page, and it says what failed when
+      // you try it.
+      remember(false)
+      setState({ known: true, assumed: false, user: null, setup: false })
     }
   }, [])
 
@@ -41,18 +80,26 @@ export function AuthProvider({ children }) {
   // announces it rather than each caller handling it, which is the same shape
   // the refresh signal already uses.
   useEffect(() => {
-    const onLost = () => setState((s) => (s.user ? { ...s, user: null } : s))
+    const onLost = () => {
+      remember(false)
+      setState((s) => (s.assumed || s.user ? { ...s, assumed: false, user: null } : s))
+    }
     window.addEventListener(SIGNED_OUT, onLost)
     return () => window.removeEventListener(SIGNED_OUT, onLost)
   }, [])
 
   const value = useMemo(() => ({
     ...state,
-    /** After a successful sign-in, so the app does not have to ask again. */
-    signedIn: (user) => setState({ loading: false, user, setup: false }),
+    /** Draw the app? Optimistically yes, until the server says otherwise. */
+    in: state.known ? !!state.user : state.assumed,
+    signedIn: (user) => {
+      remember(true)
+      setState({ known: true, assumed: true, user, setup: false })
+    },
     signOut: async () => {
       await api.post('/auth/logout').catch(() => {})
-      setState({ loading: false, user: null, setup: false })
+      remember(false)
+      setState({ known: true, assumed: false, user: null, setup: false })
     },
     recheck: check,
   }), [state, check])

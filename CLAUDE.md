@@ -122,6 +122,10 @@ works there without the page knowing the mode exists. `lib/vim.jsx` owns
 page's own handlers, lent by `useVimActions`, so every keystroke is undoable
 exactly like the click it replaces.
 
+If `planner.service` is running it holds 8787 and 8789, and `npm run dev`
+cannot start its API — `systemctl --user stop planner` first. `npm test` works
+against whichever process holds the port.
+
 ## Two ports, and only one of them is trusted
 
 `server/ports.js`. The app listens twice on loopback: `TRUSTED_PORT` (8787) is

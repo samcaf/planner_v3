@@ -19,6 +19,25 @@ The API must be running; the tools talk to `http://localhost:8787`.
 | `PLANNER_WEB` | what to build task URLs from (default `http://localhost:5173`) — set this to the served address when the planner is on a tailnet, or the links are dead for everyone but the host |
 | `PLANNER_MCP_SCOPES` | `read,write,search,dialogue` — drop `write` and `dialogue` for a server that cannot change anything |
 | `PLANNER_MCP_AUTHOR` | who comments are attributed to (default `claude`) |
+| `PLANNER_TOKEN` | a session, needed only when the planner is on another machine — see below |
+
+## When the planner is not on this machine
+
+Over loopback this needs no credential: the app's trusted port treats a request
+with no session as the owner. Reaching it across a tailnet goes through the
+public port instead, which trusts nobody, so a server deployment needs a token:
+
+```bash
+# on the machine running the planner
+node server/accounts.js token <login> mcp
+
+# wherever the MCP server runs
+PLANNER_API=https://planner.<tailnet>.ts.net PLANNER_TOKEN=<the token> …
+```
+
+It is an ordinary session. It appears in **Settings → Account** beside that
+person's phones and laptops, says when it was last used, and is revoked with the
+same button — there is no second kind of credential to keep track of.
 
 ## The tools
 

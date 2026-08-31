@@ -53,6 +53,15 @@ const BASE = process.env.PLANNER_API || 'http://localhost:8787'
 // link an agent hands back saying `localhost` is dead for everyone but the host.
 const WEB = process.env.PLANNER_WEB || 'http://localhost:5173'
 const AUTHOR = process.env.PLANNER_MCP_AUTHOR || 'claude'
+/**
+ * A session, for when the planner is not on this machine.
+ *
+ * Talking to it over loopback needs nothing: the trusted port treats a request
+ * with no session as the owner. Talking to it across a tailnet goes through the
+ * public port, which trusts nobody — so a server deployment needs a token, and
+ * `node server/accounts.js token <login> mcp` is what mints one.
+ */
+const TOKEN = process.env.PLANNER_TOKEN || ''
 
 /**
  * read, write, search — the same three Jira grants, same names — plus `dialogue`,
@@ -66,7 +75,10 @@ const SCOPES = new Set(
 async function call(path, init) {
   const res = await fetch(`${BASE}/api${path}`, {
     ...init,
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+    headers: {
+      ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...(TOKEN ? { 'x-planner-token': TOKEN } : {}),
+    },
   })
   if (!res.ok) {
     let detail = await res.text().catch(() => '')

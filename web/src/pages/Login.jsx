@@ -32,6 +32,11 @@ export default function Login() {
 
   useEffect(() => { first.current?.focus() }, [mode])
 
+  // The login page has nothing to fetch, so it can afford to wait for the real
+  // answer rather than guess and correct itself in front of you. The app cannot
+  // afford that, which is why only this side waits.
+  if (!auth?.known) return <Shell />
+
   // Nobody has an account yet, so there is nothing to sign in to. A login box
   // here would be a door with no building behind it.
   if (auth?.setup) {

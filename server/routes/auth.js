@@ -26,6 +26,25 @@ import { badRequest, h, notFound, refused } from './_helpers.js'
 export const COOKIE = 'planner_session'
 
 /**
+ * The same session, for something that is not a browser.
+ *
+ * Once the app runs on a server rather than on your laptop, the trusted port is
+ * loopback on THAT machine — so `bin/plan.js` and the MCP server can no longer
+ * walk in without a session the way they do when everything is one host. They
+ * are not browsers and have nowhere to keep a cookie, so they carry the token
+ * in a header instead.
+ *
+ * It is an ordinary session row, deliberately: it shows up in the roster beside
+ * the phones, it says when it was last used, and the owner revokes it with the
+ * same button. A separate kind of credential would have been a second thing to
+ * remember to look at.
+ */
+export const TOKEN_HEADER = 'x-planner-token'
+
+/** The session this request carries, however it is carrying it. */
+const tokenOf = (req) => req.headers?.[TOKEN_HEADER] || readCookie(req, COOKIE)
+
+/**
  * One header, five lines. `cookie-parser` would be a dependency for this.
  *
  * Values are URL-encoded by `res.cookie`, so they have to be decoded here; a
@@ -56,19 +75,43 @@ export function readCookie(req, name) {
  * that rests on undocumented proxy behaviour breaks on somebody else's upgrade.
  */
 const TEN_YEARS = 10 * 365 * 24 * 60 * 60 * 1000
-const secure = () => process.env.PLANNER_SECURE_COOKIES === '1'
 
-const cookieOptions = () => ({
+/** localhost by any of its names, whatever port it came in on. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+const askedLocally = (req) =>
+  LOCAL_HOSTS.has(String(req.headers?.host || '').replace(/:\d+$/, '').toLowerCase())
+
+/**
+ * Secure when it can be, off when it would break the login.
+ *
+ * The env var says "this deployment is served over HTTPS", which is true of the
+ * systemd unit behind `tailscale serve`. But the SAME process also answers
+ * `http://localhost:5173` while you are working on it, and a Secure cookie is
+ * simply never sent back over plain http — so the sign-in appears to succeed
+ * and then every request is anonymous, which is a maddening thing to debug.
+ *
+ * The Host header separates the two, and it is a safe thing to key on here: a
+ * client that lied about it to avoid the Secure flag would only be weakening
+ * its own cookie, which it could do by not using one at all.
+ *
+ * X-Forwarded-Proto was the other candidate. Tailscale documents the identity
+ * headers it adds and says nothing about that one, and a login that rests on
+ * undocumented proxy behaviour breaks on somebody else's upgrade.
+ */
+const secure = (req) => process.env.PLANNER_SECURE_COOKIES === '1' && !askedLocally(req)
+
+const cookieOptions = (req) => ({
   httpOnly: true,
   sameSite: 'lax',
-  secure: secure(),
+  secure: secure(req),
   path: '/',
   maxAge: TEN_YEARS,
 })
 
-export const setSessionCookie = (res, token) => res.cookie(COOKIE, token, cookieOptions())
-export const clearSessionCookie = (res) =>
-  res.clearCookie(COOKIE, { ...cookieOptions(), maxAge: undefined })
+export const setSessionCookie = (req, res, token) =>
+  res.cookie(COOKIE, token, cookieOptions(req))
+export const clearSessionCookie = (req, res) =>
+  res.clearCookie(COOKIE, { ...cookieOptions(req), maxAge: undefined })
 
 /**
  * A request on the trusted port with no cookie is the owner.
@@ -100,7 +143,7 @@ export const noAccountsYet = () => everyone().length === 0
  * there is one.
  */
 export function gate(req, res, next) {
-  const token = readCookie(req, COOKIE)
+  const token = tokenOf(req)
   const user = token ? sessionUser(token) : null
   if (user) { req.user = user; req.sessionToken = token; return next() }
 
@@ -135,7 +178,7 @@ const r = Router()
  * "nobody" and the owner-only routes refused the owner.
  */
 r.use((req, _res, next) => {
-  const token = readCookie(req, COOKIE)
+  const token = tokenOf(req)
   const user = token ? sessionUser(token) : null
   if (user) { req.user = user; req.sessionToken = token }
   else if (trustsLocal(req)) req.user = owner() || null
@@ -182,14 +225,14 @@ r.post('/login', h((req, res) => {
     throw refused('blocked', 'that account has been blocked')
   }
 
-  setSessionCookie(res, startSession(user.id, deviceOf(req)))
+  setSessionCookie(req, res, startSession(user.id, deviceOf(req)))
   return { user: publicUser(user) }
 }))
 
 r.post('/logout', h((req, res) => {
   const token = readCookie(req, COOKIE)
   if (token) endSession(token)
-  clearSessionCookie(res)
+  clearSessionCookie(req, res)
   res.status(204).end()
 }))
 
@@ -204,7 +247,6 @@ r.post('/logout', h((req, res) => {
 r.get('/me', h((req) => ({
   user: publicUser(req.user),
   setup: noAccountsYet(),
-  secure: secure(),
 })))
 
 /* ------------------------------------------------------------ the roster */

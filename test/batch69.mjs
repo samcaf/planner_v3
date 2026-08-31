@@ -11,7 +11,7 @@
  * No jsdom: this is about headers and status codes, so it needs no bundle and
  * is not subject to the rebuild hazard the runner warns about.
  */
-import { accounts, addUser, byLogin, everyone, setStatus } from '../server/accounts.js'
+import { accounts, addUser, byLogin, everyone, setStatus, startSession } from '../server/accounts.js'
 
 const TRUSTED = process.env.PLANNER_API || 'http://localhost:8787'
 const PUBLIC = process.env.PLANNER_PUBLIC_API || 'http://localhost:8789'
@@ -134,6 +134,36 @@ try {
     login: 'zzsuite-guest', password: 'probe-password-2',
   })
   check('a blocked account is told it is blocked', (await blocked.json()).code === 'blocked')
+
+  // ── a token, for a tool on another machine -------------------------------
+  // Once the planner runs on a server, the trusted port is loopback on THAT
+  // machine and the CLI tools can no longer walk in. A token is the same
+  // session a browser gets, carried in a header instead of a cookie.
+  const guest = byLogin('zzsuite-guest')
+  setStatus(guest.id, 'active')
+  const token = startSession(guest.id, 'token · suite')
+  const withToken = await fetch(`${PUBLIC}/api/settings`, {
+    headers: { 'x-planner-token': token },
+  })
+  check('a token gets in where a cookie would', withToken.status === 200, String(withToken.status))
+
+  const whoToken = await (await fetch(`${PUBLIC}/api/auth/me`, {
+    headers: { 'x-planner-token': token },
+  })).json()
+  check('as the person it was minted for', whoToken.user?.login === 'zzsuite-guest',
+    JSON.stringify(whoToken.user))
+
+  const listed = await (await fetch(`${TRUSTED}/api/auth/users`)).json()
+  const tokenRow = listed.find((u) => u.login === 'zzsuite-guest')
+    ?.sessions?.find((sn) => sn.device === 'token · suite')
+  check('and it is listed as a device, not hidden away', !!tokenRow,
+    JSON.stringify(listed.find((u) => u.login === 'zzsuite-guest')?.sessions || []))
+
+  await fetch(`${TRUSTED}/api/auth/sessions/${tokenRow.token_hash}`, { method: 'DELETE' })
+  const afterToken = await fetch(`${PUBLIC}/api/settings`, {
+    headers: { 'x-planner-token': token },
+  })
+  check('so the same button revokes it', afterToken.status === 401, String(afterToken.status))
 
   // ── the owner is not removable, by anyone --------------------------------
   const ownerRow = roster.find((u) => u.is_owner)

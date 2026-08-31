@@ -75,11 +75,89 @@ lets nobody in.
 That config persists across reboots by itself. To keep the app itself up:
 
 ```sh
-cp scripts/planner.service ~/.config/systemd/user/
-systemctl --user daemon-reload
+bash scripts/install-service.sh      # writes the unit for THIS machine
 systemctl --user enable --now planner
-loginctl enable-linger "$USER"   # so it survives logging out
+loginctl enable-linger "$USER"       # so it survives logging out
 ```
+
+**The service and `npm run dev` want the same two ports.** Stop the service
+before developing:
+
+```sh
+systemctl --user stop planner && npm run dev
+```
+
+`npm test` is fine either way — it drives whichever process holds 8787 — but it
+swaps `web/dist` for a jsdom-runnable bundle while it runs, so anyone looking at
+the served app during a test run sees the test build. It is put back afterwards.
+
+## Running it on another machine
+
+Nothing about this app is tied to the machine it was written on: it is a Node
+process, a `data/` directory, and a `tailscale serve` line.
+
+On the server:
+
+```sh
+sudo apt install -y nodejs npm build-essential python3   # better-sqlite3 is
+                                                         # a native module and
+                                                         # may compile
+git clone <this repo> planner_v3 && cd planner_v3
+npm ci
+npm run build
+```
+
+Bring the data across — **with the service stopped on both ends**, so nothing is
+mid-write. The `-wal` files are part of the database, not scratch:
+
+```sh
+# on the old machine
+systemctl --user stop planner
+rsync -a data/ user@planner:~/planner_v3/data/
+```
+
+Then, on the server:
+
+```sh
+sudo tailscale up --hostname=planner    # the URL follows the machine name
+bash scripts/install-service.sh         # writes the unit for THIS machine
+systemctl --user enable --now planner
+loginctl enable-linger "$USER"
+tailscale serve --bg 8789
+```
+
+and on the old machine, so two hosts are not both answering:
+
+```sh
+tailscale serve reset
+systemctl --user disable --now planner
+```
+
+`data/accounts.db` travels with everything else, so every account, password and
+signed-in phone comes across — nobody has to sign in again, as long as the URL
+did not change. Which is the reason for the next paragraph.
+
+### What changes for the command-line tools
+
+`bin/plan.js` opens the SQLite file directly, so it only works where the file
+is: on the server, over ssh. The copy left on your laptop is a snapshot from
+the day you moved and will quietly drift.
+
+The MCP server talks over HTTP, so it can stay where it is — but it now reaches
+the planner across the tailnet, through the public port, which trusts nobody. It
+needs a session of its own:
+
+```sh
+# on the server
+node server/accounts.js token <login> mcp
+
+# wherever the MCP server runs
+PLANNER_API=https://planner.<tailnet>.ts.net PLANNER_TOKEN=<the token> …
+```
+
+That token is an ordinary session: it shows up in **Settings → Account** beside
+that person's phones, says when it was last used, and is revoked with the same
+button.
 
 **Pick the machine name before installing it on a phone.** An installed web app
 is pinned to the address it was installed from, and that address follows the

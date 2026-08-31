@@ -287,6 +287,24 @@ const COMMANDS = {
     console.log(`${user.login} blocked, and their sessions ended`)
   },
 
+  /**
+   * Mint a session for a tool, and print it once.
+   *
+   * For an MCP server or a script on another machine, which cannot sign in
+   * through a page. It is an ordinary session — it appears in the roster, and
+   * the owner revokes it there like any device — so nothing new has to be
+   * remembered or audited separately.
+   */
+  token([login, label]) {
+    const user = byLogin(login)
+    if (!user) throw new Error(`no account for ${login}`)
+    const token = startSession(user.id, `token · ${label || 'a tool'}`)
+    console.log(token)
+    console.error(`\nThat is the only time it is shown. For the MCP server:`)
+    console.error(`  PLANNER_TOKEN=${token}`)
+    console.error(`Revoke it in Settings → Account, beside ${user.login}'s devices.`)
+  },
+
   list() {
     const rows = everyone()
     if (!rows.length) { console.log('nobody yet — start with: add-owner <login>'); return }

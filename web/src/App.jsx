@@ -120,10 +120,10 @@ function Planner() {
   // rather than of any page.
   useEffect(installShiftOpen, [])
 
-  // Nothing at all until we know. Drawing the login page while the answer is
-  // still in flight would flash a door at somebody who is already inside.
-  if (auth?.loading) return null
-  if (!auth?.user) return <Login />
+  // No waiting. `auth.in` is optimistic — this browser was signed in last time,
+  // so the app draws now and its data loads in parallel with the check. See
+  // lib/auth.jsx for why blocking here was worth removing.
+  if (!auth?.in) return <Login />
 
   return (
     <UndoProvider onChange={refreshAll}>

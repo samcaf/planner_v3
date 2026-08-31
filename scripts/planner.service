@@ -1,28 +1,28 @@
 # The planner as a user service.
 #
-#   cp scripts/planner.service ~/.config/systemd/user/
-#   systemctl --user daemon-reload
-#   systemctl --user enable --now planner
+# Do not copy this by hand — `scripts/install-service.sh` writes it out with
+# the right node path and repo directory filled in, which is the one thing that
+# differs between machines and the one thing that silently fails when wrong.
 #
-# A USER unit, not a system one: the database is a file in this user's home and
+# A USER unit, not a system one: the databases are files in this user's home and
 # the service has no business running as anyone else. `loginctl enable-linger`
-# is what keeps it up when nobody is logged in — already set on this account.
+# is what keeps it up when nobody is logged in.
 #
 # It serves the BUILT frontend out of web/dist, so `npm run build` is part of
 # deploying. Without it the API answers and every page is blank.
 #
 # Nothing here is reachable off the machine on its own. `tailscale serve --bg
-# 8787` is what publishes it, and that config persists across reboots by itself.
+# 8789` is what publishes it — the PUBLIC port, not 8787; see server/ports.js —
+# and that config persists across reboots by itself.
 
 [Unit]
 Description=Planner
-Documentation=https://github.com/  # this repo's README
 After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/Documents/planner_v3
-ExecStart=%h/.nvm/versions/node/v20.20.1/bin/node server/index.js
+WorkingDirectory=__ROOT__
+ExecStart=__NODE__ server/index.js
 Environment=NODE_ENV=production
 # Behind `tailscale serve` the browser always speaks HTTPS, so the session
 # cookie can carry the Secure flag. Left off for `npm run dev`, where the app is
@@ -30,7 +30,6 @@ Environment=NODE_ENV=production
 Environment=PLANNER_SECURE_COOKIES=1
 Restart=on-failure
 RestartSec=2
-# Journal only; there is no log file to rotate.
 StandardOutput=journal
 StandardError=journal
 
