@@ -359,3 +359,7 @@ which parts will fight a redesign.
 
 Eight runtime dependencies: express, better-sqlite3, react, react-dom,
 react-router-dom, marked, dompurify and katex.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
