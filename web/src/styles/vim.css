@@ -174,3 +174,26 @@ body:has(.vim-bar) .main { padding-bottom: 30px; }
 .vim-on-card {
   box-shadow: 0 0 0 2px var(--accent), var(--shadow-pop);
 }
+
+/* ------------------------------------------------------- the side column */
+
+/* A row whose whole point is its button — a routine offering to be added. It
+   is a line in a list rather than a container, so it gets the same bar a task
+   does; drawn as an inset shadow because these rows have no ::before of their
+   own to spare. `.task` rows in the side column are excluded: they already
+   have the bar above. */
+[data-act]:not(.task).vim-on {
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The sheet's own find. Small and quiet: it sits in a header beside a title,
+   not at the head of a form. */
+.vim-help-find {
+  width: 150px;
+  height: 24px;
+  min-height: 0;
+  padding: 0 var(--space-3);
+  font-size: 11.5px;
+}

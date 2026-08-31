@@ -1,15 +1,33 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { Empty, Field, Panel } from '../components/ui.jsx'
 import { HELP } from '../components/VimLayer.jsx'
 import AiSwitches from '../components/AiSwitches.jsx'
-import { BUILT_IN } from '../lib/aiSwitches.js'
+import { BUILT_IN, DECLARED, ENFORCED } from '../lib/aiSwitches.js'
+import { ABOUT, CONNECT, MOVES, QUERY, QUERY_EXAMPLES, SCOPES } from '../lib/aiGuide.js'
+import { GENERAL } from '../lib/shortcuts.js'
 import { useVim } from '../lib/vim.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
+import '../styles/keys.css'
 import '../styles/settings.css'
 import { usePageTitle } from '../lib/title.js'
+
+/**
+ * Three pages, not one column.
+ *
+ * The shortcuts and the AI terms are reference — long, read once, and looked up
+ * again months later — while the rest of this page is half a dozen settings you
+ * change and leave. Stacked together the reference buried the settings and the
+ * settings hid the reference. The tab is in the address, so a link can point at
+ * one and a reload comes back to it.
+ */
+const TABS = [
+  ['general', 'General'],
+  ['keys', 'Keyboard'],
+  ['ai', 'AI suite'],
+]
 
 const THEMES = [['light', 'Light'], ['dark', 'Night'], ['system', 'Auto']]
 
@@ -46,9 +64,13 @@ function parseDuration(text) {
 export default function Settings({ theme, onTheme, accent, onAccent }) {
   usePageTitle('Settings')
   const settings = useApi('/settings')
+  const [params, setParams] = useSearchParams()
   const [saved, setSaved] = useState('')
   // The raw dump is a debugging aid, not part of the page.
   const [showRaw, setShowRaw] = useState(false)
+
+  const asked = params.get('tab')
+  const tab = TABS.some(([id]) => id === asked) ? asked : 'general'
 
   if (!settings.data) return <div className="page"><p className="muted">Loading…</p></div>
 
@@ -81,7 +103,31 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
       </header>
 
       <div className="page st-page">
-        <div className="st-stack">
+        <nav className="st-tabs" role="tablist" aria-label="Settings sections">
+          {TABS.map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              id={`st-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`st-panel-${id}`}
+              className={`st-tab${tab === id ? ' is-on' : ''}`}
+              // `replace` so flipping between tabs does not fill the back
+              // button with a page you never left.
+              onClick={() => setParams(id === 'general' ? {} : { tab: id }, { replace: true })}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div
+          className="st-stack"
+          role="tabpanel"
+          id="st-panel-general"
+          aria-labelledby="st-tab-general"
+          hidden={tab !== 'general'}
+        >
           <Panel title={<><Icon name="clock" size={14} /> Pomodoro</>}>
             <p className="st-note">
               How long each phase of the timer in the sidebar runs, in minutes,
@@ -192,44 +238,7 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
             </div>
           </Panel>
 
-          {/* The bottom layer of the four. A conversation overrides these, and
-              a task overrides its conversation. */}
-          <Panel title="AI defaults">
-            <p className="st-hint">
-              How a task in an AI conversation is worked unless it, or the conversation
-              it is in, says otherwise. Hover any option for what it means.
-            </p>
-            <AiSwitches
-              label="Default terms for every AI task"
-              value={s.ai_switch_defaults}
-              inherited={BUILT_IN}
-              onChange={(v) => save('ai_switch_defaults', v)}
-            />
-
-            {/* Standing instructions, under every conversation's and every
-                task's. These stack rather than being overridden — what is set
-                here always applies. */}
-            <Field label="Standing instructions">
-              <textarea
-                className="input st-prompt"
-                rows={4}
-                defaultValue={s.ai_prompt || ''}
-                placeholder="What you want said to the AI about every task — conventions to follow, things not to touch."
-                onBlur={(e) => {
-                  const next = e.target.value.trim()
-                  if (next !== (s.ai_prompt || '')) save('ai_prompt', next)
-                }}
-              />
-              <span className="st-hint">
-                Handed to the agent with every AI task, above the conversation's instructions
-                and the task's own. All three apply.
-              </span>
-            </Field>
-          </Panel>
-
           <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />
-
-          <Keys />
 
           <button className="btn ghost sm st-raw-toggle" onClick={() => setShowRaw(!showRaw)}>
             <Icon name={showRaw ? 'chevronDown' : 'right'} size={12} />
@@ -249,6 +258,29 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
               {rest.length === 0 && <Empty>Nothing else stored yet.</Empty>}
             </Panel>
           )}
+        </div>
+
+        {/* Both kept mounted and hidden rather than unmounted: the vim toggle
+            in one and the switch panels in the other hold state that flipping
+            a tab has no business throwing away. */}
+        <div
+          className="st-stack"
+          role="tabpanel"
+          id="st-panel-keys"
+          aria-labelledby="st-tab-keys"
+          hidden={tab !== 'keys'}
+        >
+          <Keys />
+        </div>
+
+        <div
+          className="st-stack"
+          role="tabpanel"
+          id="st-panel-ai"
+          aria-labelledby="st-tab-ai"
+          hidden={tab !== 'ai'}
+        >
+          <AiSuite s={s} save={save} />
         </div>
       </div>
     </>
@@ -364,72 +396,37 @@ function DurationField({ label, value, onSave }) {
 /**
  * Every key and gesture the app answers to, in one place.
  *
- * The mouse gestures are here because they are as invisible as a keystroke —
- * nothing on screen says that right-clicking a checkbox makes a task optional —
- * and a list of shortcuts that covered only the keyboard would leave out the
- * ones people actually fail to find.
- *
- * The vim table is imported from the layer that implements it, so a key cannot
- * be documented here and bound differently there.
+ * The tables are imported, never written here: the general one from
+ * `lib/shortcuts.js`, which the `?` sheet also draws, and the keyboard-control
+ * one from the layer that binds it. A key cannot be documented on this page and
+ * bound differently somewhere else, because this page has no copy of its own.
  */
 function Keys() {
   const vim = useVim()
 
-  const GENERAL = [
-    ['Everywhere', [
-      ['Ctrl / \u2318 + /', 'search everything'],
-      ['Ctrl / \u2318 + K', 'the same, unless you are in a text box'],
-      ['Ctrl / \u2318 + Z', 'undo'],
-      ['Ctrl / \u2318 + Shift + Z', 'redo'],
-      ['Ctrl + Alt + V', 'turn keyboard control on or off'],
-      ['Escape', 'close a menu, or leave a field'],
-    ]],
-    ['Going places', [
-      ['g then d / w / m / n', 'day, week, month, notes — keeping the date'],
-      ['g then a / p / e', 'all tasks, projects, people'],
-      ['g then r / u / b', 'routines, uploads, notebook'],
-      ['g then h / s', 'the dashboard, settings'],
-      ['t', 'jump to today'],
-      ['?', 'the shortcut list'],
-    ]],
-    ['On a day', [
-      ['\u2190 / \u2192', 'the day before / after'],
-      ['Ctrl-click the arrows', 'open that day in a new tab'],
-    ]],
-    ['While writing', [
-      ['Ctrl / \u2318 + K', 'make a hyperlink'],
-      ['Ctrl / \u2318 + J', 'hop between a link\u2019s text and its url'],
-      ['Ctrl / \u2318 + B  /  I', 'bold, italic'],
-      ['Ctrl / \u2318 + Enter', 'save and close the editor'],
-      ['[[', 'link a day, project or task'],
-    ]],
-    ['On a task', [
-      ['click the checkbox', 'done / not done'],
-      ['right-click the checkbox', 'optional / committed'],
-      ['shift-click the checkbox', 'drop / undrop'],
-      ['Tab in the title', 'jump to the timing panel'],
-      ['Enter', 'commit an edit and close the menu'],
-      ['drag the middle of a row', 'nest it under that row'],
-      ['drag near a row\u2019s edge', 'reorder it there'],
-    ]],
-  ]
-
   return (
-    <Panel title={<><Icon name="list" size={14} /> Keys and gestures</>}>
-      <div className="st-keys">
-        {GENERAL.map(([group, pairs]) => (
-          <section key={group}>
-            <h4>{group}</h4>
-            <dl>
-              {pairs.map(([keys, what]) => (
-                <div key={keys}><dt>{keys}</dt><dd>{what}</dd></div>
-              ))}
-            </dl>
-          </section>
-        ))}
-      </div>
+    <>
+      <Panel title={<><Icon name="list" size={14} /> Keys and gestures</>}>
+        <p className="st-note">
+          What the app answers to with keyboard control off. The mouse gestures are
+          here because they are as invisible as a keystroke — nothing on screen says
+          that right-clicking a checkbox makes a task optional.
+        </p>
+        <div className="st-keys">
+          {GENERAL.map(([group, pairs]) => (
+            <section key={group}>
+              <h4>{group}</h4>
+              <dl>
+                {pairs.map(([keys, what]) => (
+                  <div key={keys}><dt>{keys}</dt><dd>{what}</dd></div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </Panel>
 
-      <div className="st-vim-head">
+      <Panel title={<><Icon name="keyboard" size={14} /> Keyboard control</>}>
         <label className="st-vim-toggle">
           <input
             type="checkbox"
@@ -440,15 +437,17 @@ function Keys() {
             <strong>Keyboard control</strong>
             <span className="st-hint">
               hjkl to move between tasks, one key per action, <code>:</code> for commands.
-              While it is on it takes over the single letters above — <code>j</code> moves down the
-              list rather than on to tomorrow. Ctrl-Alt-V toggles it anywhere; <code>:q</code>
-              turns it off from inside.
+              While it is on, a bare letter acts on the task under the cursor —{' '}
+              <code>x</code> ticks it off, <code>t</code> makes it optional — so it has the
+              keyboard. Everything under <code>g</code> goes to the same place either way,
+              which is why every destination lives there. Ctrl-Alt-V toggles it anywhere;{' '}
+              <code>:q</code> turns it off from inside.
             </span>
           </span>
         </label>
-      </div>
 
-      {vim?.enabled && (
+        {/* Shown whether or not it is on. A list of keys you cannot read until
+            you have turned the mode on is no use for deciding whether to. */}
         <div className="st-keys">
           {HELP.map(([group, pairs]) => (
             <section key={group}>
@@ -461,7 +460,175 @@ function Keys() {
             </section>
           ))}
         </div>
-      )}
-    </Panel>
+      </Panel>
+    </>
+  )
+}
+
+/**
+ * What the AI suite is and how to work it.
+ *
+ * The switch tables are generated from `lib/aiSwitches.js` — the same module
+ * the row panels and the resolver read — so a switch added there appears here
+ * with its own explanation, and one whose meaning changes cannot go on being
+ * described the old way. The prose around them is in `lib/aiGuide.js`.
+ */
+function AiSuite({ s, save }) {
+  return (
+    <>
+      {/* The bottom layer of the four. A conversation overrides these, and a
+          task overrides its conversation. */}
+      <Panel title={<><Icon name="sparkle" size={14} /> Your defaults</>}>
+        <p className="st-note">
+          How a task in an AI conversation is worked unless it, or the conversation
+          it is in, says otherwise. Hover any option for what it means.
+        </p>
+        <AiSwitches
+          label="Default terms for every AI task"
+          value={s.ai_switch_defaults}
+          inherited={BUILT_IN}
+          onChange={(v) => save('ai_switch_defaults', v)}
+        />
+
+        {/* Standing instructions, under every conversation's and every task's.
+            These stack rather than being overridden — what is set here always
+            applies. */}
+        <Field label="Standing instructions">
+          <textarea
+            className="input st-prompt"
+            rows={4}
+            defaultValue={s.ai_prompt || ''}
+            placeholder="What you want said to the AI about every task — conventions to follow, things not to touch."
+            onBlur={(e) => {
+              const next = e.target.value.trim()
+              if (next !== (s.ai_prompt || '')) save('ai_prompt', next)
+            }}
+          />
+          <span className="st-hint">
+            Handed to the agent with every AI task, above the conversation's instructions
+            and the task's own. All three apply.
+          </span>
+        </Field>
+      </Panel>
+
+      <Panel title="How it works">
+        <div className="st-about">
+          {ABOUT.map(({ heading, body }) => (
+            <section key={heading}>
+              <h4>{heading}</h4>
+              <p>{body}</p>
+            </section>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="The switches">
+        <p className="st-note">
+          Two classes, and the difference is not cosmetic. An <strong>enforced</strong>{' '}
+          switch is refused by the planner itself — a budget of twelve means the
+          thirteenth create fails, whatever the agent intended. A{' '}
+          <strong>declared</strong> one is recorded and shown, and whoever runs the
+          agent has to honour it: a model or an effort level belongs to the session
+          doing the work, and nothing on this side can reach into that.
+        </p>
+        <SwitchTable title="Enforced — the planner refuses" list={ENFORCED} />
+        <SwitchTable title="Declared — recorded, honoured by the runner" list={DECLARED} />
+      </Panel>
+
+      <Panel title="The dialogue">
+        <p className="st-note">
+          Five moves that hold a conversation in tasks rather than in a chat window.
+        </p>
+        <div className="st-keys">
+          <section>
+            <h4>Moves</h4>
+            <dl>
+              {MOVES.map(([name, what]) => (
+                <div key={name}><dt>{name}</dt><dd>{what}</dd></div>
+              ))}
+            </dl>
+          </section>
+          <section>
+            <h4>Tools, by scope</h4>
+            <dl>
+              {SCOPES.map(([scope, tools]) => (
+                <div key={scope}><dt>{scope}</dt><dd>{tools}</dd></div>
+              ))}
+            </dl>
+          </section>
+        </div>
+      </Panel>
+
+      <Panel title="Finding work">
+        <p className="st-note">
+          One search tool over a query language, rather than a tool per question —
+          a tool per question can only answer the questions someone thought of.
+          Terms are ANDed; bare words match the title or the notes. With no{' '}
+          <code>status:</code> or <code>is:</code> term, only open tasks come back.
+        </p>
+        <pre className="st-code">{QUERY_EXAMPLES.join('\n')}</pre>
+        <div className="st-keys">
+          <section>
+            <h4>Terms</h4>
+            <dl>
+              {QUERY.map(([term, what]) => (
+                <div key={term}><dt>{term}</dt><dd>{what}</dd></div>
+              ))}
+            </dl>
+          </section>
+        </div>
+      </Panel>
+
+      <Panel title="Connecting an agent">
+        <p className="st-note">
+          The API must be running. There is no authentication because nothing
+          crosses a network — keep it on loopback.
+        </p>
+        <pre className="st-code">{CONNECT.command}</pre>
+        <div className="st-keys">
+          <section>
+            <h4>Environment</h4>
+            <dl>
+              {CONNECT.env.map(([name, what]) => (
+                <div key={name}><dt>{name}</dt><dd>{what}</dd></div>
+              ))}
+            </dl>
+          </section>
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+/** One class of switch, with every value it takes and what each one means. */
+function SwitchTable({ title, list }) {
+  return (
+    <section className="st-switches">
+      <h4>{title}</h4>
+      {list.map((sw) => (
+        <div key={sw.key} className="st-switch">
+          <div className="st-switch-h">
+            <code>{sw.key}</code>
+            <strong>{sw.label}</strong>
+            <span className="st-hint">{sw.hint}</span>
+          </div>
+          <dl>
+            {sw.values.map((v) => (
+              <div key={v}>
+                <dt>{v}{v === sw.fallback ? ' ·' : ''}</dt>
+                <dd>{sw.about?.[v] || ''}</dd>
+              </div>
+            ))}
+          </dl>
+          {sw.numeric && (
+            <p className="st-hint">
+              Any whole number from {sw.numeric.min} to {sw.numeric.max} is accepted
+              through the API, not only the values offered here.
+            </p>
+          )}
+        </div>
+      ))}
+      <p className="st-hint">· marks the built-in fallback.</p>
+    </section>
   )
 }

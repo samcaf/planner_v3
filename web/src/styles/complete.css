@@ -1,5 +1,13 @@
 /* ------------------------------------------------------------ day complete */
 
+/* Two moments, one animation. The colour is the only difference: a day
+   finishing takes the accent you chose, and a day beginning is amber — the
+   colour this app already uses for work that is in front of you rather than
+   behind you. Everything below reads --dc-tone, so a third moment would be a
+   colour rather than a stylesheet. */
+.dc { --dc-tone: var(--accent); --dc-halo: var(--accent-soft); }
+.dc.is-start { --dc-tone: var(--amber); --dc-halo: var(--amber-soft); }
+
 /* Over everything, and through it: this is a moment rather than a dialog, so
    it takes no clicks it does not need and blocks nothing underneath. */
 .dc {
@@ -19,7 +27,7 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(60% 50% at 50% 55%, var(--accent) 0%, transparent 72%);
+    radial-gradient(60% 50% at 50% 55%, var(--dc-tone) 0%, transparent 72%);
   opacity: 0;
   animation: dc-wash 4.2s ease forwards;
 }
@@ -35,7 +43,7 @@
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--ink);
-  text-shadow: 0 0 26px var(--accent-soft);
+  text-shadow: 0 0 26px var(--dc-halo);
 }
 
 .dc-ch {

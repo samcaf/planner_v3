@@ -15,6 +15,18 @@ import { api } from './api.js'
  */
 export function makeVimActions({
   tasks = [],
+  /**
+   * Rows the page can SEE but that are not part of its list.
+   *
+   * The day's side column draws the backlog and whatever is in progress, and
+   * the cursor can now stand on those. They must be findable — a key that
+   * reads a row's current priority before stepping it needs the row — but they
+   * must not join `tasks`, because that list is what decides who a task's
+   * siblings are and what a branch contains. A backlog row has no day and no
+   * section, so folding it in would make it a sibling of every loose task on
+   * the day and quietly reorder them.
+   */
+  others = [],
   sections = [],
   date = null,
   undo,
@@ -26,7 +38,7 @@ export function makeVimActions({
   /** Only a day has sections to reorder, so only a day passes this. */
   shiftSection,
 }) {
-  const byId = (id) => tasks.find((t) => t.id === id)
+  const byId = (id) => tasks.find((t) => t.id === id) || others.find((t) => t.id === id)
 
   /** Everything under a task, however deep — what a sub-section amounts to. */
   const branch = (id) => {

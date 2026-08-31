@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useVim, parseDuration, parseWhen, yankText, yankMarkdown, columnOf, idsIn,
-  isCardKey,
+  isCardKey, isActKey, elementFor, STOPS,
   keyOf, isSectionKey, sectionIdOf,
 } from '../lib/vim.jsx'
-import { GO_TO, GO_DATED, anchorOf } from '../lib/nav.js'
+import { goTarget } from '../lib/nav.js'
 import { openTab } from '../lib/openIn.js'
 import { loadNames, saveNames, namesFor, normalise } from '../lib/pageNames.js'
 import { PRIORITIES } from './Priority.jsx'
-import { today as todayIso } from '../lib/dates.js'
+import { parseDay, today as todayIso } from '../lib/dates.js'
 import Icon from './Icon.jsx'
 import '../styles/vim.css'
 
@@ -25,14 +25,16 @@ import '../styles/vim.css'
 const HELP = [
   ['Moving', [
     ['j / k', 'next / previous task, or section (3j for three)'],
-    ['h / l', 'the box to the left / right'],
+    ['h / l', 'the box to the left / right — and l again for the side column'],
+    ['Tab', 'the side column and back'],
     ['J / K', 'select the next / previous section'],
     ['Space', 'fold / unfold — a task’s children, or a whole section'],
     ['Ctrl-Space', 'fold / unfold the section you are in'],
     ['gg / G', 'first / last task'],
     ['Ctrl-d / Ctrl-u', 'half a screen down / up'],
     ['\u2190 / \u2192', 'the day before / after'],
-    ['g then d / w / m / n', 'day, week, month, notes'],
+    ['g then t', 'today'],
+    ['g then d / w / m / n', 'day, week, month, notes — keeping the date'],
     ['g then a / p / e', 'all tasks, projects, people'],
     ['g then r / u / b / h / s', 'routines, uploads, notebook, dashboard, settings'],
   ]],
@@ -43,12 +45,20 @@ const HELP = [
     ['DD', 'cut — deletes it, and p puts it back'],
     ['bb', 'send it to the backlog'],
     ['Alt-j / Alt-k', 'move the task — or the section — itself down / up'],
-    ['o / O', 'new task below / above'],
+    ['o / O', 'new task below / above — the cursor follows it'],
     ['> / <', 'priority up / down'],
+    ['Alt-\u2191 / Alt-\u2193', 'the same, without reaching for shift'],
     ['] / [', 'move to tomorrow / yesterday'],
     ['i', 'edit the title — or rename the section'],
     ['u / Ctrl-r', 'undo / redo'],
     ['Escape', 'back to normal mode'],
+  ]],
+  ['The side column', [
+    ['l or Tab', 'into routines, in progress and the backlog'],
+    ['h or Tab', 'back to the day'],
+    ['Enter on a routine', 'add it to this day'],
+    ['Enter on a backlog row', 'schedule it here, under its own parents'],
+    ['> / <', 'grade a backlog row’s priority'],
   ]],
   ['Selecting', [
     ['v', 'select this task’s text'],
@@ -76,7 +86,7 @@ const HELP = [
   ]],
   ['Elsewhere', [
     ['zp', 'start or pause the pomodoro'],
-    ['?', 'this list'],
+    ['?', 'this list — / filters it, j and k scroll it'],
     [':', 'command line'],
   ]],
   ['Commands', [
@@ -88,6 +98,7 @@ const HELP = [
     [':mv tomorrow  :mv +3  :mv 2026-09-01', 'move it'],
     [':pri high', 'set its priority outright'],
     [':cp <when>', 'copy it to a day'],
+    [':day 14  :day +3  :day 0', 'go to that day — also 09/01/2026 and 09-01-2026'],
     [':y   :yt', 'yank as text / as markdown'],
     [':pomo', 'start or pause the pomodoro'],
     [':namepage foo', 'nickname this page — bare, it says its name'],
@@ -146,25 +157,29 @@ export default function VimLayer() {
    * gone somewhere on purpose.
    */
   const justFolded = useRef(null)
+  /**
+   * Where the cursor was on the day before it stepped into the side column.
+   *
+   * Coming back should return you to the row you were working on, not to the
+   * top of the day: the side column is somewhere you go for one thing — a
+   * routine, a backlog item — and then come straight back from.
+   */
+  const cameFromAside = useRef(null)
+  /** What is typed into the help sheet's own filter, and the box it scrolls. */
+  const [helpFind, setHelpFind] = useState('')
+  const helpInput = useRef(null)
+  const helpBody = useRef(null)
   const {
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,
     pending, setPending, command, setCommand, flash, say,
-    actions, registers, register, helpOpen, setHelpOpen, setAnchor,
+    actions, registers, register, helpOpen, setHelpOpen, setAnchor, selectSoon,
   } = vim
 
-  const rowFor = (key) => {
-    if (isSectionKey(key)) {
-      return document.querySelector(`.panel.section[data-section-id="${sectionIdOf(key)}"]`)
-    }
-    // Matched by scanning rather than by an attribute selector: the key is a
-    // path, and building a selector out of it would need escaping — CSS.escape
-    // is not everywhere, and these lists are a dozen cards long.
-    if (isCardKey(key)) {
-      return [...document.querySelectorAll('[data-open]')].find((el) => el.dataset.open === key) || null
-    }
-    return document.querySelector(`.task[data-task-id="${key}"]`)
-  }
+  // The same lookup the provider uses to move the cursor. It was written out
+  // twice, and a fourth kind of stop would have had to be added to both.
+  const rowFor = elementFor
   const ctrl = (id, sel) => rowFor(id)?.querySelector(sel)
+  const stops = () => [...document.querySelectorAll(STOPS)]
   const click = (el, init) => {
     if (!el) return false
     el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ...init }))
@@ -341,6 +356,52 @@ export default function VimLayer() {
     return sec ? `s${sec.dataset.sectionId}` : null
   }
 
+  /**
+   * The day's side column, as a second window.
+   *
+   * Routines, what is in progress and the backlog are all on the day view and
+   * none of them was reachable without the mouse — which meant the two things
+   * you most often want to do from the keyboard, pull a backlog item onto the
+   * day and add a routine, were the two you could not. They are ordinary stops
+   * now; this is only how you get between the two columns quickly.
+   *
+   * `l` is what carries you in, because the side column IS the box to the
+   * right of the last one, and `h` carries you back. Tab does both, for when
+   * the day has no column layout to walk out of.
+   */
+  const asideEl = () => document.querySelector('.day-aside')
+  const inAside = (key) => !!rowFor(key)?.closest('.day-aside')
+
+  const enterAside = () => {
+    const aside = asideEl()
+    if (!aside) return false
+    const first = stops().find((el) => aside.contains(el))
+    if (!first) { say('nothing in the side column'); return false }
+    cameFromAside.current = cursor
+    setCursor(keyOf(first))
+    first.scrollIntoView?.({ block: 'nearest' })
+    return true
+  }
+
+  const leaveAside = () => {
+    const back = cameFromAside.current
+    if (back != null && rowFor(back) && !inAside(back)) {
+      setCursor(back)
+      rowFor(back)?.scrollIntoView?.({ block: 'nearest' })
+      return true
+    }
+    // Nothing remembered, or the row it remembered has gone: the first task of
+    // the day, which is where the cursor starts anyway.
+    const aside = asideEl()
+    const home = stops().find((el) => !aside?.contains(el))
+    if (!home) return false
+    setCursor(keyOf(home))
+    home.scrollIntoView?.({ block: 'nearest' })
+    return true
+  }
+
+  const otherPane = () => (inAside(cursor) ? leaveAside() : enterAside())
+
   const sectionEl = (key) => (isSectionKey(key)
     ? rowFor(key)
     : rowFor(key)?.closest('.panel.section') || null)
@@ -397,6 +458,17 @@ export default function VimLayer() {
       }
     }
 
+    // An action row is not a task and has no id the API would recognise, so
+    // everything that would PATCH one has to stop here rather than sending a
+    // request for /tasks/!routine:3. What it does have is a button, which is
+    // the whole reason it is a stop: Enter presses it.
+    if (isActKey(id)) {
+      if (!['done', 'column', 'undo', 'redo', 'pomodoro'].includes(what)) {
+        say('that is a button — Enter presses it')
+        return
+      }
+    }
+
     // With a section under the cursor, the keys that act on one task say so
     // rather than silently doing nothing — except the handful that mean
     // something for a section too, which are handled below.
@@ -433,7 +505,17 @@ export default function VimLayer() {
 
     switch (what) {
       case 'done':
-        for (const t of ids) click(ctrl(t, '.task-check'))
+        for (const t of ids) {
+          const box = ctrl(t, '.task-check')
+          if (box) { click(box); continue }
+          // A row with no checkbox is not something you tick — it is an offer.
+          // A routine offers to add itself to the day; a backlog row offers to
+          // come back onto it. Enter takes whichever offer the row is making,
+          // which is what the row marks `data-act-go`.
+          const go = ctrl(t, '[data-act-go]')
+          if (go) { click(go); continue }
+          say('nothing to press on this row')
+        }
         break
       case 'optional':
         for (const t of ids) {
@@ -541,20 +623,27 @@ export default function VimLayer() {
       }
       case 'column': {
         // Sideways through the three boxes, keeping roughly the same depth
-        // down the column so it feels like moving across a grid.
-        // Silent where there are no columns: h and l simply have nothing to
-        // do in a plain list, and a complaint every time would be noise.
-        const at = columnOf(id)
-        if (!at) return
+        // down the column so it feels like moving across a grid — and then out
+        // of the grid entirely, into the day's side column, because that is
+        // what is actually to the right of the last box.
         const step = arg === 'left' ? -1 : 1
-        const here = idsIn(at.cols[at.index]).indexOf(id)
-        for (let i = at.index + step; i >= 0 && i < at.cols.length; i += step) {
-          const there = idsIn(at.cols[i])
-          if (!there.length) continue
-          setCursor(there[Math.min(Math.max(0, here), there.length - 1)])
-          return
+        const at = columnOf(id)
+        if (at) {
+          const here = idsIn(at.cols[at.index]).indexOf(id)
+          for (let i = at.index + step; i >= 0 && i < at.cols.length; i += step) {
+            const there = idsIn(at.cols[i])
+            if (!there.length) continue
+            setCursor(there[Math.min(Math.max(0, here), there.length - 1)])
+            return
+          }
         }
-        say(arg === 'left' ? 'no box to the left' : 'no box to the right')
+        // Past the last box, or in a plain list with no boxes at all: right
+        // goes to the side column, left comes back from it. Silent otherwise —
+        // h and l have nothing to do on a page with neither, and a complaint
+        // every time would be noise.
+        if (step > 0 && !inAside(id)) { if (enterAside()) return }
+        else if (step < 0 && inAside(id)) { if (leaveAside()) return }
+        if (at) say(arg === 'left' ? 'no box to the left' : 'no box to the right')
         break
       }
       case 'estimate': {
@@ -683,7 +772,12 @@ export default function VimLayer() {
       }
       case 'new': {
         if (!a.addNear) { say('nothing here can add a task'); return }
-        await a.addNear(id, { title: 'New task' }, arg === 'above' ? 'above' : 'below')
+        const made = await a.addNear(id, { title: 'New task' }, arg === 'above' ? 'above' : 'below')
+        // Onto the row it just made. Every other key acts on what is under the
+        // cursor, so leaving the cursor on the row ABOVE a new task means the
+        // next thing you type happens to the wrong one — and `o` is almost
+        // always followed by typing.
+        if (made?.id != null) selectSoon(made.id)
         break
       }
       case 'pomodoro':
@@ -711,6 +805,26 @@ export default function VimLayer() {
       if (!t) { say('no task under the cursor'); return }
       await a2.patch?.(cursor, { is_code: t.is_code ? 0 : 1 })
       say(t.is_code ? 'no longer a code task' : 'a code task')
+      return
+    }
+
+    /**
+     * `:day` — go to a day, however you feel like naming it.
+     *
+     * Bare it means today, which is also `:day 0`. Everything else goes
+     * through the one parser, so `14`, `+3`, `09/01/2026` and `2026-09-01` all
+     * mean what they look like. Counted from today rather than from the day
+     * you are on: `0` has to be today wherever you are standing, or it is not
+     * a way of getting home.
+     */
+    // Spelled out, with no `:d` alias: `:done`, `:drop` and `:del` all start
+    // with it, and a half-typed one must not quietly navigate you off the day
+    // you were trying to change.
+    if (verb === 'day') {
+      const to = arg.trim() ? parseDay(arg, todayIso()) : todayIso()
+      if (!to) { say(`"${arg}" is not a day — try 14, +3, 0, or 09/01/2026`); return }
+      navigate(`/day/${to}`)
+      say(`\u2192 ${to}`)
       return
     }
 
@@ -797,7 +911,19 @@ export default function VimLayer() {
 
       // Escape always comes back, even out of a text box.
       if (e.key === 'Escape') {
-        if (helpOpen) { setHelpOpen(false); return }
+        if (helpOpen) {
+          // Out of the sheet's own filter first, then out of the sheet. One
+          // Escape should not do both — you cannot see what you filtered out.
+          if (typing()) {
+            e.preventDefault(); e.stopPropagation()
+            document.activeElement.blur()
+            setHelpFind('')
+            return
+          }
+          setHelpOpen(false)
+          setHelpFind('')
+          return
+        }
         if (mode === 'command' || mode === 'search') { setCommand(''); setMode('normal'); return }
         if (typing()) {
           // Vim's contract: Escape leaves insert mode KEEPING what was typed,
@@ -843,21 +969,40 @@ export default function VimLayer() {
       const N = Math.max(1, Number(count.current) || 1)
       const takeCount = () => { count.current = ''; }
 
+      /**
+       * While the sheet is up it IS the page.
+       *
+       * `/` looked through the day underneath and `j` walked the cursor there,
+       * both of them invisible behind an overlay covering the screen — so the
+       * keys you would reach for while reading a list of keys were the two that
+       * did something you could not see. Everything falls to the sheet now, and
+       * anything it has no use for is simply swallowed.
+       */
+      if (helpOpen) {
+        const body = helpBody.current
+        const scroll = (by) => { if (body) body.scrollTop += by }
+        const eat = () => { e.preventDefault(); e.stopPropagation(); takeCount(); setPending('') }
+        if (k === '/') { eat(); helpInput.current?.focus(); return }
+        if (k === 'j') { eat(); scroll(58 * N); return }
+        if (k === 'k') { eat(); scroll(-58 * N); return }
+        if (e.ctrlKey && k.toLowerCase() === 'd') { eat(); scroll((body?.clientHeight || 300) / 2); return }
+        if (e.ctrlKey && k.toLowerCase() === 'u') { eat(); scroll(-(body?.clientHeight || 300) / 2); return }
+        if (k === 'G') { eat(); scroll(body?.scrollHeight || 0); return }
+        if (k === '?' || k === 'q') { eat(); setHelpOpen(false); setHelpFind(''); return }
+        return
+      }
+
       // --- two-key sequences ------------------------------------------------
       const held = seq.current
       const clear = () => { seq.current = ''; setPending('') }
       if (held === 'g') {
         clear()
         if (k === 'g') { e.preventDefault(); e.stopPropagation(); move('first'); return }
-        // The same g-prefix the app has without this mode on, so `ga` means
-        // all-tasks either way rather than one thing in each.
-        const to = GO_TO[k]
-        if (to) { e.preventDefault(); e.stopPropagation(); navigate(to); return }
-        const dated = GO_DATED[k]
-        if (dated) {
-          e.preventDefault(); e.stopPropagation()
-          navigate(`/${dated}/${anchorOf(window.location.pathname, todayIso())}`)
-        }
+        // The same table the app reads without this mode on, so `ga` means
+        // all-tasks and `gt` means today either way rather than one thing in
+        // each. gg is the exception, and it is vim's.
+        const to = goTarget(k, { pathname: window.location.pathname, today: todayIso() })
+        if (to) { e.preventDefault(); e.stopPropagation(); navigate(to) }
         return
       }
       if (held === 'd') {
@@ -940,14 +1085,22 @@ export default function VimLayer() {
       // of the task.
       if (e.altKey && k.toLowerCase() === 'j') return go(() => run('shift', 'down'))
       if (e.altKey && k.toLowerCase() === 'k') return go(() => run('shift', 'up'))
+      // The same thing > and < do, on keys you can hit without shift. Alt is
+      // what keeps them off the calendar: the bare arrows walk the days, and
+      // they stand down the moment any modifier is held.
+      if (e.altKey && k === 'ArrowUp') return go(() => run('priority', 'up'))
+      if (e.altKey && k === 'ArrowDown') return go(() => run('priority', 'down'))
       if (e.altKey) return
+
+      // Between the day and its side column. Tab is what a browser has always
+      // meant by "the next thing over", and with two panes there is nothing for
+      // Shift-Tab to mean that Tab does not.
+      if (k === 'Tab') return go(() => { if (!otherPane()) say('no side column here') })
 
       // With nothing to point at — a page with no tasks on it — j and k fall
       // back to scrolling, which is what they do in a pager and what your hands
       // will try anyway.
-      const noRows = () => !document.querySelector(
-        '.panel.section[data-section-id], .task[data-task-id], [data-open]',
-      )
+      const noRows = () => !document.querySelector(STOPS)
       /** scrollBy where it exists, scrollTop where it does not. */
       const scrollPage = (by) => {
         const el = document.querySelector('.main') || document.scrollingElement
@@ -1073,10 +1226,14 @@ export default function VimLayer() {
   useEffect(() => {
     if (!enabled) return
     const onClick = (e) => {
-      const row = e.target.closest?.('.task[data-task-id]')
+      // Any kind of stop, not only a task row: the side column's routines and
+      // a grid of cards are places the cursor can be, so clicking one and then
+      // pressing a key should act on what you clicked.
+      const row = e.target.closest?.(STOPS)
       if (!row) return
-      const id = Number(row.dataset.taskId)
-      if (!Number.isNaN(id)) setCursor(id)
+      const key = keyOf(row)
+      if (key === '' || (typeof key === 'number' && Number.isNaN(key))) return
+      setCursor(key)
     }
     document.addEventListener('click', onClick, true)
     return () => document.removeEventListener('click', onClick, true)
@@ -1123,9 +1280,11 @@ export default function VimLayer() {
       }
       if (!enabled) return
 
-      const ids = [...document.querySelectorAll(
-        '.panel.section[data-section-id], .task[data-task-id], [data-open]',
-      )].map(keyOf)
+      // The same list the cursor moves through. Written out separately, it
+      // fell a stop-kind behind: the side column's rows were reachable by every
+      // key that moves and then unpaintable, so the repaint read the cursor as
+      // pointing at a row that had been deleted and put it back on the day.
+      const ids = stops().map(keyOf)
 
       // Adopt the first row when there is nothing to point at yet. This lives
       // here rather than in an effect of its own because this runs on renders
@@ -1219,6 +1378,10 @@ export default function VimLayer() {
 
   if (!enabled) return null
 
+  // What the filter leaves standing. A group survives if its own name matches,
+  // which is what makes "moving" or "commands" work as a search term.
+  const shown = filterHelp(HELP, helpFind)
+
   return (
     <>
       {/* Vim's own arrangement: what you are typing sits bottom left, and the
@@ -1272,17 +1435,34 @@ export default function VimLayer() {
       </div>
 
       {helpOpen && (
-        <div className="vim-help-wrap" onClick={() => setHelpOpen(false)}>
+        <div
+          className="vim-help-wrap"
+          onClick={() => { setHelpOpen(false); setHelpFind('') }}
+        >
           <div className="vim-help panel" onClick={(e) => e.stopPropagation()}>
             <header className="panel-h">
               Keys and commands
               <span className="spacer" />
-              <button className="btn ghost sm" onClick={() => setHelpOpen(false)}>
+              {/* The sheet's own find. It is a long list and the thing you are
+                  looking for is usually a word you remember — "backlog",
+                  "priority" — rather than a key you do not. */}
+              <input
+                ref={helpInput}
+                className="input vim-help-find"
+                value={helpFind}
+                placeholder="/ to filter"
+                aria-label="Filter the keys"
+                onChange={(e) => setHelpFind(e.target.value)}
+              />
+              <button
+                className="btn ghost sm"
+                onClick={() => { setHelpOpen(false); setHelpFind('') }}
+              >
                 <Icon name="x" size={13} />
               </button>
             </header>
-            <div className="vim-help-b">
-              {HELP.map(([group, pairs]) => (
+            <div className="vim-help-b" ref={helpBody}>
+              {shown.map(([group, pairs]) => (
                 <section key={group}>
                   <h4>{group}</h4>
                   <dl>
@@ -1295,12 +1475,34 @@ export default function VimLayer() {
                   </dl>
                 </section>
               ))}
+              {!shown.length && <p className="muted">Nothing matches “{helpFind}”.</p>}
             </div>
           </div>
         </div>
       )}
     </>
   )
+}
+
+/**
+ * The sheet, narrowed to what you typed.
+ *
+ * Matched against the keys AND what they do, because you look up a shortcut by
+ * either — "yank" finds yy, and "yy" finds yank. A group whose own name matches
+ * keeps all of its rows, so "commands" shows the command line whole.
+ */
+export function filterHelp(help, find) {
+  const q = String(find || '').trim().toLowerCase()
+  if (!q) return help
+  return help
+    .map(([group, pairs]) => {
+      if (group.toLowerCase().includes(q)) return [group, pairs]
+      const kept = pairs.filter(
+        ([keys, what]) => `${keys} ${what}`.toLowerCase().includes(q),
+      )
+      return kept.length ? [group, kept] : null
+    })
+    .filter(Boolean)
 }
 
 const MODE_LABEL = {

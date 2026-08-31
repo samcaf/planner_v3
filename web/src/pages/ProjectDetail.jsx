@@ -527,7 +527,7 @@ export default function ProjectDetail() {
                       : 'Show archived sections as well'}
                     onClick={() => setShowArchived(!showArchived)}
                   >
-                    <Icon name="templates" size={13} /> Archived
+                    <Icon name="archive" size={13} /> Archived
                     <span className="muted"> {archivedCount}</span>
                   </button>
                 )}
@@ -801,7 +801,7 @@ function NoteSection({
             title={note.archived ? 'Bring this section back out of the archive' : 'Archive this section'}
             onClick={() => onChange({ archived: note.archived ? 0 : 1 })}
           >
-            <Icon name="templates" size={13} />
+            <Icon name="archive" size={13} />
           </button>
           <button className="btn ghost sm danger" title="Delete this section" onClick={onDelete}>
             <Icon name="trash" size={13} />

@@ -48,8 +48,20 @@ const MODES = { normal: 'NORMAL', insert: 'INSERT', visual: 'VISUAL', command: '
  * A stop is identified by a key rather than an id, because two kinds of thing
  * share one cursor: `12` is a task, `'s12'` a section. Keys are compared with
  * `===` throughout, so the two can never be mistaken for one another.
+ *
+ * FOUR kinds now, and the fourth is a row whose whole point is a button. A
+ * routine in the day's side column is not a task and never will be — it is an
+ * offer to make several — but it still wants a cursor on it, because "add the
+ * morning routine" is exactly the sort of thing you reach for with your hands
+ * on the keys. Those rows carry `data-act`, and Enter presses whatever they
+ * mark `data-act-go`.
+ *
+ * Exported, because the layer that draws the cursor has to walk the same list.
+ * It used to write the selector out again and fell a kind behind: rows every
+ * movement key could reach were unpaintable, so the repaint read the cursor as
+ * pointing at something deleted and sent it back to the day.
  */
-const STOPS = '.panel.section[data-section-id], .task[data-task-id], [data-open]'
+export const STOPS = '.panel.section[data-section-id], .task[data-task-id], [data-open], [data-act]'
 
 const stopEls = () => [...document.querySelectorAll(STOPS)]
 
@@ -59,12 +71,16 @@ export const keyOf = (el) => {
   // it starts with a slash, so it can never be read as a section key or a task
   // id no matter what else is on screen.
   if (el?.dataset?.open) return el.dataset.open
+  // An action row names itself, and the name starts with ! for the same reason
+  // a card's starts with / — so the four kinds of key can never collide.
+  if (el?.dataset?.act) return el.dataset.act
   return Number(el?.dataset?.taskId)
 }
 
 export const isSectionKey = (key) => typeof key === 'string' && key.startsWith('s')
 export const sectionIdOf = (key) => (isSectionKey(key) ? key.slice(1) : null)
 export const isCardKey = (key) => typeof key === 'string' && key.startsWith('/')
+export const isActKey = (key) => typeof key === 'string' && key.startsWith('!')
 
 const idsOnScreen = () => stopEls().map(keyOf)
 
@@ -79,8 +95,14 @@ const rowFor = (key) => {
   if (isCardKey(key)) {
     return [...document.querySelectorAll('[data-open]')].find((el) => el.dataset.open === key) || null
   }
+  if (isActKey(key)) {
+    return [...document.querySelectorAll('[data-act]')].find((el) => el.dataset.act === key) || null
+  }
   return document.querySelector(`.task[data-task-id="${key}"]`)
 }
+
+/** The element a key points at — exported so the layer does not redefine it. */
+export const elementFor = rowFor
 
 /**
  * How many cards sit side by side in one row of a card grid.
@@ -346,11 +368,46 @@ export function VimProvider({ children }) {
   // is already being watched. A timer here could not see the moment a row was
   // removed, and re-armed itself on every render besides.
 
+  /**
+   * Put the cursor on a row that does not exist yet.
+   *
+   * Creating a task is a round trip and a refetch, so the row a page has just
+   * asked for is not on screen when the call returns. Setting the cursor to it
+   * straight away is worse than doing nothing: the repaint sees an id that is
+   * nowhere, decides the row has been deleted, and moves the cursor somewhere
+   * else — so `o` left you pointing at the task ABOVE the one it made.
+   *
+   * So wait for it. The cursor stays where it was until the row appears, which
+   * is also the only moment moving it can be seen. Bounded, because a create
+   * that fails or lands on another day must not leave a poller running.
+   */
+  const wanted = useRef(null)
+  const selectSoon = useCallback((id) => {
+    if (id == null) return
+    wanted.current = id
+    let tries = 0
+    const look = () => {
+      if (wanted.current !== id) return
+      if (typeof document === 'undefined' || !document?.querySelector) return
+      const el = rowFor(id)
+      if (el) {
+        wanted.current = null
+        setCursor(id)
+        el.scrollIntoView?.({ block: 'nearest' })
+        return
+      }
+      if (++tries > 50) { wanted.current = null; return }
+      setTimeout(look, 40)
+    }
+    look()
+  }, [])
+
   const value = useMemo(() => ({
     enabled, toggle, mode, setMode, cursor, setCursor, selection, move,
     pending, command, flash, say, actions, registers, register,
-    helpOpen, setHelpOpen, setAnchor, setPending, setCommand,
-  }), [enabled, toggle, mode, cursor, selection, move, pending, command, flash, say, helpOpen])
+    helpOpen, setHelpOpen, setAnchor, setPending, setCommand, selectSoon,
+  }), [enabled, toggle, mode, cursor, selection, move, pending, command, flash, say,
+    helpOpen, selectSoon])
 
   return (
     <ActionContext.Provider value={actions}>

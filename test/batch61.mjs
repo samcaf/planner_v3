@@ -1,4 +1,9 @@
-/** AI defaults in Settings sit under every conversation and task. */
+/**
+ * AI defaults in Settings sit under every conversation and task.
+ *
+ * They live on the page's AI suite tab now, beside the written explanation of
+ * what each switch does, rather than in the middle of a column of preferences.
+ */
 import './ensure-iife.mjs'
 import { JSDOM, VirtualConsole } from 'jsdom'
 
@@ -37,10 +42,18 @@ try {
   const { document } = window
   await wait(3000)
 
-  const panelOf = (title) => [...document.querySelectorAll('.panel')]
-    .find((p) => p.textContent.startsWith(title))
-  const defaults = panelOf('AI defaults')
-  check('Settings has an AI defaults panel', !!defaults,
+  // Settings is three tabs; the switches are on the third. A panel title now
+  // carries an icon, so this matches on the text rather than on its first
+  // character.
+  const tab = [...document.querySelectorAll('.st-tab')]
+    .find((t) => t.textContent.trim() === 'AI suite')
+  tab?.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }))
+  await wait(600)
+
+  const panelOf = (title) => [...document.querySelectorAll('.st-stack:not([hidden]) .panel')]
+    .find((p) => p.textContent.trim().startsWith(title))
+  const defaults = panelOf('Your defaults')
+  check('the AI tab has the defaults panel', !!defaults,
     [...document.querySelectorAll('.panel')].map((p) => p.textContent.slice(0, 18)).join(' | '))
 
   defaults?.querySelector('.ais-open')?.click()

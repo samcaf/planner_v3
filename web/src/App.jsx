@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import Icon from './components/Icon.jsx'
 import Wordmark from './components/Wordmark.jsx'
@@ -29,7 +29,11 @@ import Resolver, { InternalLinks } from './components/Resolver.jsx'
 import Search from './components/Search.jsx'
 import VimLayer from './components/VimLayer.jsx'
 import { VimProvider, useVim } from './lib/vim.jsx'
-import { GO_TO, GO_DATED } from './lib/nav.js'
+import { goTarget } from './lib/nav.js'
+import { GENERAL } from './lib/shortcuts.js'
+// The `?` sheet draws the key table, so its styles have to be here rather than
+// on the one page that used to own them.
+import './styles/keys.css'
 
 /** Wide enough for the mark, narrow enough to leave the page most of the screen. */
 const clampRail = (px) => Math.min(420, Math.max(168, Math.round(px)))
@@ -119,6 +123,12 @@ export default function App() {
           <SideLink key={n.label} {...n} />
         ))}
 
+        {/* Directly under Settings, centred and wordless. It is a mode rather
+            than a place, so it does not belong in the list of places — but it
+            is reached often enough that it should not be at the far foot of
+            the rail either. */}
+        <VimToggle />
+
         {/* Between the last nav entry and the mark, as its own thing: it is
             neither navigation nor branding. */}
         <Pomodoro />
@@ -132,7 +142,6 @@ export default function App() {
           </NavLink>
           <div className="sb-foot-row">
             <DayNight dark={isDark} onToggle={() => setTheme(isDark ? 'light' : 'dark')} />
-            <VimToggle />
           </div>
         </div>
       </nav>
@@ -215,19 +224,6 @@ export default function App() {
   )
 }
 
-const VIEW_KEYS = { d: 'day', w: 'week', m: 'month', n: 'notes' }
-
-const HELP = [
-  ['\u2190 / \u2192', 'The day, week or month before / after'],
-  ['g then d / w / m / n', 'Day, Week, Month, Notes — keeping the date you are on'],
-  ['g then a / p / e', 'All tasks, Projects, People'],
-  ['g then r / u / b', 'Routines, Uploads, Notebook'],
-  ['g then h / s', 'The dashboard, Settings'],
-  ['t', 'Jump to today'],
-  ['?', 'This list'],
-  ['Esc', 'Close'],
-]
-
 /**
  * Keyboard control, on the rail rather than only in Settings.
  *
@@ -258,7 +254,16 @@ function Shortcuts() {
   const navigate = useNavigate()
   const location = useLocation()
   const [help, setHelp] = useState(false)
-  const [pendingG, setPendingG] = useState(false)
+  /**
+   * The `g` of `gt`, held in a ref rather than in state.
+   *
+   * Two keys of a sequence can arrive in one tick — from a key repeat, from
+   * typing fast, from a test — and a handler reading state still sees the value
+   * from the render it was built in. As state, the second key of `gt` saw no
+   * pending `g` and did nothing. Keyboard control learned this the same way and
+   * uses a ref for exactly this reason.
+   */
+  const pendingG = useRef(false)
   const vim = useVim()
 
   useEffect(() => {
@@ -272,25 +277,21 @@ function Shortcuts() {
       const el = document.activeElement
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
 
-      const [, view, date] = location.pathname.split('/')
-      const anchor = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : today()
-
-      if (pendingG) {
-        setPendingG(false)
-        const to = GO_TO[e.key]
+      if (pendingG.current) {
+        pendingG.current = false
+        // The same table keyboard control reads, so `gt` is today and `gp` is
+        // projects in both — there is one set of destinations, not two.
+        const to = goTarget(e.key, { pathname: location.pathname, today: today() })
         if (to) return navigate(to)
-        const dated = GO_DATED[e.key]
-        if (dated) return navigate(`/${dated}/${anchor}`)
         return
       }
 
       if (e.key === '?') { setHelp((v) => !v); return }
-      if (e.key === 'g') { setPendingG(true); return }
-      if (e.key === 't') { navigate(`/${VIEW_KEYS[view?.[0]] ? view : 'day'}/${today()}`); return }
+      if (e.key === 'g') { pendingG.current = true; return }
 
-      // d, w, m and n are only reachable through g now, so the bare letters
-      // mean the same thing whether or not keyboard control is on.
-
+      // Every destination is under g now, including today — a bare letter
+      // cannot be a shortcut here and something else with keyboard control on
+      // without meaning two things depending on a mode you cannot see.
 
       // j and k are deliberately not bound here any more. The arrow keys already
       // walk the calendar, and leaving these free means they mean one thing —
@@ -300,20 +301,26 @@ function Shortcuts() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [location.pathname, navigate, pendingG, vim?.enabled])
+  }, [location.pathname, navigate, vim?.enabled])
 
   if (!help) return null
 
   return (
     <Modal title="Keyboard shortcuts" onClose={() => setHelp(false)}>
-      <dl className="kv" style={{ gridTemplateColumns: '150px 1fr' }}>
-        {HELP.map(([keys, what]) => (
-          <div key={keys} style={{ display: 'contents' }}>
-            <dt><kbd>{keys}</kbd></dt>
-            <dd>{what}</dd>
-          </div>
+      {/* The same table the Settings page draws. One sheet cannot fall behind
+          the other when there is only one of them. */}
+      <div className="st-keys">
+        {GENERAL.map(([group, pairs]) => (
+          <section key={group}>
+            <h4>{group}</h4>
+            <dl>
+              {pairs.map(([keys, what]) => (
+                <div key={keys}><dt>{keys}</dt><dd>{what}</dd></div>
+              ))}
+            </dl>
+          </section>
         ))}
-      </dl>
+      </div>
     </Modal>
   )
 }

@@ -23,8 +23,9 @@ import { api, useApi } from '../lib/api.js'
 import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
 import DayComplete from '../components/DayComplete.jsx'
+import DayStart from '../components/DayStart.jsx'
 import { tabDate, usePageTitle } from '../lib/title.js'
-import { useVimActions } from '../lib/vim.jsx'
+import { useVim, useVimActions } from '../lib/vim.jsx'
 import { makeVimActions } from '../lib/vimActions.js'
 import { useArrowNav } from '../lib/keys.js'
 import { addDays, longDate, minutesLabel, shortDate, today } from '../lib/dates.js'
@@ -121,6 +122,7 @@ function DayView({ date }) {
     localStorage.setItem('day_aside_width', String(asideWidth))
   }, [asideWidth])
   useArrowNav(useCallback((by) => navigate(`/day/${addDays(date, by)}`), [date, navigate]))
+  const vim = useVim()
   const undo = useUndo()
   const toast = useToast()
 
@@ -142,6 +144,9 @@ function DayView({ date }) {
   // point in the render there may not be any yet.
   useVimActions(makeVimActions({
     tasks: day.data?.tasks || [],
+    // The side column's rows. Findable by the keyboard, but not part of the
+    // day's list — see makeVimActions for why the two cannot be merged.
+    others: [...(backlog.data || []), ...(doing.data || [])],
     sections: day.data?.sections || [],
     date,
     undo,
@@ -166,7 +171,7 @@ function DayView({ date }) {
     patch: (id, body) => patchTask(id, body),
     remove: (id) => removeTask(id),
     reschedule,
-    onAdded: setJustAdded,
+    onAdded: added,
   }))
 
   if (day.error) return <div className="page"><p className="muted">{day.error.message}</p></div>
@@ -241,7 +246,9 @@ function DayView({ date }) {
 
   /** Deleting is undoable both by Ctrl-Z and by the toast it leaves behind. */
   const removeTask = async (id) => {
-    const task = d.tasks.find((t) => t.id === id)
+    // `known` rather than the day's own list: the side column's rows can be
+    // under the cursor now, and DD on one used to do nothing at all.
+    const task = known.find((t) => t.id === id)
     if (!task) return
     const restore = await ops.remove(task)
     toast({
@@ -471,6 +478,22 @@ function DayView({ date }) {
     refresh()
   }
 
+  /**
+   * A row that has just been made, wherever it was made from.
+   *
+   * Two things follow a new task: the title opens for typing, and — with
+   * keyboard control on — the cursor moves onto it. Both used to be the
+   * business of whichever function happened to create the row, so a task added
+   * one way got the editor and a task added another got nothing.
+   *
+   * `edit` is false for the quick-add box at the foot of the day, which is the
+   * one case where the title has already been typed.
+   */
+  function added(id, { edit = true } = {}) {
+    if (edit) setJustAdded(id)
+    vim?.selectSoon?.(id)
+  }
+
   const rowProps = (task) => ({
     task,
     subtasks: task.subtasks || [],
@@ -503,7 +526,7 @@ function DayView({ date }) {
     const first = Math.min(...siblings.map((t) => t.sort), 0)
     await api.patch(`/tasks/${created.id}`, { sort: first - 1 })
 
-    setJustAdded(created.id)
+    added(created.id)
     refresh()
   }
 
@@ -512,7 +535,12 @@ function DayView({ date }) {
     const title = draft.trim()
     if (!title) return
     setDraft('')
-    await api.post('/tasks', { title, scheduled_date: date, project_id: draftProject })
+    const created = await api.post('/tasks', {
+      title, scheduled_date: date, project_id: draftProject,
+    })
+    // No editor: the title is what was just typed into the box. The cursor
+    // still follows it, so the next keystroke acts on what was just added.
+    added(created.id, { edit: false })
     refresh()
   }
 
@@ -532,7 +560,7 @@ function DayView({ date }) {
       section_id: sectionId === UNSECTIONED ? null : sectionId,
       project_id: section?.project_id ?? null,
     })
-    setJustAdded(created.id)
+    added(created.id)
     refresh()
   }
 
@@ -827,13 +855,16 @@ function DayView({ date }) {
                 {d.routines.map((rt) => {
                   const already = d.sections.some((s) => s.name === rt.name)
                   return (
-                    <div key={rt.id} className="row">
+                    // A stop for the keyboard, and not a task: `data-act` names
+                    // it and `data-act-go` says which control Enter presses.
+                    <div key={rt.id} className="row" data-act={`!routine:${rt.id}`}>
                       <span style={{ flex: 1 }}>
                         {rt.name}
                         {already && <span className="muted"> · added</span>}
                       </span>
                       <button
                         className="btn sm"
+                        data-act-go=""
                         onClick={async () => {
                           await api.post(`/routines/${rt.id}/apply`, { date })
                           refresh()
@@ -855,7 +886,11 @@ function DayView({ date }) {
             >
               <div style={{ padding: 6 }}>
                 {doing.data.map((t) => (
-                  <div key={t.id} className="task doing" draggable
+                  // An action row rather than a task row, even though it IS a
+                  // task: a doing task scheduled for today is drawn twice on
+                  // this page, and two stops carrying one id make the cursor
+                  // jump back up the page when you walk onto the second.
+                  <div key={t.id} className="task doing" draggable data-act={`!doing:${t.id}`}
                     onDragStart={(e) => e.dataTransfer.setData('text/task-id', String(t.id))}
                   >
                     <button
@@ -975,6 +1010,10 @@ function DayView({ date }) {
       </div>
 
       <SelectionBar tasks={known} onDone={refresh} />
+
+      {/* The other end of the same day. It fires on arrival rather than on a
+          transition, which is why it is a component of its own — see its file. */}
+      <DayStart date={date} />
 
       {/* Counted over the day's real work: notes are not tasks, dropped work
           was decided against rather than finished, and optional work is
@@ -1505,6 +1544,10 @@ function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
     <>
       <div
         className={`task bl-row${task.scaffold ? ' is-scaffold' : ''}`}
+        // A cursor stop like any other row, so the keyboard can reach the
+        // backlog. A scaffold row is a heading rather than work, but it is
+        // still worth standing on — j has to be able to walk past it.
+        data-task-id={task.id}
         style={depth ? { marginLeft: depth * 16 } : undefined}
         draggable
         onDragStart={(ev) => ev.dataTransfer.setData('text/task-id', String(task.id))}
@@ -1545,6 +1588,9 @@ function BacklogRow({ task, date, onPriority, onSchedule, depth = 0 }) {
           <div className="task-actions">
             <button
               className="btn ghost sm"
+              // What Enter presses on this row: it has no checkbox, and
+              // "bring it onto the day" is the only thing you come here for.
+              data-act-go=""
               title="Schedule on this day, back under its own parents"
               onClick={() => onSchedule(task.id)}
             >

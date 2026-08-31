@@ -1,0 +1,34 @@
+/*
+ * The key table, wherever it is drawn.
+ *
+ * Three places render it — the `?` sheet, the Settings page's Keyboard tab, and
+ * the sheet keyboard control puts up — so it cannot live in any one page's
+ * stylesheet. It used to be in settings.css, which meant the `?` sheet was
+ * unstyled on every page you had not visited Settings from.
+ */
+.st-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-6) var(--space-10);
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.st-keys h4 {
+  margin: 0 0 var(--space-3);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+}
+
+.st-keys dl { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.st-keys dl > div { display: grid; grid-template-columns: minmax(0, 46%) 1fr; gap: var(--space-4); }
+
+.st-keys dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  overflow-wrap: break-word;
+}
+
+.st-keys dd { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+

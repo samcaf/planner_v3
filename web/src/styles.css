@@ -178,7 +178,24 @@ button, input, textarea, select { font: inherit; color: inherit; }
   /* Width is set inline from the stored value; these are the fallback. */
   width: 216px;
   flex: 0 0 216px;
-  background: var(--sb-bg);
+  background-color: var(--sb-bg);
+  /* A reflection across the rail's lower-left corner: one flat plane of very
+     slightly lifted light, cut on the diagonal. The hard stop is what makes it
+     read as a reflection rather than as a gradient — a sheen on glass has an
+     edge — and the half-percent of feather is only there to stop that edge
+     stepping. It is painted on the element rather than in a child because the
+     rail scrolls, and a background stays put while its contents move. */
+  background-image: linear-gradient(
+    to top right,
+    rgba(255, 255, 255, .05) 0%,
+    rgba(255, 255, 255, .05) 49.7%,
+    rgba(255, 255, 255, 0) 50.3%
+  );
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  /* Only the lower part of the rail, so it is a corner rather than a diagonal
+     cut across the whole thing. */
+  background-size: 100% 44%;
   color: var(--sb-ink);
   display: flex;
   flex-direction: column;
@@ -216,15 +233,17 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .sb-undo .btn:disabled { opacity: .35; cursor: default; }
 
 /* The mark spans the rail rather than sitting in a corner of it, so the
-   composition's full width — flourishes and all — is what you see. `margin-top:
-   auto` is what holds it at the foot: it takes up the rail's spare height, so
-   the mark sits at the bottom on a tall window and simply follows the last nav
-   item on a short one, rather than being overlapped by it. */
-/* The pair is what sits at the foot now, so the spare height is taken here
-   rather than by the mark alone — otherwise the switch would be pushed below
-   the rail's edge on a short window. */
+   composition's full width — flourishes and all — is what you see.
+
+   It takes no spare height of its own. `margin-top: auto` here used to be what
+   held it at the foot, and it worked, but it put the whole of the rail's slack
+   between the timer's lower rule and the mark. The slack has to go somewhere
+   and both of the obvious places were wrong — above the timer it separated it
+   from the nav, below it it separated the rule from the mark — so the timer
+   grows into it instead, bounded by its own two rules. The mark still ends up
+   at the bottom on a tall window, and still simply follows the timer on a
+   short one. */
 .sb-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -238,8 +257,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
   /* The side padding is what sets the mark's size: it spans this box, and its
      aspect ratio comes from a padding-bottom percentage resolved against the
      same width — so insetting here scales the whole thing without the height
-     needing to be restated. The bottom value is clearance from the rail's edge. */
-  padding: clamp(2px, 1vh, 10px) 12px clamp(2px, 1vh, 10px);
+     needing to be restated. The bottom value is clearance from the rail's edge;
+     the top is nothing at all, so the mark sits directly under the rule. */
+  padding: 0 12px clamp(2px, 1vh, 10px);
   color: #fff;
   font-weight: 650;
   letter-spacing: -.01em;
@@ -1001,10 +1021,14 @@ kbd {
    from the nav, and one below from the mark, so it reads as its own thing
    rather than as the tail of the list or the top of the signature. */
 .pomo {
-  /* Close under the last nav row. The spare height belongs at the foot with
-     the mark, which is what .sb-foot claims — putting it here instead left a
-     gap between Settings and the timer that grew with the window. */
+  /* Close under the last nav row, and grows to fill whatever height the rail
+     has left. Both gaps this could leave were wrong: above it, a growing space
+     between Settings and the timer; below it, a growing space between the rule
+     and the mark. Taking the slack INSIDE the ruled box leaves neither — the
+     timer stays under the nav, the rule stays on the mark, and the empty room
+     is bounded by two lines, which is what makes it read as a panel. */
   margin-top: var(--space-4);
+  flex: 1 1 auto;
   padding: var(--space-3) var(--space-4) var(--space-2);
   border-top: 1px solid rgba(255, 255, 255, .09);
   border-bottom: 1px solid rgba(255, 255, 255, .09);
@@ -2060,6 +2084,10 @@ kbd {
   opacity: .65;
   cursor: pointer;
 }
+
+/* On the rail it is centred and wordless: it is a mode rather than a place, so
+   it does not get a nav row's full-width label. */
+.sidebar > .sb-vim { align-self: center; margin-top: var(--space-2); }
 
 .sb-vim:hover { opacity: 1; background: var(--sb-hi); }
 

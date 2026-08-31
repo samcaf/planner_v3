@@ -41,6 +41,10 @@ const PATHS = {
   /* A four-pointed star with a small companion: the mark that has come to mean
      "a machine did this". Two strokes, so it reads at 11px. */
   sparkle: 'M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z M18 16.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z',
+  /* The box the files go in: a lid across the top, the body under it, and the
+     lift-tab in the middle of the lid — which is the detail that separates an
+     archive from a plain crate at 13px. */
+  archive: 'M3 4h18v4H3z M5 8v12h14V8 M10 12h4',
   /* Angle brackets and a slash — what everyone draws for code. */
   code: 'M8.5 17.5L3 12l5.5-5.5 M15.5 6.5L21 12l-5.5 5.5 M13.5 4.5l-3 15',
 

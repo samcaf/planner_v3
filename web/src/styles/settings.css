@@ -75,37 +75,93 @@
 
 .st-pomo-row input { width: 96px; }
 
-/* The key list, shared shape with the vim sheet so the same table reads the
-   same way in both places. */
-.st-keys {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-6) var(--space-10);
-  padding: var(--space-2) 0 var(--space-4);
+/* ------------------------------------------------------------------- tabs */
+
+/* Three sections, and a rule under the row rather than boxes around the tabs:
+   what is selected is said by weight and by the line, which is the same way a
+   day's own headings do it. */
+.st-tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-8);
 }
 
-.st-keys h4 {
-  margin: 0 0 var(--space-3);
+.st-tab {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-3);
+  padding: var(--space-3) var(--space-5);
+  /* The line sits ON the rule below, so a selected tab joins it rather than
+     floating above it. */
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+}
+
+.st-tab:hover { color: var(--ink); }
+.st-tab.is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+
+/* `hidden` loses to `display: flex`, and the stack is a flex column. Without
+   this every tab is drawn at once, which is exactly what the tabs are for. */
+.st-stack[hidden] { display: none; }
+
+/* ------------------------------------------------------------- the ai suite */
+
+/* Prose, at a readable measure. Not the key table's two columns: these are
+   paragraphs, and a 46% dt would cut every one of them in half. */
+.st-about { display: flex; flex-direction: column; gap: var(--space-6); }
+.st-about h4 { margin: 0 0 var(--space-2); font-size: 13px; }
+.st-about p { margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-2); max-width: 74ch; }
+
+.st-switches { margin-bottom: var(--space-8); }
+.st-switches > h4 {
+  margin: 0 0 var(--space-4);
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: .06em;
   color: var(--ink-3);
 }
 
-.st-keys dl { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.st-keys dl > div { display: grid; grid-template-columns: minmax(0, 46%) 1fr; gap: var(--space-4); }
-
-.st-keys dt {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  overflow-wrap: break-word;
+/* One switch: its name, what it decides, and every position it takes. Ruled
+   off down the left so a long list of them stays legible as a list. */
+.st-switch {
+  border-left: 2px solid var(--line);
+  padding: 0 0 0 var(--space-5);
+  margin-bottom: var(--space-6);
 }
 
-.st-keys dd { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.st-switch-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); }
+.st-switch-h strong { font-size: 13px; }
+.st-switch-h .st-hint { flex: 1 1 100%; max-width: 74ch; }
 
-.st-vim-head { border-top: 1px solid var(--line-soft); padding-top: var(--space-5); }
+.st-switch dl { margin: var(--space-3) 0 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.st-switch dl > div { display: grid; grid-template-columns: 90px 1fr; gap: var(--space-4); }
+.st-switch dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.st-switch dd { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 
-.st-vim-toggle { display: flex; gap: var(--space-4); align-items: flex-start; cursor: pointer; }
+.st-code {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background: var(--sunken);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+/* The switch has a panel to itself now, so it no longer needs a rule above it
+   to separate it from the table it used to share one with. */
+.st-vim-toggle {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  cursor: pointer;
+  margin-bottom: var(--space-5);
+}
 .st-vim-toggle input { margin-top: 3px; }
 .st-vim-toggle .st-hint { display: block; margin-top: 2px; }
 

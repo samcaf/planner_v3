@@ -99,3 +99,59 @@ export function minutesLabel(total) {
   const m = total % 60
   return h ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`
 }
+
+/**
+ * The many ways of naming a day, for `:day`.
+ *
+ * Typing a date should not mean remembering which order this app wants it in.
+ * Everything here resolves against TODAY rather than against whatever day you
+ * happen to be looking at: `0` means today, `+3` means three days from now, and
+ * a bare `14` means the fourteenth of this month — all of which would drift
+ * under you if they counted from the page instead.
+ *
+ *   2026-09-01   09/01/2026   09-01-2026   9/1        the date itself
+ *   14           the 14th of this month
+ *   0  +0  -0    today
+ *   +3  -2       days from today
+ *   today  tomorrow  yesterday
+ *
+ * Returns null for anything it does not recognise, so the caller can say what
+ * it could not read rather than navigating somewhere arbitrary.
+ */
+export function parseDay(text, from = today()) {
+  const s = String(text || '').trim().toLowerCase()
+  if (!s) return null
+
+  if (s === 'today' || s === 'now') return from
+  if (s === 'tomorrow' || s === 'tom') return addDays(from, 1)
+  if (s === 'yesterday' || s === 'yest') return addDays(from, -1)
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+  // Signed, or a bare zero: an offset in days. A bare zero cannot be a day of
+  // the month, so it is unambiguous — and it is the shortest way to say today.
+  if (/^[+-]\d+$/.test(s) || s === '0') return addDays(from, Number(s))
+
+  // mm/dd/yyyy and mm-dd-yyyy, and the same without the year.
+  const parts = s.split(/[/-]/)
+  if (parts.length >= 2 && parts.every((p) => /^\d+$/.test(p))) {
+    const base = parse(from)
+    const [m, d, y] = parts.map(Number)
+    const year = parts.length >= 3 ? (y < 100 ? 2000 + y : y) : base.getFullYear()
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null
+    const made = new Date(year, m - 1, d)
+    // A day the month does not have rolls over into the next one, which is not
+    // what "the 31st of February" meant.
+    return made.getMonth() === m - 1 && made.getDate() === d ? iso(made) : null
+  }
+
+  // A bare day of the month, in the month you are in.
+  if (/^\d{1,2}$/.test(s)) {
+    const base = parse(from)
+    const d = Number(s)
+    const made = new Date(base.getFullYear(), base.getMonth(), d)
+    return made.getMonth() === base.getMonth() ? iso(made) : null
+  }
+
+  return null
+}

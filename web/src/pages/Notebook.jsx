@@ -82,7 +82,7 @@ export default function Notebook() {
           title={showArchived ? 'Hide archived notes' : 'Show archived notes as well'}
           onClick={() => setShowArchived(!showArchived)}
         >
-          <Icon name="templates" size={13} /> Archived
+          <Icon name="archive" size={13} /> Archived
         </button>
         <button className="btn primary" onClick={add}>
           <Icon name="plus" size={14} /> New note
@@ -125,7 +125,7 @@ export default function Notebook() {
                 }}
               >
                 <span className="nb-item-title">{n.title?.trim() || 'Untitled'}</span>
-                {!!n.archived && <Icon name="templates" size={11} />}
+                {!!n.archived && <Icon name="archive" size={11} />}
                 {!!n.pinned && <Icon name="flag" size={11} />}
               </button>
             ))
@@ -159,7 +159,7 @@ export default function Notebook() {
                   title={open.archived ? 'Bring back out of the archive' : 'Archive this note'}
                   onClick={() => save(open.id, { archived: open.archived ? 0 : 1 })}
                 >
-                  <Icon name="templates" size={13} />
+                  <Icon name="archive" size={13} />
                 </button>
                 <button className="btn ghost sm danger" title="Delete" onClick={() => remove(open)}>
                   <Icon name="trash" size={13} />

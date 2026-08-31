@@ -74,12 +74,34 @@ export function SelectionProvider({ children }) {
     b: { label: 'send to backlog', backlog: true },
   }
 
+  /**
+   * Alt and an arrow step the priority of everything selected.
+   *
+   * Keyboard control has this on `>` and `<`, over the task under its cursor.
+   * With the mode off there is no cursor — but there IS a selection, and it is
+   * the same gesture, so the chord means the same thing in both places rather
+   * than being something you can only do one way.
+   *
+   * A step, not a value: each task moves from wherever IT is, which is the one
+   * action here that cannot be a single patch applied to all of them.
+   */
+  const STEPS = { ArrowUp: 1, ArrowDown: -1 }
+
   useEffect(() => {
     function onKey(e) {
-      if (e.altKey) return
       // A field's own keys — a rename, a date picker — always win.
       const el = document.activeElement
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
+
+      if (e.altKey) {
+        const by = STEPS[e.key]
+        if (!by || !ids.size) return
+        e.preventDefault()
+        onKeys.current?.({
+          label: by > 0 ? 'raise the priority' : 'lower the priority', step: by,
+        }, [...ids])
+        return
+      }
 
       // Select-all is the one that has to work from an empty selection, so it
       // is handled before the "something is selected" gate below.
@@ -311,10 +333,33 @@ export function SelectionBar({ tasks = [], onDone }) {
         }
         await out()
         undo?.record?.({ label: action.label, undo: back, redo: out })
+      } else if (action.step) {
+        // Grouped by where each row LANDS, so a batch is one or two requests
+        // and one or two undo entries rather than one of each per task. The
+        // step is clamped rather than wrapped: rolling from highest round to
+        // lowest is never what a keypress meant.
+        const groups = new Map()
+        for (const id of ids) {
+          const t = tasks.find((x) => x.id === id)
+          if (!t) continue
+          const from = PRIORITIES.indexOf(t.priority || 'medium')
+          const want = Math.max(0, Math.min(
+            PRIORITIES.length - 1,
+            (from < 0 ? PRIORITIES.indexOf('medium') : from) + action.step,
+          ))
+          if (PRIORITIES[want] === t.priority) continue
+          groups.set(PRIORITIES[want], [...(groups.get(PRIORITIES[want]) || []), id])
+        }
+        for (const [priority, group] of groups) {
+          await bulkPatch(group, { priority }, { known: tasks, label: action.label, undo })
+        }
       } else {
         await bulkPatch(ids, action.patch, { known: tasks, label: action.label, undo })
       }
-      sel.clear()
+      // A step is something you repeat — two presses to get from medium to
+      // highest — so the selection survives it. Everything else here is a
+      // decision you make once and move on from.
+      if (!action.step) sel.clear()
       onDone?.()
     })
   })

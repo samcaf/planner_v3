@@ -159,8 +159,14 @@ try {
   check('matched text is painted in the accent',
     /::highlight\(vim-find\)\{[^}]*background:var\(--accent\)/.test(css),
     'no highlight rule')
+  // One indirection now: the wash reads --dc-tone, and .dc sets that to the
+  // accent — because the same animation also announces the START of a day, in
+  // amber. Checked at both ends, so neither half can drift from the other.
   check('the wash uses the accent too',
-    /\.dc-glow\{[^}]*var\(--accent\)/.test(css), 'no accent in the wash')
+    /\.dc-glow\{[^}]*var\(--dc-tone\)/.test(css)
+      && /\.dc\{[^}]*--dc-tone:\s*var\(--accent\)/.test(css), 'no accent in the wash')
+  check('and the beginning of one is amber instead',
+    /\.dc\.is-start\{[^}]*--dc-tone:\s*var\(--amber\)/.test(css), 'no amber start')
   check('and it respects reduced motion',
     /prefers-reduced-motion[^}]*\}[\s\S]{0,400}dc-ch/.test(css)
       || /dc-letter-still/.test(css), 'no reduced-motion path')
