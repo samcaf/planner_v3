@@ -193,9 +193,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
   );
   background-repeat: no-repeat;
   background-position: left bottom;
-  /* Only the lower part of the rail, so it is a corner rather than a diagonal
-     cut across the whole thing. */
-  background-size: 100% 44%;
+  /* The box the diagonal is cut across, anchored to the bottom-left corner —
+     so these two numbers ARE the triangle: its height up the rail's left edge,
+     and how far its base runs along the bottom. Kept well inside both, so it
+     reads as light caught in a corner rather than as the rail being divided
+     in half. */
+  background-size: 78% 30%;
   color: var(--sb-ink);
   display: flex;
   flex-direction: column;

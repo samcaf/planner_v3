@@ -22,6 +22,11 @@
 /* Visual mode: everything in the span, with the cursor still marked among it. */
 .task.vim-sel { background: var(--accent-soft); }
 
+/* How tall the bar is, named here beside the thing it measures. Two places
+   have to clear it — the foot of the page and the foot of the rail — and each
+   carrying its own guess is how the day/night switch ended up underneath it. */
+:root { --vim-bar-h: 30px; }
+
 /* The bar is dark in both themes and its text takes the accent you chose, so
    the mode reads as part of the app rather than as a black strip stuck to the
    bottom of it. --sb-accent is the accent already tuned to sit on a dark
@@ -145,8 +150,12 @@
 
 .vim-help-b dd { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 
-/* The bar covers the foot of the page, so give the scroll something to end on. */
-body:has(.vim-bar) .main { padding-bottom: 30px; }
+/* The bar covers the foot of the page, so give the scroll something to end on
+   — and the foot of the RAIL too, which is where the mark and the day/night
+   switch live. The rail does not scroll, so the room has to come out of its
+   height: the pomodoro gives it up, and the whole foot block rises clear. */
+body:has(.vim-bar) .main { padding-bottom: var(--vim-bar-h); }
+body:has(.vim-bar) .sidebar { padding-bottom: calc(var(--space-4) + var(--vim-bar-h)); }
 
 /* The matched words themselves, in the accent you chose. ::highlight paints
    over React's own DOM without touching it, which is what makes this safe

@@ -7,6 +7,9 @@ import {
 } from '../lib/vim.jsx'
 import { goTarget } from '../lib/nav.js'
 import { openTab } from '../lib/openIn.js'
+// Not an API call — a signal every useApi hook listens for. The rule that
+// nothing here talks to the server directly still holds.
+import { refreshAll } from '../lib/api.js'
 import { loadNames, saveNames, namesFor, normalise } from '../lib/pageNames.js'
 import { PRIORITIES } from './Priority.jsx'
 import { parseDay, today as todayIso } from '../lib/dates.js'
@@ -101,6 +104,7 @@ const HELP = [
     [':day 14  :day +3  :day 0', 'go to that day — also 09/01/2026 and 09-01-2026'],
     [':y   :yt', 'yank as text / as markdown'],
     [':pomo', 'start or pause the pomodoro'],
+    [':e', 'read the page again — :e! reloads the app itself'],
     [':namepage foo', 'nickname this page — bare, it says its name'],
     [':goto foo', 'go to a page you have nicknamed'],
     [':unname foo', 'forget a nickname'],
@@ -799,6 +803,17 @@ export default function VimLayer() {
     if (verb === 'vim') { toggle(true); say('vim mode on'); return }
     if (['h', 'help'].includes(verb)) { setHelpOpen(true); return }
     if (verb === 'w') { say('nothing to save — every edit is already written'); return }
+    /**
+     * `:e` — read it again.
+     *
+     * vim re-reads the file from disk; here that is the data behind the page,
+     * so every hook refetches and the cursor, the mode and the scroll all
+     * survive it. A browser reload would throw all three away to fetch the
+     * same rows, which is why that is `:e!` — the forcing form, for when it is
+     * the app you want back rather than what it is showing.
+     */
+    if (['e', 'edit'].includes(verb)) { refreshAll(); say('read again'); return }
+    if (['e!', 'edit!'].includes(verb)) { window.location.reload(); return }
     if (verb === 'code') {
       const a2 = actions.current || {}
       const t = a2.taskById?.(cursor)

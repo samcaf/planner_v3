@@ -20,6 +20,9 @@ const json = async (p, o) => (await fetch(BASE + p, o)).json()
 const post = (p, b) => json(p, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b),
 })
+const patch = (p, b) => json(p, {
+  method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b),
+})
 const del = (p) => fetch(BASE + p, { method: 'DELETE' })
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -140,6 +143,20 @@ try {
       return true
     }
 
+    // ── :e reads the page again --------------------------------------------
+    // Changed behind the page's back, so only a refetch can show it. The
+    // cursor and the mode have to survive it, which is the whole reason this
+    // is not a browser reload.
+    await patch(`/api/tasks/${seed.id}`, { title: 'ZZ sheet probe, read again' })
+    const onIt = at()
+    await cmd('e')
+    check(':e picks up a change made behind the page',
+      /read again/.test(document.querySelector(`.task[data-task-id="${seed.id}"]`)?.textContent || ''),
+      document.querySelector(`.task[data-task-id="${seed.id}"]`)?.textContent?.slice(0, 60) || '')
+    check('and does not leave the day', window.location.pathname === `/day/${D}`,
+      window.location.pathname)
+    check('nor move the cursor', at() === onIt, `${onIt} -> ${at()}`)
+
     await cmd('day 2031-12-25')
     check(':day takes a date outright', window.location.pathname === '/day/2031-12-25',
       window.location.pathname)
@@ -178,10 +195,7 @@ try {
 
   // ── the same chord over a selection, with the mode off --------------------
   {
-    await fetch(`${BASE}/api/tasks/${seed.id}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ priority: 'medium' }),
-    })
+    await patch(`/api/tasks/${seed.id}`, { priority: 'medium' })
     const { window, document } = await open(`/day/${D}`, false)
     const key = (k, init = {}) => window.dispatchEvent(new window.KeyboardEvent('keydown', {
       key: k, bubbles: true, cancelable: true, ...init,

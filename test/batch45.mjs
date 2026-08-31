@@ -172,6 +172,16 @@ try {
       || /dc-letter-still/.test(css), 'no reduced-motion path')
   check('the timer sits close under the nav',
     /\.pomo\{[^}]*margin-top:var\(--space-4\)/.test(css), 'the timer still floats')
+  // The mode bar is fixed over the foot of the window, which is where the rail
+  // keeps the mark and the day/night switch. Both feet have to clear it, and
+  // from the same number — each carrying its own guess is how the switch ended
+  // up underneath it.
+  check('the mode bar has a named height',
+    /--vim-bar-h:\s*\d+px/.test(css), 'the bar\u2019s height is still a literal')
+  check('and both feet clear it',
+    /body:has\(\.vim-bar\) \.main\{[^}]*var\(--vim-bar-h\)/.test(css)
+      && /body:has\(\.vim-bar\) \.sidebar\{[^}]*var\(--vim-bar-h\)/.test(css),
+    'the rail sits under the bar')
 } catch (e) {
   check('the suite ran to the end', false, e.message)
 } finally {
