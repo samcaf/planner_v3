@@ -142,8 +142,41 @@ choose.
 The dev proxy in `vite.config.js` points at the PUBLIC port on purpose, so that
 developing exercises the login rather than walking past it.
 
+## A planner per person
+
+One SQLite file each. The owner keeps `data/planner.db`; everyone else gets
+`data/users/<slug>.db`. `server/db.js` exports `db` as a **Proxy** that resolves
+the current request's connection out of an `AsyncLocalStorage`, so all 234
+`db.prepare(...)` sites and every line of their SQL are untouched — which is
+only possible because none of them is hoisted to module scope.
+
+Isolation is structural. There is no `WHERE user_id = ?` to forget, because the
+other person's rows are in a file this connection never opened. Two people can
+both own task id 1.
+
+**Never hoist `db.transaction(...)` above a request.** It captures the
+connection when it is CREATED, while the statements inside re-resolve when it is
+CALLED — so a transaction built under one person and run under another executes
+outside any transaction at all. Every route-layer site builds and calls in one
+expression (`db.transaction(() => …)()`). Nothing checks that they still do.
+
+Two more things that follow from the layout:
+
+- **A new column has to reach every file.** `bootstrap()` runs the schema and the
+  additive migrations on connection open, so a planner belonging to someone who
+  has not signed in since the change gets it when they next do. That is why the
+  migrations live in `openDb` and not at import.
+- **One query runs at import**, before any request exists:
+  `routes/people.js:23` does `PRAGMA table_info` in a top-level loop. The
+  fallback connection is opened lazily for exactly this.
+
+Attachments are on disk rather than in the database, so they need the same
+split: `uploadDir(slug)` in `routes/uploads.js`, and the owner keeps
+`data/uploads`.
+
 ## Data
 
-One SQLite file at `data/planner.db`. It is the user's real data — the dev
-server runs against it. Do not seed, reset or migrate it to try something out;
-work on far-future dates and clean up after yourself.
+`data/planner.db` is the user's real data — the dev server runs against it. Do
+not seed, reset or migrate it to try something out; work on far-future dates and
+clean up after yourself. A probe *person* is cheaper than probe rows: their whole
+planner is one file you can delete, which is what `test/batch70.mjs` does.

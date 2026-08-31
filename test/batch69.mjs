@@ -12,6 +12,7 @@
  * is not subject to the rebuild hazard the runner warns about.
  */
 import { accounts, addUser, byLogin, everyone, setStatus, startSession } from '../server/accounts.js'
+import { rmSync } from 'node:fs'
 
 const TRUSTED = process.env.PLANNER_API || 'http://localhost:8787'
 const PUBLIC = process.env.PLANNER_PUBLIC_API || 'http://localhost:8789'
@@ -24,10 +25,23 @@ const post = (base, path, body, headers = {}) => fetch(base + path, {
   method: 'POST', headers: { ...json(), ...headers }, body: JSON.stringify(body),
 })
 
-/** Drop a probe account however it was made — the API will not remove an owner. */
-const forget = (login) => {
+/**
+ * Drop a probe account however it was made — the API will not remove an owner.
+ *
+ * Through the API first, so the server lets go of that person's planner file. A
+ * pooled connection outlives the file it was opened on, so deleting one behind
+ * the server's back leaves a handle that still answers and would be handed to
+ * whoever next took the slug. Then the file, which the API deliberately leaves.
+ */
+const forget = async (login) => {
   const u = byLogin(login)
-  if (u) accounts.prepare('DELETE FROM users WHERE id = ?').run(u.id)
+  if (!u) return
+  await fetch(`${TRUSTED}/api/auth/users/${u.id}`, { method: 'DELETE' }).catch(() => {})
+  if (byLogin(login)) accounts.prepare('DELETE FROM users WHERE id = ?').run(u.id)
+  for (const p of [`data/users/${u.slug}.db`, `data/users/${u.slug}.db-wal`,
+    `data/users/${u.slug}.db-shm`, `data/users/${u.slug}`]) {
+    rmSync(p, { recursive: true, force: true })
+  }
 }
 
 let borrowedOwner = null
@@ -42,7 +56,7 @@ try {
   }
 
   // ── asking for an account ------------------------------------------------
-  forget('zzsuite-guest')
+  await forget('zzsuite-guest')
   const asked = await post(PUBLIC, '/api/auth/request', {
     login: 'zzsuite-guest', name: 'Probe', password: 'probe-password-2',
   })
@@ -178,7 +192,7 @@ try {
     if (!ok) bad++
   }
   console.log(bad ? `\n${bad} failed` : '\nall checks passed')
-  for (const login of [...made, 'zzsuite-x']) forget(login)
+  for (const login of [...made, 'zzsuite-x']) await forget(login)
   console.log('cleanup: probe accounts removed')
   process.exit(bad ? 1 : 0)
 }

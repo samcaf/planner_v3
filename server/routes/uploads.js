@@ -6,11 +6,33 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { badRequest, h, notFound } from './_helpers.js'
+import { currentSlug } from '../db.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-export const UPLOAD_DIR = join(here, '..', '..', 'data', 'uploads')
+const DATA = join(here, '..', '..', 'data')
 
-mkdirSync(UPLOAD_DIR, { recursive: true })
+/**
+ * Where the asking person's attachments live.
+ *
+ * A function rather than a constant, because there is a directory per person
+ * now and which one is meant depends on the request. The owner keeps the
+ * original `data/uploads`, matching how their planner file stayed put, so
+ * nothing on disk had to move.
+ *
+ * This is not filing tidiness. One shared directory meant `GET /api/uploads`
+ * listed everyone's files, `DELETE` removed anyone's, the sidecar index exposed
+ * everyone's original filenames, and two people uploading identical bytes
+ * silently shared one file — content addressing deduplicates across people as
+ * happily as within one.
+ */
+export function uploadDir(slug) {
+  const dir = slug ? join(DATA, 'users', slug, 'uploads') : join(DATA, 'uploads')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+/** The directory this request is working in. */
+const dir = () => uploadDir(currentSlug())
 
 const MAX_BYTES = 20 * 1024 * 1024
 
@@ -102,11 +124,11 @@ const SAFE_NAME = /^[0-9a-f]{16}\.[a-z0-9]{1,12}$/
  * that source of truth — the index only decorates it, and a missing or corrupt
  * one costs display polish rather than files.
  */
-const INDEX_FILE = join(UPLOAD_DIR, 'index.json')
+const indexFile = () => join(dir(), 'index.json')
 
 function readIndex() {
   try {
-    const parsed = JSON.parse(readFileSync(INDEX_FILE, 'utf8'))
+    const parsed = JSON.parse(readFileSync(indexFile(), 'utf8'))
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
   } catch { return {} }
 }
@@ -115,9 +137,9 @@ function readIndex() {
 // a rename within one directory is atomic where a partial write is not.
 function writeIndex(index) {
   try {
-    const tmp = `${INDEX_FILE}.tmp`
+    const tmp = `${indexFile()}.tmp`
     writeFileSync(tmp, JSON.stringify(index, null, 2))
-    renameSync(tmp, INDEX_FILE)
+    renameSync(tmp, indexFile())
   } catch { /* the labels are a convenience; the files are what matter */ }
 }
 
@@ -179,7 +201,7 @@ r.post('/', h((req) => {
   }
 
   const name = `${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}.${ext}`
-  if (!existsSync(join(UPLOAD_DIR, name))) writeFileSync(join(UPLOAD_DIR, name), bytes)
+  if (!existsSync(join(dir(), name))) writeFileSync(join(dir(), name), bytes)
 
   const index = readIndex()
   // Identical bytes are one file, so a re-upload under a different name keeps
@@ -195,7 +217,7 @@ r.post('/', h((req) => {
 
 /** One listing row. Falls back to the on-disk name when the index has nothing. */
 function entry(name, index) {
-  const { size, mtimeMs } = statSync(join(UPLOAD_DIR, name))
+  const { size, mtimeMs } = statSync(join(dir(), name))
   const saved = index[name] || {}
   const ext = name.slice(name.lastIndexOf('.') + 1)
   return {
@@ -211,18 +233,18 @@ function entry(name, index) {
 /** Every upload, as the list endpoint reports them. Exported so search can
  *  scan files without duplicating how one is described. */
 export function listUploads() {
-  if (!existsSync(UPLOAD_DIR)) return []
+  if (!existsSync(dir())) return []
   const index = readIndex()
-  return readdirSync(UPLOAD_DIR)
+  return readdirSync(dir())
     .filter((name) => SAFE_NAME.test(name))
     .map((name) => entry(name, index))
     .sort((a, b) => b.mtime.localeCompare(a.mtime))
 }
 
 r.get('/', h(() => {
-  if (!existsSync(UPLOAD_DIR)) return []
+  if (!existsSync(dir())) return []
   const index = readIndex()
-  return readdirSync(UPLOAD_DIR)
+  return readdirSync(dir())
     .filter((name) => SAFE_NAME.test(name))
     .map((name) => entry(name, index))
     .sort((a, b) => b.mtime.localeCompare(a.mtime))
@@ -232,11 +254,11 @@ r.delete('/:name', h((req) => {
   const { name } = req.params
   if (!SAFE_NAME.test(name)) throw badRequest('not a valid upload name')
 
-  const file = join(UPLOAD_DIR, name)
+  const file = join(dir(), name)
   // SAFE_NAME already makes a separator impossible, so this can never fire
   // today. It is here as the thing a future change to the name shape trips
   // over, rather than silently unlinking outside the uploads directory.
-  if (dirname(resolve(file)) !== resolve(UPLOAD_DIR)) throw badRequest('not a valid upload name')
+  if (dirname(resolve(file)) !== resolve(dir())) throw badRequest('not a valid upload name')
   if (!existsSync(file)) throw notFound('no such upload')
 
   unlinkSync(file)
@@ -254,7 +276,7 @@ r.delete('/:name', h((req) => {
  * the door was closed.
  *
  * Wire it into server/index.js:
- *   app.use('/uploads', express.static(UPLOAD_DIR, {
+ *   app.use('/uploads', express.static(uploadDir(slug), {
  *     maxAge: '30d', immutable: true, setHeaders: uploadHeaders,
  *   }))
  */

@@ -3,6 +3,7 @@ import {
   addUser, byId, byLogin, checkPassword, endSession, everyone, owner, publicUser,
   removeUser, revokeSession, sessionUser, sessionsOf, setStatus, startSession,
 } from '../accounts.js'
+import { closeFor } from '../db.js'
 import { TRUSTED_PORT } from '../ports.js'
 import { badRequest, h, notFound, refused } from './_helpers.js'
 
@@ -277,8 +278,14 @@ r.delete('/users/:id', h((req, res) => {
   if (!user) throw notFound('no such account')
   if (user.is_owner) throw refused('is_owner', 'the owner cannot be removed')
   // Their planner file is left alone. Removing an account is about access, and
-  // deleting somebody's work as a side effect of it would be a surprise.
+  // deleting somebody's work as a side effect of it would be a surprise — so an
+  // account made again under the same login finds their work still there.
+  //
+  // The open handle is NOT left alone. A pooled connection outlives the file, so
+  // without this a planner deleted from disk would go on answering for whoever
+  // next took the slug. See closeFor.
   removeUser(user.id)
+  closeFor(user.slug)
   res.status(204).end()
 }))
 

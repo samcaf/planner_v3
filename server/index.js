@@ -12,8 +12,9 @@ import sections, { routinesRouter } from './routes/sections.js'
 import search from './routes/search.js'
 import notebook from './routes/notebook.js'
 import settings from './routes/settings.js'
-import uploads, { UPLOAD_DIR, uploadHeaders } from './routes/uploads.js'
+import uploads, { uploadDir, uploadHeaders } from './routes/uploads.js'
 import auth, { gate } from './routes/auth.js'
+import { withUser } from './db.js'
 import { PUBLIC_PORT, TRUSTED_PORT } from './ports.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -54,15 +55,38 @@ app.use(express.json({ limit: '30mb' }))
  */
 app.use('/api/auth', auth)
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
-app.use('/api', gate)
+app.use('/api', gate, planner)
+
+/**
+ * Everything past the gate runs against the asking person's own planner.
+ *
+ * This is the whole of the per-person plumbing at the HTTP layer. Every route
+ * below says `db.prepare(...)` exactly as it always did; which file that
+ * reaches is decided here, once. The owner keeps the original database and the
+ * original upload directory, so nothing on disk moved when this arrived.
+ */
+function planner(req, _res, next) {
+  withUser(req.user && !req.user.is_owner ? req.user.slug : null, next)
+}
 
 // Attachments are served from this app's own origin, so anything the browser
 // would render as a document must come back as a download instead. Behind the
 // gate: an upload is somebody's content, and a content-addressed name is not a
 // secret — anyone who has seen one could fetch it forever.
-app.use('/uploads', gate, express.static(UPLOAD_DIR, {
-  maxAge: '30d', immutable: true, setHeaders: uploadHeaders,
-}))
+//
+// A handler per directory rather than one for a fixed path, because the
+// directory now depends on who is asking. They are memoised: express.static
+// builds a send() pipeline, and rebuilding it per request would be waste.
+const statics = new Map()
+app.use('/uploads', gate, planner, (req, res, next) => {
+  const dir = uploadDir(req.user && !req.user.is_owner ? req.user.slug : null)
+  if (!statics.has(dir)) {
+    statics.set(dir, express.static(dir, {
+      maxAge: '30d', immutable: true, setHeaders: uploadHeaders,
+    }))
+  }
+  return statics.get(dir)(req, res, next)
+})
 
 app.use('/api/projects', projects)
 app.use('/api/tasks', tasks)
