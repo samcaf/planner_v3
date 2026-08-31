@@ -85,6 +85,26 @@ the page prints. Give every new switch both.
 `aiGuide.js` is the part nothing can check — it mirrors `mcp/server.js` in
 prose. Treat a change to the tool list as a change to that file too.
 
+### A new kind of `[[…]]` link
+
+`[[day:…]]`, `[[project:…]]`, `[[task:…]]`, `[[note:…]]` and `[[link:…]]` are one
+syntax spread over six files, and nothing fails loudly when one is missed —
+the link just renders as prose, or reads as `link:repo` in a place with no
+room to draw it. Adding a kind means all of:
+
+| file | what |
+|---|---|
+| `web/src/lib/rich.jsx` | `wikiLink` — the prefix alternation and the `/go/` href |
+| `web/src/lib/rich.jsx` | `suggestFor` — what the `[[` picker offers |
+| `web/src/lib/rich.jsx` | `plainTitle` — the prefix list, or it shows in plain text |
+| `web/src/lib/vim.jsx` | `asPlain` — the same list again, for what `yy` copies |
+| `web/src/components/Resolver.jsx` | the lookup that turns it into an address |
+| `web/src/styles/notes.css` | `.nt-wiki-<kind>::before` — its glyph |
+
+Whether a link opens in a new tab is decided in ONE place: the
+`afterSanitizeAttributes` hook in `rich.jsx`, from the href. DOMPurify strips a
+`target` it did not add itself, so writing one into the anchor does not work.
+
 ## The keyboard, in one paragraph
 
 The cursor is found in the DOM, not held by a page: anything drawing

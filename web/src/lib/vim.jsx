@@ -172,7 +172,8 @@ export function parseDuration(text) {
 
 /** Markdown stripped back to what it says, for text that has to be plain. */
 const asPlain = (md) => String(md || '')
-  .replace(/\[\[(?:day:|project:|task:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, l) => l || t)
+  // Every kind of prefix: one left out reads as `link:repo` in the yank.
+  .replace(/\[\[(?:day:|project:|task:|note:|link:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, l) => l || t)
   .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
   .replace(/[*`_]/g, '')
   .trim()

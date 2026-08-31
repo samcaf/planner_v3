@@ -7,6 +7,7 @@ import AiSwitches from '../components/AiSwitches.jsx'
 import { BUILT_IN, DECLARED, ENFORCED } from '../lib/aiSwitches.js'
 import { ABOUT, CONNECT, MOVES, QUERY, QUERY_EXAMPLES, SCOPES } from '../lib/aiGuide.js'
 import { GENERAL } from '../lib/shortcuts.js'
+import { asUrl, normalise } from '../lib/names.js'
 import { useVim } from '../lib/vim.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
@@ -47,7 +48,8 @@ const ACCENTS = [
 
 // Settings edited by a control above; the raw dump would only repeat them.
 const HANDLED = [
-  'deep_capacity_min', 'column_labels', 'page_names', 'ai_switch_defaults', 'ai_prompt',
+  'deep_capacity_min', 'column_labels', 'page_names', 'link_names',
+  'ai_switch_defaults', 'ai_prompt',
   'pomodoro_work', 'pomodoro_short', 'pomodoro_long', 'pomodoro_before_long',
 ]
 
@@ -240,6 +242,8 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
 
           <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />
 
+          <LinkNames names={s.link_names} onSave={(v) => save('link_names', v)} />
+
           <button className="btn ghost sm st-raw-toggle" onClick={() => setShowRaw(!showRaw)}>
             <Icon name={showRaw ? 'chevronDown' : 'right'} size={12} />
             {showRaw ? 'Hide' : 'Show'} everything else
@@ -358,6 +362,92 @@ function PageNames({ names, onSave }) {
         />
         <button className="btn" onClick={add} disabled={!name.trim() || !path.trim()}>Add</button>
       </div>
+    </Panel>
+  )
+}
+
+/**
+ * Nicknames for URLs.
+ *
+ * The same list `[[link:…]]` and `:goto` read. A page name points at somewhere
+ * in this app and can be set from the page itself, so it barely needs a form;
+ * a URL has to be typed in from wherever you copied it, which makes this the
+ * place most of them get made.
+ *
+ * The nickname is what goes in the note, never the address — so re-pointing one
+ * here re-points every link already written to it, which is the difference
+ * between a nickname and a pasted URL.
+ */
+function LinkNames({ names, onSave }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+
+  const list = (() => {
+    try {
+      const parsed = JSON.parse(names || '{}')
+      return parsed && typeof parsed === 'object' ? Object.entries(parsed) : []
+    } catch { return [] }
+  })()
+
+  const write = (pairs) => onSave(JSON.stringify(Object.fromEntries(pairs)))
+
+  function add() {
+    const n = normalise(name)
+    const to = asUrl(url)
+    if (!n) return
+    if (!to) { setError('That does not look like a URL.'); return }
+    setError('')
+    write([...list.filter(([k]) => k !== n), [n, to]])
+    setName('')
+    setUrl('')
+  }
+
+  return (
+    <Panel title={<><Icon name="link" size={14} /> Link names</>}>
+      <p className="st-hint">
+        A word for a URL you keep going back to. Type <code>[[</code> in any note
+        or task title and pick it, or write <code>[[link:docs]]</code> outright;
+        it opens in a new tab. <code>:goto docs</code> opens it from anywhere.
+      </p>
+      {list.length === 0 && <Empty>No URLs have names yet.</Empty>}
+      {list.map(([n, to]) => (
+        <div key={n} className="kv st-raw-row">
+          <dt><code>{n}</code></dt>
+          <dd className="muted st-raw-val">
+            {/* The real address, not the /go/ route: this is the one place you
+                are checking what a nickname actually stands for. */}
+            <a href={to} target="_blank" rel="noopener noreferrer">{to}</a>
+            <button
+              className="btn ghost sm danger"
+              aria-label={`Forget ${n}`}
+              onClick={() => write(list.filter(([k]) => k !== n))}
+            >
+              <Icon name="trash" size={12} />
+            </button>
+          </dd>
+        </div>
+      ))}
+      <div className="row st-name-add">
+        <input
+          className="input"
+          placeholder="docs"
+          aria-label="Link name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+        />
+        <input
+          className="input"
+          placeholder="https://example.com/handbook"
+          aria-label="URL"
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setError('') }}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+        />
+        <button className="btn" onClick={add} disabled={!name.trim() || !url.trim()}>Add</button>
+      </div>
+      {error && <span className="st-hint st-error">{error}</span>}
     </Panel>
   )
 }

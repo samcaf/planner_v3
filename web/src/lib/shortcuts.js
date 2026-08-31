@@ -45,7 +45,7 @@ export const GENERAL = [
     ['Ctrl / ⌘ + J', 'hop between a link’s text and its url'],
     ['Ctrl / ⌘ + B  /  I', 'bold, italic'],
     ['Ctrl / ⌘ + Enter', 'save and close the editor'],
-    ['[[', 'link a day, project or task'],
+    ['[[', 'link a day, project, task, note or a URL you have named'],
   ]],
   ['On the tasks you have picked', [
     ['click a row’s checkbox area', 'select it; shift-click takes the range'],

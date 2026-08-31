@@ -5,6 +5,7 @@ import katex from 'katex'
 import DOMPurify from 'dompurify'
 import Icon from '../components/Icon.jsx'
 import { api } from './api.js'
+import { loadLinks } from './names.js'
 import { addDays, today } from './dates.js'
 
 marked.setOptions({ gfm: true, breaks: true })
@@ -38,7 +39,11 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (!raw) return
   const href = absolute(raw)
   if (href !== raw) node.setAttribute('href', href)
-  if (href.startsWith('/') || href.startsWith('#')) return
+  // A nicknamed URL is a /go/ route only until the resolver has looked it up.
+  // Where it actually lands is outside the app, so it belongs with the outbound
+  // links rather than with the internal ones it is spelled like.
+  if (href.startsWith('/') && !href.startsWith('/go/link/')) return
+  if (href.startsWith('#')) return
   node.setAttribute('target', '_blank')
   node.setAttribute('rel', 'noopener noreferrer')
 })
@@ -49,12 +54,18 @@ const ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ESCAPE[c])
 
 /**
- * `[[…]]` points at a day, a project or a task. Turning a project name or a
- * task id into a route needs data this render has no access to, so the link
- * targets /go/* and the resolver route does the lookup on click.
+ * `[[…]]` points at a day, a project, a task, a notebook entry or a nicknamed
+ * URL. Turning any of those into an address needs data this render has no
+ * access to, so the link targets /go/* and the resolver route does the lookup
+ * on click.
+ *
+ * That indirection is the whole point of a nicknamed URL rather than an
+ * incidental cost of it: what is written in the note is the NAME, so re-pointing
+ * the nickname re-points every link already written. A pasted address freezes
+ * at the moment you pasted it.
  */
 function wikiLink(target, label) {
-  const [, kind, rest] = /^(?:(day|project|task|note):)?([\s\S]*)$/.exec(target) || []
+  const [, kind, rest] = /^(?:(day|project|task|note|link):)?([\s\S]*)$/.exec(target) || []
   const value = (rest || '').trim()
   // Without a label the value reads better than the raw target, since the
   // `kind:` prefix is syntax rather than something worth showing.
@@ -65,6 +76,9 @@ function wikiLink(target, label) {
   // A notebook entry belongs to no day and no project, so it could not be
   // linked at all — which is exactly the sort of note you most want to point at.
   if (kind === 'note') return { kind: 'note', href: `/go/note/${encodeURIComponent(value)}`, text }
+  // A nicknamed URL. It is the one kind that leaves the app, so it is also the
+  // one kind that opens in a tab of its own — see restoreWiki.
+  if (kind === 'link') return { kind: 'link', href: `/go/link/${encodeURIComponent(value)}`, text }
   if (kind === 'day' || ISO.test(value)) return { kind: 'day', href: `/go/day/${encodeURIComponent(value)}`, text }
   // Anything else is not a link the app can resolve, so it stays as prose.
   return null
@@ -84,6 +98,10 @@ function extractWiki(src) {
 function restoreWiki(html, links) {
   return html.replace(/@@WIKI(\d+)@@/g, (_, i) => {
     const { kind, href, text } = links[Number(i)]
+    // Which of these open in a tab of their own is decided by the sanitiser
+    // hook above, from the href — one place, so a `target` written here could
+    // not be quietly stripped by it either. DOMPurify drops the attribute
+    // outright unless it is the one adding it, which is exactly what happened.
     return `<a class="nt-wiki nt-wiki-${kind}" href="${escapeHtml(href)}">${escapeHtml(text)}</a>`
   })
 }
@@ -330,7 +348,9 @@ async function loadProjects() {
 /** A markdown title as readable text — for places with no room to render it. */
 export const plainTitle = (s) => (s || '')
   .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-  .replace(/\[\[(?:day:|project:|task:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label || target)
+  // Every kind of prefix, or the ones left out read as `link:repo` in a place
+  // with no room to render them.
+  .replace(/\[\[(?:day:|project:|task:|note:|link:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => label || target)
   .replace(/[*`_]/g, '')
 
 /** The `[[…` fragment the caret is sitting inside, or null. */
@@ -354,15 +374,27 @@ async function suggestFor(query) {
         { insert: `day:${addDays(today(), -1)}`, label: `Yesterday · ${addDays(today(), -1)}`, kind: 'day' },
       ].filter((d) => !lower || d.label.toLowerCase().includes(lower))
 
-  const [projects, tasks, notes] = await Promise.all([
+  const [projects, tasks, notes, links] = await Promise.all([
     loadProjects(),
     // A one-letter search matches most of the database, so it is not worth a round trip.
     q.length >= 2 ? api.get(`/tasks?q=${encodeURIComponent(q)}`).catch(() => []) : [],
     api.get('/notebook').catch(() => []),
+    // Read fresh rather than cached like the projects above: a nickname is
+    // usually made in the minute before it is first used, and a picker that
+    // could not offer it until you reloaded would be no easier than typing the
+    // address out.
+    loadLinks().catch(() => ({})),
   ])
 
   return [
     ...days,
+    // Nicknamed URLs, high in the list: they are the shortest thing here and
+    // the only one you named yourself, so a match on one is rarely a coincidence.
+    ...Object.entries(links)
+      .filter(([name, url]) => !lower
+        || name.includes(lower) || String(url).toLowerCase().includes(lower))
+      .slice(0, 5)
+      .map(([name, url]) => ({ insert: `link:${name}`, label: name, hint: url, kind: 'link' })),
     ...projects
       .filter((p) => !lower || p.name.toLowerCase().includes(lower))
       .slice(0, 5)
@@ -827,6 +859,10 @@ export function RichEditor({
                 >
                   <span className="nt-ac-kind">{item.kind}</span>
                   <span className="nt-ac-label">{item.label}</span>
+                  {/* Where a nickname actually goes. The name alone is a word
+                      you chose months ago, and the picker is the one place you
+                      can be reminded what it stands for before inserting it. */}
+                  {item.hint && <span className="nt-ac-hint">{item.hint}</span>}
                 </button>
               </li>
             ))}
@@ -853,7 +889,7 @@ export function RichEditor({
         >
           {busy ? 'Uploading…' : 'Attach'}
         </button>
-        <code>$x^2$</code> maths · <code>[[</code> link a day or project · paste or drop a file
+        <code>$x^2$</code> maths · <code>[[</code> link a day, project or named URL · paste or drop a file
         <span className="spacer" />
         {error
           ? <span style={{ color: 'var(--red)' }}>{error}</span>

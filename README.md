@@ -104,6 +104,23 @@ Every notes field and task title accepts:
 | `$$ \int_0^\infty e^{-x^2}dx $$` | a display equation |
 | paste or drag an image, or hit **Add image** | an embedded image |
 | `[[2026-08-10]]`, `[[project:Name]]`, `[[task:12]]` | a link to that day, project or task |
+| `[[link:docs]]` | a URL you have nicknamed — opens in a new tab |
+
+### Nicknames
+
+A word for somewhere you keep going back to, kept in settings so it follows you
+between browsers. Two kinds, one namespace:
+
+| | |
+| --- | --- |
+| `:namepage thesis` | names the page you are on |
+| `:nameurl docs https://…` | names a URL — **Settings → Link names** does the same |
+| `:goto thesis` | goes there; a URL opens in a new tab |
+| `:unname thesis` | forgets it |
+
+A named URL can be written into any note or task title as `[[link:docs]]`, or
+picked from the `[[` menu. The note holds the *name*, so re-pointing the
+nickname re-points every link already written to it.
 
 Images are stored under `data/uploads/` and referenced from the markdown as
 `![alt](/uploads/…)`. They are content-addressed, so pasting the same image

@@ -255,6 +255,19 @@
 
 .nt-ac-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* What a nickname stands for, after the nickname itself. It gives way first
+   when the row runs out of room: the name is what you are choosing, and the
+   address is only there to confirm you chose the right one. */
+.nt-ac-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
 /* ---------------------------------------------------------- internal links */
 
 /* An internal link stays in the app, so it must not look like an outbound one:
@@ -274,6 +287,10 @@
 .nt-wiki-day::before { content: '@'; }
 .nt-wiki-project::before { content: '#'; }
 .nt-wiki-task::before { content: '✓'; }
+.nt-wiki-note::before { content: '¶'; }
+/* An arrow, because this is the one that LEAVES: it opens a tab of its own and
+   lands somewhere this app did not draw. */
+.nt-wiki-link::before { content: '↗'; }
 
 /* ------------------------------------------- markdown the toolbar can emit */
 

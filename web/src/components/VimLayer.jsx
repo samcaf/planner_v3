@@ -10,7 +10,9 @@ import { openTab } from '../lib/openIn.js'
 // Not an API call — a signal every useApi hook listens for. The rule that
 // nothing here talks to the server directly still holds.
 import { refreshAll } from '../lib/api.js'
-import { loadNames, saveNames, namesFor, normalise } from '../lib/pageNames.js'
+import {
+  asUrl, loadAll, loadLinks, loadNames, saveLinks, saveNames, namesFor, normalise,
+} from '../lib/names.js'
 import { PRIORITIES } from './Priority.jsx'
 import { parseDay, today as todayIso } from '../lib/dates.js'
 import Icon from './Icon.jsx'
@@ -106,7 +108,8 @@ const HELP = [
     [':pomo', 'start or pause the pomodoro'],
     [':e', 'read the page again — :e! reloads the app itself'],
     [':namepage foo', 'nickname this page — bare, it says its name'],
-    [':goto foo', 'go to a page you have nicknamed'],
+    [':nameurl foo <url>', 'nickname a URL — bare, it says where it goes'],
+    [':goto foo', 'go to whatever you nicknamed — a page, or a URL in a new tab'],
     [':unname foo', 'forget a nickname'],
     [':vim  :novim  :q', 'turn this off'],
     [':h  :help', 'this list'],
@@ -839,7 +842,7 @@ export default function VimLayer() {
       const to = arg.trim() ? parseDay(arg, todayIso()) : todayIso()
       if (!to) { say(`"${arg}" is not a day — try 14, +3, 0, or 09/01/2026`); return }
       navigate(`/day/${to}`)
-      say(`\u2192 ${to}`)
+      say(`→ ${to}`)
       return
     }
 
@@ -847,17 +850,23 @@ export default function VimLayer() {
     if (['goto', 'gt'].includes(verb)) {
       const want = normalise(arg)
       if (!want) { say('goto where? — :goto <name>'); return }
-      const names = await loadNames()
-      const there = names[want]
-      if (!there) {
-        const known = Object.keys(names)
-        say(known.length
-          ? `nothing called "${want}" — try ${known.slice(0, 6).join(', ')}`
-          : 'no page has a name yet — :namepage <name> gives this one one')
+      const { page, link } = await loadAll()
+      // Pages first. The two share a namespace so nothing can answer to both,
+      // but if something ever did, the app's own page is the safer reading —
+      // it can be backed out of.
+      if (page[want]) { navigate(page[want]); say(`→ ${want}`); return }
+      if (link[want]) {
+        // In a tab of its own. Going somewhere outside the planner is almost
+        // never the end of what you were doing in it, so the day you were on
+        // stays open behind you.
+        openTab(link[want])
+        say(`${want} ↗ in a new tab`)
         return
       }
-      navigate(there)
-      say(`→ ${want}`)
+      const known = [...Object.keys(page), ...Object.keys(link)]
+      say(known.length
+        ? `nothing called "${want}" — try ${known.slice(0, 6).join(', ')}`
+        : 'nothing has a name yet — :namepage names this page, :nameurl names a URL')
       return
     }
     if (['namepage', 'np'].includes(verb)) {
@@ -871,23 +880,73 @@ export default function VimLayer() {
         return
       }
       const want = normalise(arg)
-      // One name, one page. Reusing a name re-points it rather than making a
-      // second entry you could never tell apart.
+      // One name, one destination — and the URLs share the namespace, so a
+      // word already spoken for there cannot be quietly taken here either.
+      const links = await loadLinks()
+      if (links[want]) { say(`"${want}" is already a URL — :unname ${want} first`); return }
+      // Reusing a name re-points it rather than making a second entry you
+      // could never tell apart.
       await saveNames({ ...names, [want]: here })
       say(`named "${want}"`)
       return
     }
+    /**
+     * `:nameurl foo https://…` — a word for somewhere outside the planner.
+     *
+     * The sibling of `:namepage`, and deliberately not the same command: that
+     * one names the page you are ON, which is the whole of its argument list,
+     * while this one has to be told both the word and where it goes. Bare, it
+     * reads back rather than writing, because a nickname you cannot remember
+     * the target of is one you will not use.
+     */
+    if (['nameurl', 'nu'].includes(verb)) {
+      const [first, ...tail] = arg.trim().split(/\s+/)
+      const want = normalise(first || '')
+      if (!want) { say('name what? — :nameurl <name> <url>'); return }
+
+      const links = await loadLinks()
+      if (!tail.length) {
+        say(links[want] ? `${want} → ${links[want]}` : `nothing called "${want}"`)
+        return
+      }
+
+      const url = asUrl(tail.join(' '))
+      if (!url) { say(`"${tail.join(' ')}" is not a URL`); return }
+      // Checked against the pages too: one word, one destination. Two things
+      // answering to "repo" would make :goto a coin toss.
+      const pages = await loadNames()
+      if (pages[want]) { say(`"${want}" is already a page — :unname ${want} first`); return }
+      await saveLinks({ ...links, [want]: url })
+      say(`named "${want}" → ${url}`)
+      return
+    }
+
     if (verb === 'unname') {
-      const names = await loadNames()
+      const { page, link } = await loadAll()
       const here = window.location.pathname
       // With no argument it drops this page's names, which is what you want
-      // when you cannot remember what you called it.
-      const going = arg.trim() ? [normalise(arg)] : namesFor(names, here)
-      if (!going.length) { say('nothing to unname here'); return }
-      const left = { ...names }
-      for (const n of going) delete left[n]
-      await saveNames(left)
-      say(`unnamed "${going.join('", "')}"`)
+      // when you cannot remember what you called it. A URL has no "here" to
+      // match against, so it can only be forgotten by name.
+      const going = arg.trim() ? [normalise(arg)] : namesFor(page, here)
+      const gone = going.filter((n) => page[n] !== undefined || link[n] !== undefined)
+      if (!gone.length) {
+        say(arg.trim() ? `nothing called "${normalise(arg)}"` : 'nothing to unname here')
+        return
+      }
+
+      // Only the store that actually held one is written back, so forgetting a
+      // page name does not rewrite the URLs as a side effect.
+      const pageLeft = { ...page }
+      const linkLeft = { ...link }
+      let touchedPage = false
+      let touchedLink = false
+      for (const n of gone) {
+        if (pageLeft[n] !== undefined) { delete pageLeft[n]; touchedPage = true }
+        if (linkLeft[n] !== undefined) { delete linkLeft[n]; touchedLink = true }
+      }
+      if (touchedPage) await saveNames(pageLeft)
+      if (touchedLink) await saveLinks(linkLeft)
+      say(`unnamed "${gone.join('", "')}"`)
       return
     }
     if (verb === 'pri' || verb === 'priority') {
