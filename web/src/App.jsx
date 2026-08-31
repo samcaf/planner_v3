@@ -24,10 +24,12 @@ import PersonDetail from './pages/PersonDetail.jsx'
 import Routines from './pages/Routines.jsx'
 import Uploads from './pages/Uploads.jsx'
 import Settings from './pages/Settings.jsx'
+import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Resolver, { InternalLinks } from './components/Resolver.jsx'
 import Search from './components/Search.jsx'
 import VimLayer from './components/VimLayer.jsx'
+import { AuthProvider, useAuth } from './lib/auth.jsx'
 import { VimProvider, useVim } from './lib/vim.jsx'
 import { goTarget } from './lib/nav.js'
 import { GENERAL } from './lib/shortcuts.js'
@@ -57,10 +59,27 @@ const NAV_2 = [
   { to: '/settings', icon: 'gear', label: 'Settings' },
 ]
 
+/**
+ * The app, or the door to it.
+ *
+ * The theme and accent effects live inside `App`, below, and they are what put
+ * data-theme and data-accent on <html> — so the login page has to render inside
+ * the same component to come up in the right colours rather than flashing the
+ * default ones and correcting itself.
+ */
 export default function App() {
+  return (
+    <AuthProvider>
+      <Planner />
+    </AuthProvider>
+  )
+}
+
+function Planner() {
   // App sits inside the BrowserRouter, so this is safe here — and it is what
   // lets the error boundary below reset itself when you navigate away.
   const location = useLocation()
+  const auth = useAuth()
   const [accent, setAccent] = useState(() => localStorage.getItem('accent') || 'blue')
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system')
   // What the theme actually resolved to. `theme` may be 'system', and the
@@ -100,6 +119,11 @@ export default function App() {
   // Installed once, at the root, because it is a property of the whole app
   // rather than of any page.
   useEffect(installShiftOpen, [])
+
+  // Nothing at all until we know. Drawing the login page while the answer is
+  // still in flight would flash a door at somebody who is already inside.
+  if (auth?.loading) return null
+  if (!auth?.user) return <Login />
 
   return (
     <UndoProvider onChange={refreshAll}>

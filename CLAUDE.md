@@ -122,6 +122,22 @@ works there without the page knowing the mode exists. `lib/vim.jsx` owns
 page's own handlers, lent by `useVimActions`, so every keystroke is undoable
 exactly like the click it replaces.
 
+## Two ports, and only one of them is trusted
+
+`server/ports.js`. The app listens twice on loopback: `TRUSTED_PORT` (8787) is
+what the CLI, the MCP server and the test suites talk to, and a request there
+with no session is the owner. `PUBLIC_PORT` (8789) is what `tailscale serve` is
+pointed at, and a request there is whoever its cookie says it is.
+
+**Do not replace that with a check on the peer address.** `tailscale serve`
+proxies from tailscaled on this same machine, so a visitor from the far side of
+the tailnet arrives with `remoteAddress` 127.0.0.1 exactly like a local tool
+does. The port a connection arrived on is the only thing here a client cannot
+choose.
+
+The dev proxy in `vite.config.js` points at the PUBLIC port on purpose, so that
+developing exercises the login rather than walking past it.
+
 ## Data
 
 One SQLite file at `data/planner.db`. It is the user's real data — the dev

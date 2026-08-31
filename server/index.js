@@ -13,11 +13,11 @@ import search from './routes/search.js'
 import notebook from './routes/notebook.js'
 import settings from './routes/settings.js'
 import uploads, { UPLOAD_DIR, uploadHeaders } from './routes/uploads.js'
+import auth, { gate } from './routes/auth.js'
+import { PUBLIC_PORT, TRUSTED_PORT } from './ports.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
-const PORT = Number(process.env.PORT || 8787)
-
 /**
  * Loopback only — and BOTH spellings of it.
  *
@@ -43,9 +43,24 @@ const app = express()
 // Generous limit: pasted images arrive as base64 data URLs in the JSON body.
 app.use(express.json({ limit: '30mb' }))
 
+/**
+ * The two things that must answer without a session, and then the gate.
+ *
+ * `/api/auth` is how you get a session, so it cannot need one. `/api/health` is
+ * how something outside decides whether this is up at all, and an uptime check
+ * that requires a login tells you nothing useful.
+ *
+ * Everything below is behind `gate`, which sets req.user or answers 401.
+ */
+app.use('/api/auth', auth)
+app.get('/api/health', (_req, res) => res.json({ ok: true }))
+app.use('/api', gate)
+
 // Attachments are served from this app's own origin, so anything the browser
-// would render as a document must come back as a download instead.
-app.use('/uploads', express.static(UPLOAD_DIR, {
+// would render as a document must come back as a download instead. Behind the
+// gate: an upload is somebody's content, and a content-addressed name is not a
+// secret — anyone who has seen one could fetch it forever.
+app.use('/uploads', gate, express.static(UPLOAD_DIR, {
   maxAge: '30d', immutable: true, setHeaders: uploadHeaders,
 }))
 
@@ -61,9 +76,10 @@ app.use('/api/notebook', notebook)
 app.use('/api/settings', settings)
 app.use('/api/uploads', uploads)
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }))
-
-// In production the built frontend is served from the same origin.
+// In production the built frontend is served from the same origin, and
+// deliberately NOT behind the gate: the login page is part of the app, so
+// refusing the bundle to anyone without a session would mean nobody could ever
+// get one. Nothing in the bundle is data.
 const dist = join(root, 'web', 'dist')
 if (existsSync(dist)) {
   app.use(express.static(dist))
@@ -85,9 +101,13 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json(body)
 })
 
+// Two ports, both on loopback, and they are not interchangeable — see ports.js.
+// The public one is what `tailscale serve` is pointed at.
+for (const [PORT, label] of [[TRUSTED_PORT, 'local'], [PUBLIC_PORT, 'served']]) {
 for (const host of HOSTS) {
   const server = app.listen(PORT, host, () => {
-    console.log(`planner_v3 api  →  http://${host.includes(':') ? `[${host}]` : host}:${PORT}`)
+    const at = host.includes(':') ? `[${host}]` : host
+    console.log(`planner_v3 api  →  http://${at}:${PORT}  (${label})`)
   })
   // A machine with IPv6 turned off has no ::1 to bind. That is not a reason to
   // refuse to serve on the address that does exist — say so and carry on.
@@ -98,4 +118,5 @@ for (const host of HOSTS) {
     }
     throw err
   })
+}
 }

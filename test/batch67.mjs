@@ -54,7 +54,9 @@ try {
       new window.MouseEvent('click', { bubbles: true, cancelable: true }),
     )
     const tabs = [...document.querySelectorAll('.st-tab')]
-    check('there are three tabs', tabs.length === 3, tabs.map((t) => t.textContent).join(', '))
+    check('the settings are in tabs',
+      tabs.map((t) => t.textContent).join(',') === 'General,Keyboard,AI suite,Account',
+      tabs.map((t) => t.textContent).join(', '))
     check('general is the one you land on', tabs[0]?.getAttribute('aria-selected') === 'true')
 
     const visible = () => [...document.querySelectorAll('.st-stack')]
@@ -99,6 +101,15 @@ try {
     check('the dialogue is spelled out',
       ['claim', 'ask', 'step', 'report', 'run_state'].every((m) => aiText.includes(m)))
     check('and how to point an agent at it', /claude mcp add planner/.test(aiText))
+
+    click(tabs[3])
+    await wait(600)
+    const account = visible()[0]?.textContent || ''
+    check('the account tab says who is signed in', /Signed in/.test(account), account.slice(0, 60))
+    check('and offers a way out', /Sign out/.test(account))
+    // The suites reach the API on the trusted port, which resolves to the
+    // owner — so the roster is drawn here, and a guest would not see it.
+    check('the owner is shown the roster', /Who can sign in/.test(account))
 
     check('nothing threw', errors.length === 0, errors.join(' | '))
   }

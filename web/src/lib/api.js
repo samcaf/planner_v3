@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 
+/**
+ * The session went away — revoked, signed out in another tab, or the server
+ * restarted without it. Announced rather than handled here, because the thing
+ * that has to react is the whole app, and this function has no idea what that
+ * looks like. Same shape as REFRESH_EVENT below.
+ */
+export const SIGNED_OUT = 'planner:signed-out'
+
 async function request(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
@@ -8,7 +16,18 @@ async function request(method, path, body) {
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.error || `${method} ${path} failed (${res.status})`)
+    // Every call in the app goes through here, so one line covers all of them.
+    // Asking who you are is exempt: that request answering 401 IS the answer,
+    // and reacting to it would be a loop.
+    if (res.status === 401 && !path.startsWith('/auth/')) {
+      window.dispatchEvent(new Event(SIGNED_OUT))
+    }
+    const err = new Error(detail.error || `${method} ${path} failed (${res.status})`)
+    err.status = res.status
+    // The server distinguishes a refusal from a mistake with a code; the login
+    // page needs it to tell "waiting on approval" from "wrong password".
+    if (detail.code) err.code = detail.code
+    throw err
   }
   return res.status === 204 ? null : res.json()
 }
@@ -31,6 +50,10 @@ export function useApi(path, deps = []) {
 
   const reload = useCallback(() => {
     let cancelled = false
+    // A null path is "there is nothing to ask for yet" — a panel only the owner
+    // may fetch, a detail view with no id. Hooks cannot be called conditionally,
+    // so the condition has to live here instead.
+    if (!path) { setData(null); setError(null); setLoading(false); return () => {} }
     setLoading(true)
     api.get(path)
       .then((d) => { if (!cancelled) { setData(d); setError(null) } })

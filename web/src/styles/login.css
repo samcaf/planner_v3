@@ -1,0 +1,136 @@
+/* ------------------------------------------------------------------ login */
+
+/*
+ * The sidebar's ground, not the page's. The rail is dark in both themes by
+ * design — see DESIGN.md — so building the one screen that has no app on it out
+ * of the rail's palette means it looks like itself whichever theme is set, and
+ * the mark is legible on it without a second artwork.
+ */
+.lg {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--space-8);
+  background: var(--sb-bg);
+  color: var(--sb-ink);
+  /* The same reflection the rail carries in its lower-left corner, turned up
+     the other way: light falling across the top of a dark plane. It is the one
+     ornament on the page and it costs nothing. */
+  background-image: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, .05) 0%,
+    rgba(255, 255, 255, .05) 42%,
+    rgba(255, 255, 255, 0) 42.6%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 46%;
+  background-position: left top;
+}
+
+.lg-card {
+  width: min(340px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+/* Big. This is the only thing on the screen, and the mark is the whole of the
+   app's identity — a small one beside a form would read as a favicon.
+
+   Targeted by descent rather than by a class of its own: Wordmark spreads its
+   props after setting `brand-mark`, so passing a className would replace it and
+   take the mask — which is the entire artwork — with it. */
+.lg .brand-mark {
+  width: min(200px, 60vw);
+  max-height: 34vh;
+  background-color: var(--sb-accent);
+}
+
+.lg-form { width: 100%; display: flex; flex-direction: column; gap: var(--space-5); }
+
+.lg-field { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.lg-field > span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #7b85a6;
+  font-weight: 600;
+}
+
+/* Not `.input`: that is tuned for a light panel, and on this ground it would be
+   a white slab. A ruled line instead of a box — less furniture, and it belongs
+   to the dark palette rather than borrowing from the page's. */
+.lg-input {
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .04);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 9px var(--space-4);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s, background .15s;
+}
+
+.lg-input:focus {
+  border-bottom-color: var(--sb-accent);
+  background: rgba(255, 255, 255, .07);
+}
+
+.lg-go {
+  margin-top: var(--space-2);
+  padding: 10px var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--sb-accent);
+  color: var(--sb-bg);
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.lg-go:hover:not(:disabled) { filter: brightness(1.08); }
+.lg-go:disabled { opacity: .4; cursor: default; }
+
+/* The other door, and the "check again" button. Quiet: it is the thing you
+   press when the first thing was not what you wanted. */
+.lg-alt {
+  border: 0;
+  background: none;
+  color: var(--sb-ink);
+  opacity: .7;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: var(--space-2);
+}
+
+.lg-alt:hover { opacity: 1; text-decoration: underline; }
+
+.lg-error { margin: 0; font-size: 12.5px; color: #f2a5a0; }
+
+/* Not an error. A pending account got the password right and has nothing left
+   to do but wait, so it is said in the ordinary ink rather than in red. */
+.lg-say { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--sb-ink); opacity: .85; }
+
+.lg-code {
+  margin: 0;
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, .25);
+  color: var(--sb-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  overflow-x: auto;
+}
+
+/* The phone. The mark gives way first — the form is the point. */
+@media (max-height: 620px) {
+  .lg .brand-mark { max-height: 22vh; }
+  .lg-card { gap: var(--space-5); }
+}

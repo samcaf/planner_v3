@@ -8,6 +8,7 @@ import { BUILT_IN, DECLARED, ENFORCED } from '../lib/aiSwitches.js'
 import { ABOUT, CONNECT, MOVES, QUERY, QUERY_EXAMPLES, SCOPES } from '../lib/aiGuide.js'
 import { GENERAL } from '../lib/shortcuts.js'
 import { asUrl, normalise } from '../lib/names.js'
+import { useAuth } from '../lib/auth.jsx'
 import { useVim } from '../lib/vim.jsx'
 import { api, useApi } from '../lib/api.js'
 import { minutesLabel } from '../lib/dates.js'
@@ -28,6 +29,7 @@ const TABS = [
   ['general', 'General'],
   ['keys', 'Keyboard'],
   ['ai', 'AI suite'],
+  ['account', 'Account'],
 ]
 
 const THEMES = [['light', 'Light'], ['dark', 'Night'], ['system', 'Auto']]
@@ -286,9 +288,157 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
         >
           <AiSuite s={s} save={save} />
         </div>
+
+        {/* Mounted only when it is open: it fetches the roster, and the roster
+            is the one thing on this page nobody but the owner may even see. */}
+        {tab === 'account' && (
+          <div
+            className="st-stack"
+            role="tabpanel"
+            id="st-panel-account"
+            aria-labelledby="st-tab-account"
+          >
+            <Account />
+          </div>
+        )}
       </div>
     </>
   )
+}
+
+/**
+ * Who you are, and — if you are the owner — who else is allowed in.
+ *
+ * Two panels rather than one, because they answer to different people. The
+ * first is about this browser and everyone has it; the second is the roster and
+ * only the owner ever sees it, which is why it is fetched rather than filtered
+ * on screen — an approve button nobody may press should not be drawn at all.
+ */
+function Account() {
+  const auth = useAuth()
+  const me = auth?.user
+  const roster = useApi(me?.is_owner ? '/auth/users' : null)
+  const [busy, setBusy] = useState('')
+
+  const act = async (fn) => {
+    setBusy('1')
+    try { await fn() } finally { setBusy(''); roster.reload?.() }
+  }
+
+  return (
+    <>
+      <Panel title={<><Icon name="people" size={14} /> Signed in</>}>
+        <div className="kv st-raw-row">
+          <dt>Login</dt>
+          <dd className="muted st-raw-val">
+            <code>{me?.login}</code>
+            {me?.is_owner && <span className="chip c-green">owner</span>}
+          </dd>
+        </div>
+        <p className="st-hint">
+          This browser stays signed in until it is signed out here or the owner
+          revokes it. There is no expiry — a session you still want should not
+          end because a clock ran out.
+        </p>
+        <button className="btn" onClick={() => auth?.signOut()}>Sign out</button>
+      </Panel>
+
+      {me?.is_owner && (
+        <Panel title={<><Icon name="keyboard" size={14} /> Who can sign in</>}>
+          <p className="st-note">
+            Anyone on the network can ask for an account from the login page.
+            Asking creates it with a password already set, waiting on you — so
+            approving is a click rather than an exchange of passwords.
+          </p>
+          {!roster.data && <Empty>Loading…</Empty>}
+          {roster.data?.map((u) => (
+            <div key={u.id} className="st-account">
+              <div className="st-account-h">
+                <code>{u.login}</code>
+                {u.name && <span className="muted">{u.name}</span>}
+                <span className={`chip ${u.status === 'active' ? 'c-green' : u.status === 'pending' ? 'c-amber' : 'c-red'}`}>
+                  {u.status}
+                </span>
+                {!!u.is_owner && <span className="chip">owner</span>}
+                <span className="spacer" />
+                {u.status !== 'active' && (
+                  <button
+                    className="btn sm"
+                    disabled={!!busy}
+                    onClick={() => act(() => api.post(`/auth/users/${u.id}/approve`))}
+                  >
+                    Approve
+                  </button>
+                )}
+                {u.status === 'active' && !u.is_owner && (
+                  <button
+                    className="btn ghost sm"
+                    disabled={!!busy}
+                    onClick={() => act(() => api.post(`/auth/users/${u.id}/block`))}
+                  >
+                    Block
+                  </button>
+                )}
+                {!u.is_owner && (
+                  <button
+                    className="btn ghost sm danger"
+                    aria-label={`Remove ${u.login}`}
+                    disabled={!!busy}
+                    // Their planner file is left where it is. Taking away
+                    // access and deleting somebody's work are different acts.
+                    onClick={() => act(() => api.del(`/auth/users/${u.id}`))}
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                )}
+              </div>
+              {u.sessions?.length > 0 && (
+                <dl className="st-devices">
+                  {u.sessions.map((sn) => (
+                    <div key={sn.token_hash}>
+                      <dt>{deviceName(sn.device)}</dt>
+                      <dd>
+                        last used {sn.last_seen}
+                        <button
+                          className="btn ghost sm"
+                          disabled={!!busy}
+                          onClick={() => act(() => api.del(`/auth/sessions/${sn.token_hash}`))}
+                        >
+                          Sign it out
+                        </button>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          ))}
+        </Panel>
+      )}
+    </>
+  )
+}
+
+/**
+ * A user-agent string, as something you could recognise a device by.
+ *
+ * Not a parse — those are famously unwinnable. It looks for the handful of
+ * names that tell one of YOUR devices from another, which is all this list has
+ * to do, and falls back to saying it does not know.
+ */
+function deviceName(ua = '') {
+  const bits = []
+  if (/iPhone/i.test(ua)) bits.push('iPhone')
+  else if (/iPad/i.test(ua)) bits.push('iPad')
+  else if (/Android/i.test(ua)) bits.push('Android')
+  else if (/Macintosh/i.test(ua)) bits.push('Mac')
+  else if (/Windows/i.test(ua)) bits.push('Windows')
+  else if (/Linux/i.test(ua)) bits.push('Linux')
+  if (/Firefox/i.test(ua)) bits.push('Firefox')
+  else if (/Edg\//i.test(ua)) bits.push('Edge')
+  else if (/Chrome/i.test(ua)) bits.push('Chrome')
+  else if (/Safari/i.test(ua)) bits.push('Safari')
+  return bits.join(' · ') || 'an unnamed device'
 }
 
 /**

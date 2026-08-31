@@ -37,9 +37,40 @@ as an app.
 
 ```sh
 npm run build
-tailscale serve --bg 8787      # https://<this-machine>.<tailnet>.ts.net
+node server/accounts.js add-owner <your-login>   # the first account
+tailscale serve --bg 8789                        # NOT 8787 — see below
 tailscale serve status
 ```
+
+**8789, not 8787.** The app listens on two loopback ports and they are not the
+same door. A request on **8787** with no session is treated as the owner, which
+is what lets `bin/plan.js`, the MCP server and the tests work without a login.
+A request on **8789** is whoever their cookie says they are, and nobody
+without one. Serving the wrong port hands your planner to the whole tailnet.
+
+It has to be the port rather than the address, because `tailscale serve` runs
+on this same machine and forwards from `127.0.0.1` — so a visitor from the far
+side of the tailnet looks exactly like a local tool if you ask who is calling.
+
+## Accounts
+
+Everyone gets their own login. New people ask from the login page, and the
+owner approves them in **Settings → Account**.
+
+```sh
+node server/accounts.js add-owner <login>   # the first account; makes the owner
+node server/accounts.js add <login>         # someone else, already approved
+node server/accounts.js approve <login>
+node server/accounts.js block <login>
+node server/accounts.js passwd <login>
+node server/accounts.js list
+```
+
+Sessions do not expire — signing in on a phone is meant to be something you do
+once. A session ends when it is signed out, when the owner revokes that device
+in Settings, or when the account is blocked. Passwords are scrypt-hashed and the
+session cookie is stored only as its SHA-256, so a copy of `data/accounts.db`
+lets nobody in.
 
 That config persists across reboots by itself. To keep the app itself up:
 
