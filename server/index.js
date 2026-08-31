@@ -18,6 +18,27 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
 const PORT = Number(process.env.PORT || 8787)
 
+/**
+ * Loopback only — and BOTH spellings of it.
+ *
+ * This used to listen on every interface, which on a machine running Tailscale
+ * means the whole tailnet could read and write the planner with no
+ * authentication at all. Nothing needs to reach this port from outside the
+ * machine: `tailscale serve` proxies to it and terminates TLS, and keeping the
+ * socket on loopback is what makes it safe to believe what that proxy says
+ * about a request.
+ *
+ * Both addresses, because `localhost` resolves to ::1 before 127.0.0.1 on a
+ * modern Linux and Node's resolver order is `verbatim`. Binding only the IPv4
+ * address would refuse every client that spells it `localhost` — which is the
+ * Vite proxy, the MCP server, and all but one of the test suites. Two listeners
+ * on one port with different addresses is ordinary.
+ *
+ * PLANNER_HOST overrides it with a single address, for a host where one of the
+ * two does not exist or where something else fronts the app.
+ */
+const HOSTS = process.env.PLANNER_HOST ? [process.env.PLANNER_HOST] : ['127.0.0.1', '::1']
+
 const app = express()
 // Generous limit: pasted images arrive as base64 data URLs in the JSON body.
 app.use(express.json({ limit: '30mb' }))
@@ -64,6 +85,17 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json(body)
 })
 
-app.listen(PORT, () => {
-  console.log(`planner_v3 api  →  http://localhost:${PORT}`)
-})
+for (const host of HOSTS) {
+  const server = app.listen(PORT, host, () => {
+    console.log(`planner_v3 api  →  http://${host.includes(':') ? `[${host}]` : host}:${PORT}`)
+  })
+  // A machine with IPv6 turned off has no ::1 to bind. That is not a reason to
+  // refuse to serve on the address that does exist — say so and carry on.
+  server.on('error', (err) => {
+    if (HOSTS.length > 1 && ['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(err.code)) {
+      console.warn(`planner_v3 api  —  ${host} is unavailable (${err.code}), skipping it`)
+      return
+    }
+    throw err
+  })
+}

@@ -16,7 +16,7 @@ The API must be running; the tools talk to `http://localhost:8787`.
 | variable | |
 |---|---|
 | `PLANNER_API` | where the API is (default `http://localhost:8787`) |
-| `PLANNER_WEB` | what to build task URLs from (default `http://localhost:5173`) |
+| `PLANNER_WEB` | what to build task URLs from (default `http://localhost:5173`) — set this to the served address when the planner is on a tailnet, or the links are dead for everyone but the host |
 | `PLANNER_MCP_SCOPES` | `read,write,search,dialogue` — drop `write` and `dialogue` for a server that cannot change anything |
 | `PLANNER_MCP_AUTHOR` | who comments are attributed to (default `claude`) |
 
@@ -129,9 +129,13 @@ can replace notes if you ask it to; `add_comment` never can.
 day's totals see it, and leaves a comment saying where the time went.
 
 What is deliberately **not** copied: OAuth, multi-tenancy, cloud ids. This talks
-to one planner over loopback, and an identity layer for a single-user app on
-localhost would be ceremony, not security. Keep it on localhost — there is no
-authentication because nothing needs to cross a network.
+to one planner over loopback, and an identity layer for a tool server sharing a
+machine with the database file it is reaching would be ceremony, not security.
+
+The **app** may now be published to a tailnet with `tailscale serve`, but the
+API it fronts still listens on loopback only, and this server still reaches it
+there. Nothing about that changes what is written above: the boundary is the
+machine, and anything already on it can read `data/planner.db` directly.
 
 ## Flagging code work
 

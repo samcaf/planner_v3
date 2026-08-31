@@ -98,8 +98,11 @@ export const QUERY = [
 export const CONNECT = {
   command: 'claude mcp add planner -- node ~/Documents/planner_v3/mcp/server.js',
   env: [
-    ['PLANNER_API', 'where the API is (default http://localhost:8787)'],
-    ['PLANNER_WEB', 'what task URLs are built from (default http://localhost:5173)'],
+    ['PLANNER_API', 'where the API is — loopback, default http://localhost:8787'],
+    ['PLANNER_WEB',
+      'what task URLs are built from. Not the same as the API: when the planner '
+      + 'is served to a tailnet, set this to the address people actually open, '
+      + 'or every link an agent hands back says localhost and works for nobody.'],
     ['PLANNER_MCP_SCOPES',
       'read,write,search,dialogue — drop write and dialogue for a read-only server'],
     ['PLANNER_MCP_AUTHOR', 'who comments are attributed to (default claude)'],

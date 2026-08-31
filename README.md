@@ -27,6 +27,35 @@ npm run build
 npm start        # serves the built app and the API together on 8787
 ```
 
+## On your tailnet
+
+The API listens on **loopback only** — `127.0.0.1` and `::1`, both, because
+`localhost` resolves to the second one first on a modern Linux. Nothing reaches
+it from another machine on its own; `tailscale serve` is what publishes it, and
+it is also what supplies HTTPS, which a phone needs before it will install this
+as an app.
+
+```sh
+npm run build
+tailscale serve --bg 8787      # https://<this-machine>.<tailnet>.ts.net
+tailscale serve status
+```
+
+That config persists across reboots by itself. To keep the app itself up:
+
+```sh
+cp scripts/planner.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now planner
+loginctl enable-linger "$USER"   # so it survives logging out
+```
+
+**Pick the machine name before installing it on a phone.** An installed web app
+is pinned to the address it was installed from, and that address follows the
+*machine* name in MagicDNS. Naming the host `planner` now means moving the app
+to another box later is: copy `data/`, install the unit there, rename that
+machine `planner` — and every phone keeps working.
+
 ## Where things live
 
 ```

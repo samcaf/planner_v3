@@ -14,6 +14,13 @@ npm run dev
 Two processes: the API on **8787** and Vite on **5173**, which proxies `/api`
 to it. `npm start` serves the built app and the API together on 8787.
 
+The API binds **loopback only**, and both spellings of it — `127.0.0.1` and
+`::1`. `localhost` resolves to `::1` first here and Node's resolver order is
+`verbatim`, so binding one address refuses every client that says `localhost`,
+which is the Vite proxy, the MCP server and all but one of the test suites.
+Publishing it to the tailnet is `tailscale serve`'s job, not the app's — see
+the README.
+
 ## Testing
 
 ```bash

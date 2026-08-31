@@ -47,6 +47,10 @@ import { stack } from '../web/src/lib/aiSwitches.js'
 import { promptParts, promptText } from '../web/src/lib/aiPrompt.js'
 
 const BASE = process.env.PLANNER_API || 'http://localhost:8787'
+// What task links are built from, which is not the same thing as where the API
+// is. On a machine serving the planner to a tailnet these are different hosts —
+// the API stays on loopback and the browsable address is the served one — and a
+// link an agent hands back saying `localhost` is dead for everyone but the host.
 const WEB = process.env.PLANNER_WEB || 'http://localhost:5173'
 const AUTHOR = process.env.PLANNER_MCP_AUTHOR || 'claude'
 
