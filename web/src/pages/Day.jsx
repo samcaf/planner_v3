@@ -24,6 +24,8 @@ import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
 import DayComplete from '../components/DayComplete.jsx'
 import DayStart from '../components/DayStart.jsx'
+import DateField from '../components/DateField.jsx'
+import { useMobile } from '../lib/mobile.js'
 import { tabDate, usePageTitle } from '../lib/title.js'
 import { useVim, useVimActions } from '../lib/vim.jsx'
 import { makeVimActions } from '../lib/vimActions.js'
@@ -77,6 +79,7 @@ export default function Day() {
 function DayView({ date }) {
   usePageTitle(tabDate(date))
   const navigate = useNavigate()
+  const phone = useMobile()
   const day = useApi(`/days/${date}`, [date])
   const backlog = useApi(`/tasks?${BACKLOG_QUERY}`)
   // In-progress work is worth seeing whatever day you are looking at, so this
@@ -650,22 +653,25 @@ function DayView({ date }) {
             <Icon name="right" size={15} />
           </button>
         </div>
-        <h1>{longDate(date)}</h1>
+        {/* Kept for the document outline and a screen reader, but not for the
+            pixels: on a phone the date field beside it says the same thing in a
+            third of the width, and the bar has none to spare. */}
+        <h1 className={phone ? 'sr-only' : undefined}>{longDate(date)}</h1>
         {isToday && <span className="chip c-blue">Today</span>}
-        <input
-          className="input"
-          type="date"
-          style={{ width: 150 }}
-          value={date}
-          onChange={(e) => e.target.value && navigate(`/day/${e.target.value}`)}
-        />
+        <DateField value={date} onChange={(d) => navigate(`/day/${d}`)} />
         {!isToday && <button className="btn sm" onClick={() => navigate(`/day/${today()}`)}>Today</button>}
         <span className="spacer" />
         <PriorityFilter value={priFilter} onChange={setPriFilter} />
         <button className="btn sm" onClick={() => setMeetingFor({ section: null })}>
           <Icon name="clock" size={13} /> New meeting
         </button>
-        <Link className="btn ghost sm" to={`/notes/${date}`}><Icon name="templates" size={13} /> Notes page</Link>
+        {/* The rail reaches the notebook on a phone, and this bar cannot
+            afford a second way to the same place. */}
+        {!phone && (
+          <Link className="btn ghost sm" to={`/notes/${date}`}>
+            <Icon name="templates" size={13} /> Notes page
+          </Link>
+        )}
       </header>
 
       <DayBar

@@ -199,6 +199,39 @@ try {
   check('a laptop still gets the full grid',
     !!(await open(`/month/${D}`)).document.querySelector('.month'))
 
+  // ── the day's bar, with the room made ────────────────────────────────────
+  const dayPhone = await open(`/day/${D}`, { phone: true })
+  const pd = dayPhone.document
+  const pbar = pd.querySelector('.topbar')
+  check('the long date is out of the layout but still in the outline',
+    pbar?.querySelector('h1')?.className === 'sr-only',
+    pbar?.querySelector('h1')?.className)
+  check('the notes link is gone from the bar',
+    !pbar?.querySelector('a[href*="/notes/"]'),
+    'the rail already reaches the notebook')
+  const mini = pd.querySelector('.date-mini')
+  check('the date is written short', /^\d\d\/\d\d\/\d\d$/.test(mini?.textContent || ''),
+    mini?.textContent)
+  check('and reads as the day on screen',
+    mini?.textContent === `${D.slice(5, 7)}/${D.slice(8)}/${D.slice(2, 4)}`, mini?.textContent)
+  check('the real input is still underneath it, so the picker still opens',
+    mini?.querySelector('input[type="date"]')?.value === D,
+    'display:none or visibility:hidden here would take the native picker with it')
+  check('and it is transparent rather than hidden',
+    /\.date-mini input\{[^}]*opacity:0\}/.test(built))
+
+  const dayDesk = await open(`/day/${D}`)
+  const dbar = dayDesk.document.querySelector('.topbar')
+  check('a laptop keeps the long date', dbar?.querySelector('h1')?.className !== 'sr-only',
+    dbar?.querySelector('h1')?.textContent)
+  check('and the notes link', !!dbar?.querySelector('a[href*="/notes/"]'))
+  check('and the plain native field',
+    !!dbar?.querySelector('input.topbar-date[type="date"]') && !dayDesk.document.querySelector('.date-mini'))
+  check('whose width is a class now, not an inline style',
+    /\.topbar-date\{width:150px\}/.test(built)
+      && !/style="width: *150px"/.test(dbar?.innerHTML || ''),
+    'an inline width outranks every media query — see CLAUDE.md')
+
   // ── all tasks opens grouped ──────────────────────────────────────────────
   const all = await open('/tasks')
   const picker = all.document.querySelector('select.at-filter[title="Grouping"]')
