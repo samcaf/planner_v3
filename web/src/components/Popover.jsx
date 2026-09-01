@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { onAway } from '../lib/away.js'
 import '../styles/priority.css'
 
 const GAP = 6      // breathing room between the trigger and the panel
@@ -78,24 +79,21 @@ export default function Popover({
   useEffect(() => {
     if (!open) return
 
-    const away = (e) => {
-      if (panelRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return
-      close(false) // the pointer already chose where focus should go
-    }
     const key = (e) => { if (e.key === 'Escape') close() }
     const scrolled = (e) => {
       if (panelRef.current?.contains(e.target)) return // the panel's own scrollbar
       close(false)
     }
 
-    window.addEventListener('mousedown', away)
+    // false: the pointer already chose where focus should go.
+    const stopAway = onAway([panelRef, triggerRef], () => close(false))
     window.addEventListener('keydown', key)
     // Capture: the scroll containers here are ancestors of the trigger, and
     // scroll events from an element never bubble up to window.
     window.addEventListener('scroll', scrolled, true)
     window.addEventListener('resize', scrolled)
     return () => {
-      window.removeEventListener('mousedown', away)
+      stopAway()
       window.removeEventListener('keydown', key)
       window.removeEventListener('scroll', scrolled, true)
       window.removeEventListener('resize', scrolled)

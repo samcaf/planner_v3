@@ -306,4 +306,10 @@
 
 @media (max-width: 700px) {
   .nt-rail-day { min-width: 34px; }
+
+  /* The long date takes the whole row at this width, leaving the heading field
+     about thirty pixels — enough to set "Add a heading…" one letter to a line.
+     It gets a row of its own instead. */
+  .nt-day-h { flex-wrap: wrap; row-gap: var(--space-2); }
+  .nt-title { flex: 1 0 100%; }
 }

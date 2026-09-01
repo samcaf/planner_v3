@@ -97,3 +97,141 @@
 /* Inside a tinted group the plain hover would read as a second tint, so it
    leans on the group's own colour instead. */
 .cal-group-b .mini:hover { background: color-mix(in srgb, var(--c, var(--gray)) 22%, transparent); }
+
+/* ------------------------------------------------ the month, on a phone */
+
+/*
+ * A summary grid over an agenda, rather than six rows of unreadable pills.
+ * See MonthPhone in pages/Month.jsx for why the titles moved out of the cells.
+ */
+.mgrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--space-6);
+}
+
+.mgrid-dow {
+  background: var(--panel);
+  padding: 5px 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  font-weight: 650;
+}
+
+.mgrid-day {
+  /* A button, because tapping a day is an action on this page rather than a
+     journey off it — the date at the head of the list below is the link. */
+  appearance: none;
+  border: 0;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  /* Tall enough to take a finger without a sixth row pushing the list off the
+     bottom of the screen. */
+  min-height: 46px;
+  padding: 5px 0 4px;
+}
+
+.mgrid-day.other { background: var(--sunken); color: var(--ink-3); }
+.mgrid-day.today .mgrid-num { color: var(--accent); font-weight: 700; }
+
+/* The chosen day is a filled disc under its number, the way every phone
+   calendar marks it — and it has to beat `.today`, which is a colour on the
+   same number. */
+.mgrid-day.is-on .mgrid-num {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.mgrid-num {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  text-align: center;
+}
+
+.mgrid-dots {
+  display: flex;
+  gap: 2px;
+  min-height: 5px;
+  align-items: center;
+}
+
+.mgrid-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex: 0 0 5px;
+  background: var(--c, var(--gray));
+}
+
+/* ------- the chosen day, in full width */
+
+.magenda { padding: 0; }
+
+.magenda-h {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.magenda-date { font-size: 13.5px; font-weight: 650; color: var(--ink); }
+.magenda-date:hover { color: var(--accent); text-decoration: none; }
+
+.magenda-add { padding: var(--space-3) var(--space-4) 0; }
+.magenda-add .input { width: 100%; }
+
+.magenda-none {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.magenda-row {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 9px var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.magenda-row:last-child { border-bottom: 0; }
+.magenda-row .mgrid-dot { align-self: center; }
+
+.magenda-when {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.magenda-when:empty { display: none; }
+
+.magenda-title { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.magenda-title.done { color: var(--ink-3); text-decoration: line-through; }

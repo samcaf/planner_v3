@@ -139,6 +139,19 @@ dragging is unreachable on a phone, so reordering and nesting also live in the
 row menu, calling the same handlers the keyboard does. A new drag gesture needs
 a menu entry beside it.
 
+**A tap does not reliably produce `mousedown`.** A touch browser synthesises
+mouse events only where it judges the target was meant to be clicked, so a menu
+dismissed on `window.mousedown` closes or does not close depending on what is
+under the finger. Every "press away and this closes" goes through `onAway` in
+`web/src/lib/away.js`, which listens for `pointerdown` as well.
+
+**`useMobile()` is the only thing that decides what a phone is** — one
+`matchMedia` on the same 700px the stylesheet uses, so a component and a media
+query can never disagree about it. Gate a phone-only difference on that rather
+than on the user agent or the touch API. It is a gate and not a setting: vim
+mode reads it and stays off, but the stored preference is left alone so the same
+account on a laptop still finds the mode on.
+
 `@media (hover: none)` asks the input device rather than the width, which is the
 honest question for a control that only appears on hover: a narrow window on a
 laptop still has a mouse.

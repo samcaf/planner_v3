@@ -2335,8 +2335,63 @@ kbd {
      resize while it is a drawer. */
   .rail-grip, .day-wrap > .grip-v { display: none; }
 
-  /* Room for the button, which floats over this corner. */
-  .topbar { padding-left: 60px; }
+  /* As a drawer the rail has the whole screen's height and only a handful of
+     links to spend it on, so the mark takes the room the switch was holding.
+     The switch is one button; the mark is the signature. */
+  .brand-mark { max-height: 24vh; }
+  .sidebar .brand { padding: 0 8px clamp(2px, 1vh, 10px); }
+
+  .daynight {
+    width: 28px;
+    height: 28px;
+    margin-bottom: var(--space-2);
+    opacity: .85;
+  }
+
+  /*
+   * One row, and a short one.
+   *
+   * The day's header is nav, a title, a chip, a date field, the priority filter
+   * and four buttons. Allowed to wrap, that is FOUR rows on a 375px screen —
+   * 191px, nearly a quarter of the display, before a single task is visible.
+   *
+   * So it stops wrapping and scrolls sideways instead. Everything stays
+   * reachable, nothing is hidden behind a menu, and the bar is one control tall
+   * whatever is in it. The spacer goes: in a scrolling row it would push the
+   * rest off into space rather than align it right.
+   */
+  .topbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    gap: var(--space-3);
+    /* Room on the left for the drawer button, which floats over this corner. */
+    padding: calc(var(--space-1) + env(safe-area-inset-top, 0px)) var(--space-4)
+             var(--space-1) 60px;
+  }
+
+  .topbar::-webkit-scrollbar { display: none; }
+  .topbar > * { flex: 0 0 auto; }
+  .topbar .spacer { display: none; }
+
+  /* The date is the page's title, so it keeps the weekday — it is just no
+     longer set at heading size on a screen this narrow. */
+  .topbar h1 {
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .topbar .input { width: 124px; height: 30px; padding-top: 0; padding-bottom: 0; }
+  .topbar .btn, .topbar .btn.sm, .topbar .btn.ghost.sm { min-height: 30px; }
+
+  /* The five priority icons are already colour-coded, and stacking the word
+     PRIORITY under them made this the tallest thing in the bar — 41px against
+     30 for everything else, so one label was setting the height of the row.
+     The icons say it on their own at this width. */
+  .topbar .pri-filter-label { display: none; }
 
   /* The day's own columns stop being columns. The breakpoints above already
      say so; these are the edges they do not reach. */
@@ -2389,5 +2444,7 @@ body:has(.vim-bar) .main {
 @media (max-width: 700px) {
   /* The home indicator sits over the foot of the page on an iPhone. */
   .main { padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .topbar { padding-top: calc(var(--space-6) + env(safe-area-inset-top, 0px)); }
+  /* The top bar's own rule above already carries `safe-area-inset-top`. It
+     used to be padded again here, with a larger value that won — which is
+     where two thirds of the bar's height came from. */
 }

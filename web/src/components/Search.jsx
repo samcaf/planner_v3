@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import Icon from './Icon.jsx'
+import { onAway } from '../lib/away.js'
 import { Rich } from '../lib/rich.jsx'
 import { api, useApi } from '../lib/api.js'
 import { cls } from './ui.jsx'
@@ -165,13 +166,7 @@ export default function Search() {
   // A click anywhere else puts it away.
   useEffect(() => {
     if (!open) return
-    const away = (e) => {
-      if (box.current?.contains(e.target)) return
-      if (panel.current?.contains(e.target)) return
-      setOpen(false)
-    }
-    window.addEventListener('mousedown', away)
-    return () => window.removeEventListener('mousedown', away)
+    return onAway([box, panel], () => setOpen(false))
   }, [open])
 
   // Following a result closes the panel; staying open over the page you just

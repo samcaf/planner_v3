@@ -7,6 +7,7 @@ import AiSwitches from '../components/AiSwitches.jsx'
 import { BUILT_IN, DECLARED, ENFORCED } from '../lib/aiSwitches.js'
 import { ABOUT, CONNECT, MOVES, QUERY, QUERY_EXAMPLES, SCOPES } from '../lib/aiGuide.js'
 import { GENERAL } from '../lib/shortcuts.js'
+import { useMobile } from '../lib/mobile.js'
 import { asUrl, normalise } from '../lib/names.js'
 import { useAuth } from '../lib/auth.jsx'
 import { useVim } from '../lib/vim.jsx'
@@ -67,14 +68,20 @@ function parseDuration(text) {
 
 export default function Settings({ theme, onTheme, accent, onAccent }) {
   usePageTitle('Settings')
+  // A phone has no keyboard to give shortcuts to, and the two nickname tables
+  // are typing-heavy reference lists that belong on the machine you name things
+  // from. Both are hidden rather than reflowed: there is no version of them
+  // worth the width here.
+  const phone = useMobile()
   const settings = useApi('/settings')
   const [params, setParams] = useSearchParams()
   const [saved, setSaved] = useState('')
   // The raw dump is a debugging aid, not part of the page.
   const [showRaw, setShowRaw] = useState(false)
 
+  const tabs = phone ? TABS.filter(([id]) => id !== 'keys') : TABS
   const asked = params.get('tab')
-  const tab = TABS.some(([id]) => id === asked) ? asked : 'general'
+  const tab = tabs.some(([id]) => id === asked) ? asked : 'general'
 
   if (!settings.data) return <div className="page"><p className="muted">Loading…</p></div>
 
@@ -108,7 +115,7 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
 
       <div className="page st-page">
         <nav className="st-tabs" role="tablist" aria-label="Settings sections">
-          {TABS.map(([id, label]) => (
+          {tabs.map(([id, label]) => (
             <button
               key={id}
               role="tab"
@@ -242,9 +249,13 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
             </div>
           </Panel>
 
-          <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />
+          {!phone && (
+            <>
+              <PageNames names={s.page_names} onSave={(v) => save('page_names', v)} />
 
-          <LinkNames names={s.link_names} onSave={(v) => save('link_names', v)} />
+              <LinkNames names={s.link_names} onSave={(v) => save('link_names', v)} />
+            </>
+          )}
 
           <button className="btn ghost sm st-raw-toggle" onClick={() => setShowRaw(!showRaw)}>
             <Icon name={showRaw ? 'chevronDown' : 'right'} size={12} />

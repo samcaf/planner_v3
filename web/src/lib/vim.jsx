@@ -1,6 +1,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react'
+import { useMobile } from './mobile.js'
 
 /**
  * Keyboard-first control over the task list.
@@ -252,7 +253,13 @@ export function parseWhen(text, from) {
 }
 
 export function VimProvider({ children }) {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem('vim_mode') === '1')
+  // Off on a phone, whatever the stored preference says. A keyboard mode with
+  // no keyboard is a bar across the bottom of the screen that eats a tenth of
+  // it and can never be dismissed, and the setting is not cleared because the
+  // same account on a laptop should still find it on.
+  const phone = useMobile()
+  const [vimWanted, setEnabled] = useState(() => localStorage.getItem('vim_mode') === '1')
+  const enabled = vimWanted && !phone
   const [mode, setMode] = useState('normal')
   const [cursor, setCursor] = useState(null)
   const [anchor, setAnchor] = useState(null)   // where visual mode started
@@ -272,13 +279,13 @@ export function VimProvider({ children }) {
   }, [])
 
   const toggle = useCallback((on) => {
-    const next = on ?? !enabled
+    const next = on ?? !vimWanted
     setEnabled(next)
     localStorage.setItem('vim_mode', next ? '1' : '0')
     setMode('normal')
     setPending('')
     if (!next) setCursor(null)
-  }, [enabled])
+  }, [vimWanted])
 
   // The selection: just the cursor in normal mode, the span back to the anchor
   // in visual mode.

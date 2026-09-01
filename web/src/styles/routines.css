@@ -148,3 +148,15 @@
   .rt-title { flex-basis: 100%; order: -1; }
   .rt-row-extras .select { width: 96px; }
 }
+
+/* ------------------------------------------------------------- on a phone */
+
+@media (max-width: 700px) {
+  /* `.rt-field` asks for a 150px select and refuses to wrap. Beside its own
+     label in a 340px card that select was cut to 94px, narrower than the
+     routine names in it. Each field takes a row, and the select takes what is
+     left of that row. */
+  .rt-field { display: flex; width: 100%; white-space: normal; }
+  .rt-field .select { flex: 1; width: auto; min-width: 0; }
+  .rt-controls { gap: var(--space-4); }
+}

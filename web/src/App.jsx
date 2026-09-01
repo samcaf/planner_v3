@@ -31,6 +31,7 @@ import Search from './components/Search.jsx'
 import VimLayer from './components/VimLayer.jsx'
 import { AuthProvider, useAuth } from './lib/auth.jsx'
 import { VimProvider, useVim } from './lib/vim.jsx'
+import { useMobile } from './lib/mobile.js'
 import { goTarget } from './lib/nav.js'
 import { GENERAL } from './lib/shortcuts.js'
 // The `?` sheet draws the key table, so its styles have to be here rather than
@@ -284,6 +285,8 @@ function Planner() {
 function VimToggle() {
   const vim = useVim()
   const on = !!vim?.enabled
+  // Nothing to offer on a phone: see VimProvider.
+  if (useMobile()) return null
   return (
     <button
       className={`sb-vim${on ? ' is-on' : ''}`}

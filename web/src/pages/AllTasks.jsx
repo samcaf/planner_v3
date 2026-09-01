@@ -39,7 +39,9 @@ export default function AllTasks() {
   const [showClosed, setShowClosed] = useState(false)
   const [showRoutine, setShowRoutine] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
-  const [groupBy, setGroupBy] = useState('none')
+  // By project by default: an ungrouped list of every open task in the
+  // planner is the one shape of this page nobody reads.
+  const [groupBy, setGroupBy] = useState('project')
   // In the URL so the day's backlog panel can link straight here, and so the
   // view survives a refresh the way the grouping in a bookmarked link would.
   const [urlParams, setUrlParams] = useSearchParams()

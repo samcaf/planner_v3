@@ -195,3 +195,27 @@
 .st-name-add { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
 .st-name-add .input:first-child { max-width: 160px; }
 .st-name-add .input { flex: 1; min-width: 0; }
+
+/* ------------------------------------------------------------- on a phone */
+
+@media (max-width: 700px) {
+  /*
+   * Label above value, not beside it.
+   *
+   * `.st-raw-row` gave the label a fixed 200px, which on a 325px row left the
+   * value 115px — so a login and its owner chip were laid out in a column
+   * narrower than the words in it and ran out past the edge of the panel.
+   * There is no width to divide here, so the pairs stack.
+   */
+  .kv, .st-raw-row { grid-template-columns: 1fr; gap: 1px var(--space-4); }
+  .kv dt { font-size: 11.5px; }
+
+  /* Same again for the roster's device list, whose label column was 140px. */
+  .st-devices > div { flex-wrap: wrap; }
+  .st-devices dt { min-width: 0; }
+
+  /* Four tabs do not fit; they scroll rather than wrap into a second row. */
+  .st-tabs { overflow-x: auto; scrollbar-width: none; }
+  .st-tabs::-webkit-scrollbar { display: none; }
+  .st-tab { flex: 0 0 auto; }
+}

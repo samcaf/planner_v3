@@ -9,6 +9,7 @@ import TaskTimer from './TaskTimer.jsx'
 import TimeGlyph from './TimeGlyph.jsx'
 import { isSectionDrag, useSelection } from './Selection.jsx'
 import { PriorityChip } from './Priority.jsx'
+import { onAway } from '../lib/away.js'
 import { isDialogue } from '../lib/columns.js'
 import { flashTask } from '../lib/threads.js'
 import { Rich, RichEditor, RichLine, plainTitle } from '../lib/rich.jsx'
@@ -221,18 +222,11 @@ export default function TaskRow({
    */
   useEffect(() => {
     if (!details) return
-    function away(e) {
-      if (!rowRef.current?.contains(e.target)) { setDetails(false); setTabbed(false) }
-    }
-    // mousedown, not click: a click that starts inside and ends outside (a
-    // drag, or a select that runs past the edge) should not count as leaving.
-    //
-    // Capture phase, so this runs BEFORE the button that was pressed. Pressing
+    // Capture, so this runs BEFORE the button that was pressed. Pressing
     // another row's clock used to close this panel and stop there — the close
     // re-rendered the list, the press never reached its own handler, and it
     // took two clicks to move between two tasks' time panels.
-    document.addEventListener('mousedown', away, true)
-    return () => document.removeEventListener('mousedown', away, true)
+    return onAway([rowRef], () => { setDetails(false); setTabbed(false) }, { capture: true })
   }, [details])
 
   /**

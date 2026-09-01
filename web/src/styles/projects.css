@@ -198,3 +198,12 @@
 .pj-note-sec.is-archived { opacity: .6; }
 .pj-note-sec.is-archived:hover,
 .pj-note-sec.is-archived:focus-within { opacity: 1; }
+
+/* ------------------------------------------------------------- on a phone */
+
+@media (max-width: 700px) {
+  /* A project's name and its type chip shared one unwrapping row, so a name of
+     any length squeezed the chip until its text stacked vertically. */
+  .pcard .pname { flex-wrap: wrap; row-gap: var(--space-2); }
+  .pj-name { min-width: 0; overflow-wrap: anywhere; }
+}
