@@ -120,7 +120,7 @@ try {
   check('it announces what it does', grip?.getAttribute('aria-label') === 'Resize the side column')
 
   const widthOf = () => {
-    const m = /minmax\(0,\s*1fr\)\s+4px\s+(\d+)px/.exec(wrap.getAttribute('style') || '')
+    const m = /--aside-w:\s*(\d+)px/.exec(wrap.getAttribute('style') || '')
     return m ? Number(m[1]) : null
   }
   const before = widthOf()

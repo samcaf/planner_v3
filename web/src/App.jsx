@@ -88,6 +88,14 @@ function Planner() {
   const [railWidth, setRailWidth] = useState(
     () => clampRail(Number(localStorage.getItem('rail_width')) || 216)
   )
+  /**
+   * The rail as a drawer, on a screen too narrow to give it a column.
+   *
+   * Only the open/shut state lives here. Whether the rail IS a drawer is a
+   * media query's business, so there is no viewport width in JavaScript and
+   * nothing to keep in step with the stylesheet.
+   */
+  const [railOpen, setRailOpen] = useState(false)
 
   // The width is written on pointerup rather than on every move, so a drag is
   // one entry in storage rather than a hundred.
@@ -120,6 +128,10 @@ function Planner() {
   // rather than of any page.
   useEffect(installShiftOpen, [])
 
+  // Going somewhere shuts the drawer. Tapping a nav link and then having to
+  // dismiss the thing you tapped it in is the commonest way a drawer annoys.
+  useEffect(() => setRailOpen(false), [location.pathname])
+
   // No waiting. `auth.in` is optimistic — this browser was signed in last time,
   // so the app draws now and its data loads in parallel with the check. See
   // lib/auth.jsx for why blocking here was worth removing.
@@ -129,8 +141,22 @@ function Planner() {
     <UndoProvider onChange={refreshAll}>
     <VimProvider>
     <ToastHost>
-    <div className="app">
-      <nav className="sidebar" style={{ width: railWidth, flexBasis: railWidth }}>
+    <div className={`app${railOpen ? ' rail-open' : ''}`}>
+      {/* Only drawn under the drawer breakpoint; see styles.css. Fixed rather
+          than in the flow so no page has to leave room for it. */}
+      <button
+        className="rail-btn"
+        aria-label={railOpen ? 'Close the menu' : 'Open the menu'}
+        aria-expanded={railOpen}
+        onClick={() => setRailOpen((v) => !v)}
+      >
+        <Icon name={railOpen ? 'x' : 'list'} size={17} />
+      </button>
+      {/* Tapping away is how a drawer is shut. It exists only while open, so it
+          cannot swallow a click the rest of the time. */}
+      {railOpen && <div className="rail-back" onClick={() => setRailOpen(false)} />}
+
+      <nav className="sidebar" style={{ '--rail-w': `${railWidth}px` }}>
         <UndoButtons />
 
         {/* Above the navigation, because it is how you get to anything that is

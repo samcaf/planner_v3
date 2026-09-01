@@ -144,6 +144,10 @@ export default function TaskRow({
   onChange,
   onDelete,
   onNest,
+  // A pointer that cannot drag still has to be able to reorder and nest. Both
+  // are optional: a page that does not supply them simply has no such entries.
+  onShift,
+  nestTargets,
   onDropTask,
   onAddChild,
   // Move or copy this task to another day. The server does it, because either
@@ -327,6 +331,8 @@ export default function TaskRow({
         onDelete={onDelete}
         onAddChild={onAddChild}
         onReschedule={onReschedule}
+        onShift={onShift}
+        nestTargets={nestTargets}
         notesShown={notesShown}
         /* Whatever the bar dropped for want of room reappears in here, so
            nothing becomes unreachable on a nested row. */
@@ -766,6 +772,8 @@ export default function TaskRow({
           onDropTask={onDropTask}
           onAddChild={onAddChild}
           onReschedule={onReschedule}
+          onShift={onShift}
+          nestTargets={nestTargets}
           showProject={showProject}
           // A child is in the same conversation and the same exchange as its
           // parent — it is drawn from inside this row rather than from the
@@ -1009,7 +1017,7 @@ function TaskDetails({ task, derived, onChange, onDone, focusTime = false }) {
 
 function Menu({
   task, isNote, onChange, onNest, onDelete, onAddChild, onReschedule,
-  notesShown, overflow, dateless,
+  onShift, nestTargets, notesShown, overflow, dateless,
 }) {
   return (
     <Popover
@@ -1031,6 +1039,8 @@ function Menu({
           onDelete={onDelete}
           onAddChild={onAddChild}
           onReschedule={onReschedule}
+          onShift={onShift}
+          nestTargets={nestTargets}
           notesShown={notesShown}
           overflow={overflow}
           close={close}
@@ -1041,12 +1051,53 @@ function Menu({
 }
 
 /**
+ * "Nest under…", the menu's version of dragging one row onto another.
+ *
+ * The candidates are computed by the page when the submenu opens rather than on
+ * every render: it is a list of every top-level task on the day, and building
+ * that behind a closed menu for every row would be a list per row per keystroke.
+ */
+function NestUnder({ task, onNest, nestTargets, close }) {
+  const [open, setOpen] = useState(false)
+  const targets = open ? nestTargets().filter((t) => t.id !== task.parent_id) : []
+
+  return (
+    <div className="menu-sub">
+      <button
+        className={`menu-item ${open ? 'is-open' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        Nest under…
+        <Icon name={open ? 'chevronDown' : 'right'} size={11} />
+      </button>
+      {open && (
+        <div className="menu-sub-body">
+          {targets.length === 0 && <div className="menu-empty">nothing else to nest under</div>}
+          {targets.map((t) => (
+            <button
+              key={t.id}
+              className="menu-item"
+              // The server refuses a cycle, so a bad pick is an error rather
+              // than a corrupted tree.
+              onClick={() => { onNest(task.id, t.id); close() }}
+            >
+              {t.title.slice(0, 44)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Split out so "Move to…" starts collapsed every time: the popover only mounts
  * its content while open, so this state resets itself.
  */
 function MenuItems({
   task, isNote, onChange, onNest, onDelete, onAddChild, onReschedule,
-  notesShown, overflow, dateless, close,
+  onShift, nestTargets, notesShown, overflow, dateless, close,
 }) {
   // Which of the two date pickers is open, if either.
   const [sub, setSub] = useState(null)
@@ -1149,6 +1200,19 @@ function MenuItems({
       )}
 
       {task.parent_id && onNest && item('Move out of parent', () => onNest(task.id, null))}
+
+      {/* Everything below is what a drag does. HTML5 drag-and-drop does not
+          fire on touch, so without these a phone can tick a task off and write
+          a note but cannot reorganise a day at all. */}
+      {!isNote && onShift && (
+        <>
+          <div className="menu-sep" />
+          {item('Move up', () => onShift(task, -1))}
+          {item('Move down', () => onShift(task, 1))}
+        </>
+      )}
+
+      {!isNote && onNest && nestTargets && <NestUnder {...{ task, onNest, nestTargets, close }} />}
     </>
   )
 }

@@ -175,9 +175,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .app { display: flex; height: 100%; }
 
 .sidebar {
-  /* Width is set inline from the stored value; these are the fallback. */
-  width: 216px;
-  flex: 0 0 216px;
+  /* The dragged width arrives as --rail-w, a custom property, so that a media
+     query can still overrule it. Set as an inline `width` it could not be:
+     inline styles beat every rule in this file, which is why the responsive
+     work already here did nothing at all on a phone. */
+  width: var(--rail-w, 216px);
+  flex: 0 0 var(--rail-w, 216px);
   background-color: var(--sb-bg);
   /* A reflection across the rail's lower-left corner: one flat plane of very
      slightly lifted light, cut on the diagonal. The hard stop is what makes it
@@ -609,9 +612,11 @@ kbd {
   flex: 1;
   min-height: 0;
   display: grid;
-  /* Overridden inline from the stored width; this is the fallback, and the
-     middle track is the drag handle between the two columns. */
-  grid-template-columns: minmax(0, 1fr) 4px 340px;
+  /* The dragged width arrives as --aside-w so a media query can still overrule
+     it; set inline as `grid-template-columns` it could not be, and the
+     one-column rule below never once took effect. The middle track is the drag
+     handle between the two columns. */
+  grid-template-columns: minmax(0, 1fr) 4px var(--aside-w, 340px);
   gap: var(--space-8);
   padding: var(--space-8) var(--space-12) 0;
   overflow: hidden;
@@ -2266,3 +2271,123 @@ kbd {
 }
 
 .st-prompt { width: 100%; resize: vertical; }
+
+/* ------------------------------------------------------------- the phone */
+
+/*
+ * Below this width the rail cannot have a column of its own: at 216px of a
+ * 375px screen it was taking more than half the display and leaving the day
+ * 107px to live in. It becomes a drawer instead.
+ *
+ * Whether it is a drawer is decided here rather than in JavaScript, so there is
+ * no viewport width in two places to keep in step. React only knows whether it
+ * is open.
+ */
+.rail-btn { display: none; }
+
+@media (max-width: 700px) {
+  .rail-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    /* Clear of the notch on a phone held in either orientation. */
+    top: calc(env(safe-area-inset-top, 0px) + var(--space-3));
+    left: calc(env(safe-area-inset-left, 0px) + var(--space-3));
+    z-index: 160;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+
+  /* Out of the flow entirely, so `.main` gets the whole width and nothing has
+     to be told the rail is gone. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 170;
+    width: min(280px, 82vw);
+    flex-basis: auto;
+    transform: translateX(-101%);
+    transition: transform .22s ease;
+    box-shadow: var(--shadow-pop);
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-2));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-4));
+  }
+
+  .app.rail-open .sidebar { transform: none; }
+
+  .rail-back {
+    position: fixed;
+    inset: 0;
+    z-index: 165;
+    background: rgba(16, 22, 40, .38);
+  }
+
+  /* Dragging the rail wider is a mouse gesture, and there is no column to
+     resize while it is a drawer. */
+  .rail-grip, .day-wrap > .grip-v { display: none; }
+
+  /* Room for the button, which floats over this corner. */
+  .topbar { padding-left: 60px; }
+
+  /* The day's own columns stop being columns. The breakpoints above already
+     say so; these are the edges they do not reach. */
+  .day-wrap { padding: var(--space-5) var(--space-5) 0; gap: var(--space-6); }
+  .page { padding: var(--space-5); }
+
+  /* Nothing should ever scroll sideways on a phone. */
+  body, .main { overflow-x: hidden; }
+}
+
+/*
+ * A pointer that cannot hover.
+ *
+ * Ten controls in this app appear only on :hover, including the ONLY way to add
+ * a task from the month grid. On a touch screen that is either invisible or a
+ * tap-to-reveal-then-tap-again, so they are simply always shown. `hover: none`
+ * asks the input device rather than the width, which is the honest question: a
+ * small window on a laptop still has a mouse.
+ */
+@media (hover: none) {
+  .mday .mday-add,
+  .time-glyph,
+  .daynight,
+  .toast-x,
+  .sb-vim,
+  .sb-search-x,
+  .pe-chip-x,
+  .at-when-edit,
+  .task-actions .btn { opacity: 1; }
+
+  /* A finger is about 9mm. These were tuned for a cursor. */
+  .btn.sm, .btn.ghost.sm { min-height: 34px; }
+  .task-check { min-width: 30px; min-height: 30px; }
+  .done-toggle, .task-twist { min-width: 28px; min-height: 28px; }
+}
+
+/*
+ * The parts of the screen a phone keeps for itself.
+ *
+ * `viewport-fit=cover` lets the page reach under the notch and the home
+ * indicator, which is what makes an installed app look installed rather than
+ * inset in a white box. The cost is that anything fixed to an edge now has to
+ * say how far the edge really is.
+ */
+.vim-bar { padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px)); }
+body:has(.vim-bar) .main {
+  padding-bottom: calc(var(--vim-bar-h) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 700px) {
+  /* The home indicator sits over the foot of the page on an iPhone. */
+  .main { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .topbar { padding-top: calc(var(--space-6) + env(safe-area-inset-top, 0px)); }
+}

@@ -142,7 +142,15 @@ function DayView({ date }) {
   // same thing wherever it is pressed. Above the early returns, and reading
   // day.data when it is called rather than closing over it, because at this
   // point in the render there may not be any yet.
-  useVimActions(makeVimActions({
+  /**
+   * The handlers the keyboard borrows — kept, not just lent.
+   *
+   * A finger cannot drag a task (HTML5 drag never fires on touch), so the row
+   * menu has to offer reordering and nesting some other way. These are the same
+   * functions the keys call, already undoable, already tested; the menu just
+   * reaches them from a different gesture.
+   */
+  const handlers = makeVimActions({
     tasks: day.data?.tasks || [],
     // The side column's rows. Findable by the keyboard, but not part of the
     // day's list — see makeVimActions for why the two cannot be merged.
@@ -172,7 +180,8 @@ function DayView({ date }) {
     remove: (id) => removeTask(id),
     reschedule,
     onAdded: added,
-  }))
+  })
+  useVimActions(handlers)
 
   if (day.error) return <div className="page"><p className="muted">{day.error.message}</p></div>
   if (!day.data) return <div className="page"><p className="muted">Loading…</p></div>
@@ -241,6 +250,25 @@ function DayView({ date }) {
     }
     const rest = ids.filter((id) => !returning.includes(id))
     if (rest.length) await bulkPatch(rest, patch, { known, label, undo, parent })
+    refresh()
+  }
+
+  /**
+   * Nest a task under another, or lift it out — what a drag does, from a menu.
+   *
+   * HTML5 drag-and-drop never fires on touch, so on a phone this was the only
+   * gesture with no alternative at all. Undoable the same way the drag is,
+   * through the same snapshot.
+   */
+  async function nest(id, parentId) {
+    const before = snapshot([id])
+    const apply = async () => { await api.post(`/tasks/${id}/nest`, { parent_id: parentId }) }
+    await apply()
+    undo?.record?.({
+      label: parentId ? 'nest' : 'move out of parent',
+      undo: restoreAll(before),
+      redo: apply,
+    })
     refresh()
   }
 
@@ -508,6 +536,13 @@ function DayView({ date }) {
     onAddChild: addChild,
     autoEditId: justAdded,
     onReschedule: reschedule,
+    // What a drag does, for a pointer that cannot drag.
+    onShift: (t, by) => handlers.shift(t.id, by),
+    onNest: (id, parentId) => nest(id, parentId),
+    nestTargets: () => d.tasks
+      .filter((t) => t.kind !== 'note' && !t.scaffold && t.id !== task.id
+        && (t.parent_id ?? null) === null)
+      .map((t) => ({ id: t.id, title: plainTitle(t.title) || 'Untitled' })),
   })
 
   async function addChild(parent) {
@@ -641,7 +676,7 @@ function DayView({ date }) {
 
       <div
         className="day-wrap"
-        style={{ gridTemplateColumns: `minmax(0, 1fr) 4px ${asideWidth}px` }}
+        style={{ '--aside-w': `${asideWidth}px` }}
       >
         <div className="day-col">
           {scheduled.length > 0 && (

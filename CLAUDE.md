@@ -126,6 +126,27 @@ If `planner.service` is running it holds 8787 and 8789, and `npm run dev`
 cannot start its API — `systemctl --user stop planner` first. `npm test` works
 against whichever process holds the port.
 
+## The phone
+
+**Never write a layout value as an inline style.** An inline `width` or
+`grid-template-columns` outranks every rule in the stylesheet, so a media query
+cannot overrule it — which is how the responsive work already in this project
+came to do nothing at all on a phone for months. A dragged width goes in as a
+custom property (`--rail-w`, `--aside-w`) and CSS decides whether to use it.
+
+**HTML5 drag-and-drop never fires on touch.** Anything reachable only by
+dragging is unreachable on a phone, so reordering and nesting also live in the
+row menu, calling the same handlers the keyboard does. A new drag gesture needs
+a menu entry beside it.
+
+`@media (hover: none)` asks the input device rather than the width, which is the
+honest question for a control that only appears on hover: a narrow window on a
+laptop still has a mouse.
+
+The service worker is `web/public/sw.js`, hand-written and registered from
+`main.jsx` in production only. `/api` is never served from its cache — a stale
+answer there would have you ticking off a task that no longer exists.
+
 ## Two ports, and only one of them is trusted
 
 `server/ports.js`. The app listens twice on loopback: `TRUSTED_PORT` (8787) is
