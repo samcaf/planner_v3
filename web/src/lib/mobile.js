@@ -26,7 +26,17 @@ export function useMobile() {
     const heard = () => setIs(m.matches)
     heard()
     m.addEventListener('change', heard)
-    return () => m.removeEventListener('change', heard)
+    // And `resize` as well, which is not redundant: the query's `matches` is
+    // always current, but some embeddings update it without ever dispatching
+    // `change` — a webview or an embedded pane resized from the outside. The
+    // case that matters is turning a phone sideways, where the stylesheet would
+    // switch and every component reading this would not. Setting the same value
+    // twice is a bail-out in React, so the extra listener costs a comparison.
+    window.addEventListener('resize', heard)
+    return () => {
+      m.removeEventListener('change', heard)
+      window.removeEventListener('resize', heard)
+    }
   }, [])
   return is
 }
