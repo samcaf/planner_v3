@@ -271,6 +271,14 @@ export default function TaskRow({
   const roomy = depth === 0
   const isParent = subtasks.length > 0
 
+  // A task that already says when it is or how long it takes carries its own
+  // way into the timing panel: the chip that says it. The clock button is for
+  // the rows that have nothing to click, which is why it disappears once they
+  // do — an icon whose only job is to open a panel you can already reach is a
+  // control the row is paying for twice.
+  const hasTime = !!(timed || own)
+  const openTiming = () => { setTabbed(false); setDetails(true) }
+
   function zoneFor(e) {
     const r = e.currentTarget.getBoundingClientRect()
     const y = (e.clientY - r.top) / r.height
@@ -285,7 +293,7 @@ export default function TaskRow({
   const actions = (
     <div className="task-actions">
       {rowExtras?.(task)}
-      {!isNote && (
+      {!isNote && !hasTime && (
         <button
           className={`btn ghost sm ${details ? 'is-on' : ''}`}
           title="Time and duration"
@@ -566,10 +574,15 @@ export default function TaskRow({
               />
             )}
             {!dialogue && timed && (
-              <span className="chip c-blue">
+              <button
+                type="button"
+                className={`chip c-blue tm-chip${details ? ' is-on' : ''}`}
+                title="Time and duration"
+                onClick={openTiming}
+              >
                 <Icon name="clock" size={11} />
                 {task.start_time || '—'}{task.end_time ? `–${task.end_time}` : ''}
-              </span>
+              </button>
             )}
             {/* Always shown, next to the clock: priority is set from here now,
                 so hiding the common case would hide the control too. */}
@@ -608,16 +621,19 @@ export default function TaskRow({
                 timed children, `own || childMinutes` is the NUMBER zero, and
                 React renders a literal "0" into the row rather than nothing. */}
             {(own || childMinutes) > 0 && (
-              <span
-                className="chip"
+              <button
+                type="button"
+                className={`chip tm-chip${details ? ' is-on' : ''}`}
+                onClick={openTiming}
                 title={childMinutes
-                  ? `${minutesLabel(own) || '0m'} here, ${minutesLabel(childMinutes)} in subtasks — ${minutesLabel(own + childMinutes)} in all`
-                  : undefined}
+                  ? `${minutesLabel(own) || '0m'} here, ${minutesLabel(childMinutes)} in subtasks — `
+                    + `${minutesLabel(own + childMinutes)} in all. Click to edit.`
+                  : 'Time and duration'}
               >
                 {own ? minutesLabel(own) : ''}
                 {own && childMinutes ? ' + ' : ''}
                 {childMinutes ? minutesLabel(childMinutes) : ''}
-              </span>
+              </button>
             )}
             {task.optional === 1 && <span className="chip is-optional">optional</span>}
             {/* Keyed on the date alone, not on the status. Where a task came

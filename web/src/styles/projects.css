@@ -206,4 +206,33 @@
      any length squeezed the chip until its text stacked vertically. */
   .pcard .pname { flex-wrap: wrap; row-gap: var(--space-2); }
   .pj-name { min-width: 0; overflow-wrap: anywhere; }
+
+  /*
+   * The row's controls come out of the corner and go under the row.
+   *
+   * The floating strip above is a hover affordance, and a touch screen has no
+   * hover to give it — what it has is the sticky :hover a tap leaves behind, so
+   * the strip appeared over the title and the checkbox of whichever task you
+   * last touched and stayed there. Under the row it is always visible, covers
+   * nothing, and needs no hover to explain it. This is the arrangement a parent
+   * row already uses on every screen: see `.task-body > .task-actions`.
+   */
+  .task { flex-wrap: wrap; }
+
+  .task-actions {
+    position: static;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    pointer-events: auto;
+    opacity: 1;
+  }
+
+  .task > .task-actions {
+    flex: 1 0 100%;
+    margin-top: var(--space-2);
+    /* Cancels the ghost buttons' own padding, so the bar lines up with the
+       text above it rather than sitting a few pixels in. */
+    margin-left: -4px;
+  }
 }
