@@ -2,21 +2,25 @@ import { useEffect, useState } from 'react'
 import Icon from './Icon.jsx'
 import { Empty, Modal } from './ui.jsx'
 import { api } from '../lib/api.js'
-import '../styles/teleonomy.css'
+import '../styles/integrations.css'
 
 /**
- * Choosing what to bring over from Teleonomy.
+ * Choosing what to bring over from another task system.
  *
  * A picker rather than a mirror. Nothing arrives here because it exists over
  * there — it arrives because somebody ticked it, and only ticked tasks are ever
  * touched again. That is what keeps this a planner instead of a second view of
- * a team board, and it is why the linked set stays small enough to sweep.
+ * somebody's team board, and it is why the linked set stays small enough to
+ * sweep.
  *
- * Everything is read through the planner's own API. The Teleonomy token lives
- * on the server; this component knows an address and a checkbox.
+ * It knows nothing about any particular system: the sources, their containers
+ * and their items all arrive from the planner's own API, which is also where
+ * the credentials stay.
  */
-export default function TeleonomyPicker({ onClose, onLinked }) {
-  const [projects, setProjects] = useState(null)
+export default function ExternalPicker({ onClose, onLinked }) {
+  const [sources, setSources] = useState(null)
+  const [source, setSource] = useState('')
+  const [containers, setContainers] = useState(null)
   const [parent, setParent] = useState('')
   const [items, setItems] = useState(null)
   const [picked, setPicked] = useState(() => new Set())
@@ -24,19 +28,34 @@ export default function TeleonomyPicker({ onClose, onLinked }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get('/tel/projects')
-      .then((d) => setProjects(d.roots || []))
-      .catch((e) => setError(e.message || 'could not reach Teleonomy'))
+    api.get('/integrations')
+      .then((d) => {
+        const usable = (d.sources || []).filter((x) => x.configured)
+        setSources(usable)
+        // One connected system is the common case, and making somebody choose
+        // from a list of one is a step that only ever has one answer.
+        if (usable.length === 1) setSource(usable[0].name)
+      })
+      .catch((e) => setError(e.message || 'could not read the connections'))
   }, [])
 
   useEffect(() => {
-    if (!parent) { setItems(null); return }
+    if (!source) { setContainers(null); return }
+    setContainers(null)
+    setParent('')
+    api.get(`/integrations/${source}/containers`)
+      .then((d) => setContainers(d.containers || []))
+      .catch((e) => setError(e.message || 'could not reach that system'))
+  }, [source])
+
+  useEffect(() => {
+    if (!source || !parent) { setItems(null); return }
     setItems(null)
     setPicked(new Set())
-    api.get(`/tel/items?parent=${encodeURIComponent(parent)}`)
+    api.get(`/integrations/${source}/items?parent=${encodeURIComponent(parent)}`)
       .then((d) => setItems(d.items || []))
       .catch((e) => setError(e.message || 'could not read that project'))
-  }, [parent])
+  }, [source, parent])
 
   const toggle = (id) => setPicked((prev) => {
     const next = new Set(prev)
@@ -54,7 +73,7 @@ export default function TeleonomyPicker({ onClose, onLinked }) {
     setBusy(true)
     setError('')
     try {
-      const out = await api.post('/tel/link', { items: [...picked], parent })
+      const out = await api.post(`/integrations/${source}/link`, { items: [...picked], parent })
       onLinked?.(out)
       onClose()
     } catch (e) {
@@ -65,7 +84,7 @@ export default function TeleonomyPicker({ onClose, onLinked }) {
 
   return (
     <Modal
-      title={<><Icon name="link" size={14} /> Bring work over from Teleonomy</>}
+      title={<><Icon name="link" size={14} /> Bring work over</>}
       onClose={onClose}
       footer={(
         <>
@@ -78,17 +97,37 @@ export default function TeleonomyPicker({ onClose, onLinked }) {
         </>
       )}
     >
-      <label className="tel-pick">
-        <span>Project</span>
-        <select className="input select" value={parent} onChange={(e) => setParent(e.target.value)}>
-          <option value="">Choose one…</option>
-          {(projects || []).map((p) => (
-            <option key={p.id} value={p.id}>{p.human_code ? `${p.human_code} · ` : ''}{p.title || p.label}</option>
-          ))}
-        </select>
-      </label>
+      {sources?.length === 0 && (
+        <p className="tel-hint">
+          Nothing is connected yet. Settings → Integrations is where a system goes.
+        </p>
+      )}
 
-      {!parent && <p className="tel-hint">They arrive unscheduled, in the backlog. Which day is yours to decide.</p>}
+      {(sources?.length ?? 0) > 1 && (
+        <label className="tel-pick">
+          <span>From</span>
+          <select className="input select" value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">Choose one…</option>
+            {sources.map((x) => <option key={x.name} value={x.name}>{x.label}</option>)}
+          </select>
+        </label>
+      )}
+
+      {!!source && (
+        <label className="tel-pick">
+          <span>Project</span>
+          <select className="input select" value={parent} onChange={(e) => setParent(e.target.value)}>
+            <option value="">Choose one…</option>
+            {(containers || []).map((c) => (
+              <option key={c.id} value={c.id}>{c.key ? `${c.key} · ` : ''}{c.title}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {!parent && !!source && (
+        <p className="tel-hint">They arrive unscheduled, in the backlog. Which day is yours to decide.</p>
+      )}
 
       {parent && items === null && <Empty>Reading…</Empty>}
       {parent && items?.length === 0 && <Empty>Nothing under that one.</Empty>}
@@ -115,7 +154,7 @@ export default function TeleonomyPicker({ onClose, onLinked }) {
                     disabled={!!i.linked_task_id}
                     onChange={() => toggle(i.id)}
                   />
-                  <code className="tel-code">{i.code}</code>
+                  <code className="tel-code">{i.key}</code>
                   <span className="tel-title">{i.title}</span>
                   <span className="chip">{i.status.replace(/_/g, ' ')}</span>
                   {i.linked_task_id && <span className="chip c-green">already here</span>}

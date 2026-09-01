@@ -30,7 +30,7 @@ const TABS = [
   ['general', 'General'],
   ['keys', 'Keyboard'],
   ['ai', 'AI suite'],
-  ['tel', 'Teleonomy'],
+  ['integrations', 'Integrations'],
   ['account', 'Account'],
 ]
 
@@ -80,9 +80,9 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
   // The raw dump is a debugging aid, not part of the page.
   const [showRaw, setShowRaw] = useState(false)
 
-  // The keyboard tab has nothing to say to a phone; the Teleonomy one is a
-  // server address and a token, which is typing you do from a laptop.
-  const tabs = phone ? TABS.filter(([id]) => id !== 'keys' && id !== 'tel') : TABS
+  // The keyboard tab has nothing to say to a phone; the integrations one is
+  // server addresses and tokens, which is typing you do from a laptop.
+  const tabs = phone ? TABS.filter(([id]) => id !== 'keys' && id !== 'integrations') : TABS
   const asked = params.get('tab')
   const tab = tabs.some(([id]) => id === asked) ? asked : 'general'
 
@@ -138,11 +138,11 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
         <div
           className="st-stack"
           role="tabpanel"
-          id="st-panel-tel"
-          aria-labelledby="st-tab-tel"
-          hidden={tab !== 'tel'}
+          id="st-panel-integrations"
+          aria-labelledby="st-tab-integrations"
+          hidden={tab !== 'integrations'}
         >
-          <Teleonomy s={s} save={save} />
+          <Integrations s={s} save={save} />
         </div>
 
         <div
@@ -898,107 +898,56 @@ function SwitchTable({ title, list }) {
 }
 
 /**
- * The Teleonomy link: where it is, who it says you are, and what is riding on it.
+ * Connections to other task systems.
  *
- * The token is written here and never read back — the field shows whether one
- * is set, not what it is. A secret that a page will hand back on request is a
- * secret that anything reaching that page can have.
+ * Generated from whatever adapters the server reports, so an integration that
+ * is added ships its own fields and hint text and this page needs no edit. A
+ * field marked secret is write-only: the API answers with `''` and a companion
+ * `<key>_set`, so this can offer to replace one and can never show it.
  *
- * The rules this page states are the ones the sync actually keeps, and they are
- * stated because a person cannot infer them from watching: that Teleonomy wins
- * on a conflict, and that ticking a task done here reaches `needs_review` there
- * and stops. See server/tel/map.js, which is where they are enforced.
+ * The two rules stated below are the ones the sync actually keeps, and they are
+ * stated because a person cannot infer them from watching. See
+ * server/integrations/sync.js, where the first is enforced, and the adapter,
+ * where the second is.
  */
-function Teleonomy({ s, save }) {
-  const [base, setBase] = useState(s.tel_base_url || '')
-  const [token, setToken] = useState('')
-  const [probe, setProbe] = useState(null)
-  const links = useApi('/tel/links')
-
-  const check = async () => {
-    setProbe({ trying: true })
-    try { setProbe(await api.get('/tel/status')) } catch (e) { setProbe({ ok: false, error: e.message }) }
-  }
+function Integrations({ s, save }) {
+  const info = useApi('/integrations')
+  const links = useApi('/integrations/links')
 
   return (
     <>
-      <Panel title={<><Icon name="link" size={14} /> Connection</>}>
-        <Field label="Server">
-          <input
-            className="input"
-            placeholder="https://tel-server.porgy-emperor.ts.net"
-            value={base}
-            onChange={(e) => setBase(e.target.value)}
-            onBlur={() => base !== (s.tel_base_url || '') && save('tel_base_url', base)}
-          />
-          <span className="st-hint">Where Teleonomy answers. The planner talks to it; your browser never does.</span>
-        </Field>
-
-        <Field label="Agent token">
-          <input
-            className="input"
-            type="password"
-            placeholder={s.tel_token_set ? 'set — type to replace it' : 'paste the bearer token'}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            onBlur={() => { if (token) { save('tel_token', token); setToken('') } }}
-          />
-          <span className="st-hint">
-            Minted in Teleonomy with <code>POST /auth/agent_token</code>, which only an admin there
-            can call. Every write the sync makes is recorded against this token’s actor. It is
-            write-only: the API will not hand it back, so this field can replace it but never
-            show it.
-          </span>
-        </Field>
-
-        <Field label="Syncing">
-          <label className="st-check">
-            <input
-              type="checkbox"
-              checked={s.tel_enabled === '1'}
-              onChange={(e) => save('tel_enabled', e.target.checked ? '1' : '0')}
-            />
-            <span>Keep linked tasks in step</span>
-          </label>
-          <span className="st-hint">Off leaves everything exactly where it is; nothing is unlinked.</span>
-        </Field>
-
-        <div className="row">
-          <button className="btn" onClick={check}>Test the connection</button>
-          {probe?.trying && <span className="muted">asking…</span>}
-          {probe && !probe.trying && (
-            probe.ok
-              ? <span className="chip c-green">reached it{probe.actor?.label ? ` as ${probe.actor.label}` : ''}</span>
-              : <span className="chip c-red">{probe.error || 'no answer'}</span>
-          )}
-        </div>
-      </Panel>
+      {info.data?.sources?.map((src) => (
+        <Connection key={src.name} src={src} s={s} save={save} />
+      ))}
+      {info.data?.sources?.length === 0 && (
+        <Panel title="Connections"><Empty>No integrations are built in.</Empty></Panel>
+      )}
 
       <Panel title={<><Icon name="list" size={14} /> What is linked</>}>
         <p className="st-note">
-          Only tasks you picked. Nothing is mirrored, so work in Teleonomy that you never
-          imported is not touched and never appears here. Bring more over from the backlog
-          on the <Link to="/tasks?view=backlog">All tasks</Link> page.
+          Only tasks you picked. Nothing is mirrored, so work you never imported is not
+          touched and never appears here. Bring more over from the backlog on the{' '}
+          <Link to="/tasks?view=backlog">All tasks</Link> page.
         </p>
         <p className="st-note">
-          Teleonomy is the record for anything that came from it: if a status or a note
-          differs on both sides, its version wins and what was here is kept in a comment on
-          the task. Ticking a linked task done here advances it as far as
-          <code> needs_review</code> there and stops — crossing that gate is a review, and a
-          review is not a tick box.
+          The other system is the record for anything that came from it: if a status or a
+          note differs on both sides, its version wins and what was here is kept in a
+          comment on the task. And a sync only ever makes moves that system calls legal —
+          ticking a linked task done here advances it as far as it honestly can and stops,
+          rather than forcing a step that is somebody’s to approve.
         </p>
         {!links.data && <Empty>Loading…</Empty>}
         {links.data?.links?.length === 0 && <Empty>Nothing linked yet.</Empty>}
         {links.data?.links?.map((l) => (
           <div key={l.id} className="kv st-raw-row">
-            <dt><code>{l.tel_code}</code></dt>
+            <dt><code>{l.ext_key}</code></dt>
             <dd className="st-raw-val">
               {l.title}
               <span className="chip">{l.status}</span>
-              <span className="chip">{String(l.tel_status || '').replace(/_/g, ' ')}</span>
+              <span className="chip">{String(l.ext_status || '').replace(/_/g, ' ')}</span>
               <button
                 className="btn ghost sm"
-                onClick={() => api.post(`/tel/unlink/${l.id}`).then(() => links.reload())}
+                onClick={() => api.post(`/integrations/unlink/${l.id}`).then(() => links.reload())}
               >
                 Unlink
               </button>
@@ -1007,5 +956,74 @@ function Teleonomy({ s, save }) {
         ))}
       </Panel>
     </>
+  )
+}
+
+/** One system's fields, its switch, and a way to find out if it answers. */
+function Connection({ src, s, save }) {
+  const [probe, setProbe] = useState(null)
+  const key = (f) => `int_${src.name}_${f}`
+
+  const check = async () => {
+    setProbe({ trying: true })
+    try { setProbe(await api.get(`/integrations/${src.name}/status`)) }
+    catch (e) { setProbe({ ok: false, error: e.message }) }
+  }
+
+  return (
+    <Panel title={<><Icon name="link" size={14} /> {src.label}</>}>
+      {src.fields.map((f) => (
+        <ConnectionField key={f.key} field={f} name={key(f.key)} s={s} save={save} />
+      ))}
+
+      <Field label="Syncing">
+        <label className="st-check">
+          <input
+            type="checkbox"
+            checked={s[key('on')] === '1'}
+            onChange={(e) => save(key('on'), e.target.checked ? '1' : '0')}
+          />
+          <span>Keep linked tasks in step</span>
+        </label>
+        <span className="st-hint">Off leaves everything where it is; nothing is unlinked.</span>
+      </Field>
+
+      <div className="row">
+        <button className="btn" onClick={check}>Test the connection</button>
+        {probe?.trying && <span className="muted">asking…</span>}
+        {probe && !probe.trying && (
+          probe.ok
+            ? <span className="chip c-green">reached it{probe.actor?.label ? ` as ${probe.actor.label}` : ''}</span>
+            : <span className="chip c-red">{probe.error || 'no answer'}</span>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+function ConnectionField({ field, name, s, save }) {
+  const [value, setValue] = useState(field.secret ? '' : (s[name] || ''))
+
+  return (
+    <Field label={field.label}>
+      <input
+        className="input"
+        type={field.secret ? 'password' : 'text'}
+        placeholder={field.secret
+          ? (s[`${name}_set`] ? 'set — type to replace it' : field.placeholder || '')
+          : field.placeholder || ''}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          // A secret is only ever written, so an empty box means "leave it".
+          if (field.secret) { if (value) { save(name, value); setValue('') } }
+          else if (value !== (s[name] || '')) save(name, value)
+        }}
+      />
+      <span className="st-hint">
+        {field.hint}
+        {field.secret && ' It is write-only: the API will not hand it back, so this can replace it but never show it.'}
+      </span>
+    </Field>
   )
 }

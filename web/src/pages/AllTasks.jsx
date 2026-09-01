@@ -9,7 +9,7 @@ import TaskFilter, {
 import TaskRow from '../components/TaskRow.jsx'
 import { Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
 import BacklogBoards from '../components/BacklogBoards.jsx'
-import TeleonomyPicker from '../components/TeleonomyPicker.jsx'
+import ExternalPicker from '../components/ExternalPicker.jsx'
 import { bulkPatch } from '../components/Selection.jsx'
 import { isBacklogTask } from '../lib/backlog.js'
 import { columnLabels as labelsFor } from '../lib/columns.js'
@@ -318,10 +318,10 @@ export default function AllTasks() {
             {backlogView && (
               <button
                 className="btn ghost sm"
-                title="Pick work out of Teleonomy and put it in the backlog"
+                title="Pick work out of a connected system and put it in the backlog"
                 onClick={() => setImporting(true)}
               >
-                <Icon name="link" size={12} /> From Teleonomy
+                <Icon name="link" size={12} /> Import
               </button>
             )}
 
@@ -479,7 +479,7 @@ export default function AllTasks() {
       )}
 
       {importing && (
-        <TeleonomyPicker
+        <ExternalPicker
           onClose={() => setImporting(false)}
           onLinked={() => reload()}
         />

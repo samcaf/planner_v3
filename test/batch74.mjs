@@ -1,5 +1,5 @@
 /**
- * The Teleonomy link: what crosses, what does not, and who wins.
+ * The integration layer: what crosses, what does not, and who wins.
  *
  * Driven against a STUB Teleonomy stood up in this process. That is not
  * convenience — the suites run against the real planner database, and pointing
@@ -101,30 +101,30 @@ try {
   // write-only — see routes/settings.js), so a suite that overwrote it could not
   // put the real one back, and the stub does not check authorization anyway.
   was = {
-    tel_base_url: before.tel_base_url ?? '',
-    tel_enabled: before.tel_enabled ?? '',
+    int_teleonomy_url: before.int_teleonomy_url ?? '',
+    int_teleonomy_on: before.int_teleonomy_on ?? '',
   }
-  await patch('/api/settings', { tel_base_url: stubUrl, tel_enabled: '1' })
+  await patch('/api/settings', { int_teleonomy_url: stubUrl, int_teleonomy_on: '1' })
 
   // ── the connection ───────────────────────────────────────────────────────
-  const picks = await json('/api/tel/projects')
+  const picks = await json('/api/integrations/teleonomy/containers')
   check('the pickable list is the workspace and what is under it',
-    picks.roots?.length === 2 && picks.roots[1].human_code === 'ZZ-P',
-    JSON.stringify(picks.roots?.map((p) => p.human_code)))
+    picks.containers?.length === 2 && picks.containers[1].key === 'ZZ-P',
+    JSON.stringify(picks.containers?.map((p) => p.key)))
 
-  const st = await json('/api/tel/status')
+  const st = await json('/api/integrations/teleonomy/status')
   check('the planner can reach the server it was pointed at', st.ok === true, JSON.stringify(st))
   check('and reports who the token says it is', st.actor?.label === 'the sync', JSON.stringify(st.actor))
 
   // ── picking ──────────────────────────────────────────────────────────────
-  const items = await json(`/api/tel/items?parent=${PARENT}`)
+  const items = await json(`/api/integrations/teleonomy/items?parent=${PARENT}`)
   check('the picker sees the work under a project', items.items?.length === 2,
-    JSON.stringify(items.items?.map((i) => i.code)))
+    JSON.stringify(items.items?.map((i) => i.key)))
   check('flattened with its depth, so a subtask reads as one',
     items.items?.[1]?.depth === 1, String(items.items?.[1]?.depth))
   check('and nothing is linked yet', items.items?.every((i) => i.linked_task_id === null))
 
-  const linkedOut = await post('/api/tel/link', { items: [T1, T2], parent: PARENT })
+  const linkedOut = await post('/api/integrations/teleonomy/link', { items: [T1, T2], parent: PARENT })
   const ids = linkedOut.linked.map((l) => l.id)
   made.push(...ids)
   check('picking two brings two over', ids.length === 2, JSON.stringify(linkedOut.linked))
@@ -138,14 +138,14 @@ try {
   check('in_progress maps to doing', t2.status === 'doing', t2.status)
   check('and the notes came with it', t2.notes === 'theirs', JSON.stringify(t2.notes))
 
-  const again = await json(`/api/tel/items?parent=${PARENT}`)
+  const again = await json(`/api/integrations/teleonomy/items?parent=${PARENT}`)
   check('a second look shows them as already here',
     again.items.every((i) => i.linked_task_id), JSON.stringify(again.items.map((i) => i.linked_task_id)))
 
   // ── the gate: ticking done here must NOT finish it there ─────────────────
   calls.length = 0
   await patch(`/api/tasks/${ids[0]}`, { status: 'done' })
-  const ran = await post(`/api/tel/reconcile/${ids[0]}`)
+  const ran = await post(`/api/integrations/reconcile/${ids[0]}`)
   check('a tick climbs the lifecycle one legal hop at a time',
     JSON.stringify(advances()) === JSON.stringify(['ready', 'in_progress', 'needs_review']),
     JSON.stringify(advances()))
@@ -160,7 +160,7 @@ try {
 
   // ── their change comes back ──────────────────────────────────────────────
   world[T2].status = 'blocked'
-  await post(`/api/tel/reconcile/${ids[1]}`)
+  await post(`/api/integrations/reconcile/${ids[1]}`)
   const blocked = await json(`/api/tasks/${ids[1]}`)
   check('blocked has no planner status, so it lands as waiting_on',
     blocked.status === 'doing' && /blocked/i.test(blocked.waiting_on || ''),
@@ -169,12 +169,12 @@ try {
   // ── notes both ways ──────────────────────────────────────────────────────
   calls.length = 0
   await patch(`/api/tasks/${ids[1]}`, { notes: 'mine now' })
-  await post(`/api/tel/reconcile/${ids[1]}`)
+  await post(`/api/integrations/reconcile/${ids[1]}`)
   check('a note written here is pushed over',
     world[T2].attrs.description === 'mine now', JSON.stringify(world[T2].attrs))
 
   world[T2].attrs.description = 'theirs again'
-  await post(`/api/tel/reconcile/${ids[1]}`)
+  await post(`/api/integrations/reconcile/${ids[1]}`)
   check('and a note written there comes back',
     (await json(`/api/tasks/${ids[1]}`)).notes === 'theirs again')
 
@@ -182,7 +182,7 @@ try {
   // has to survive somewhere a person will find it.
   world[T2].attrs.description = 'theirs, conflicting'
   await patch(`/api/tasks/${ids[1]}`, { notes: 'mine, conflicting' })
-  await post(`/api/tel/reconcile/${ids[1]}`)
+  await post(`/api/integrations/reconcile/${ids[1]}`)
   const after = await json(`/api/tasks/${ids[1]}`)
   const comments = await json(`/api/tasks/${ids[1]}/comments`)
   check('when both moved, theirs wins', after.notes === 'theirs, conflicting', after.notes)
@@ -191,11 +191,11 @@ try {
     JSON.stringify(comments.map((c) => c.body.slice(0, 40))))
 
   // ── unlinking leaves the task alone ──────────────────────────────────────
-  await post(`/api/tel/unlink/${ids[1]}`)
+  await post(`/api/integrations/unlink/${ids[1]}`)
   const orphan = await json(`/api/tasks/${ids[1]}`)
   check('unlinking keeps the task', orphan.id === ids[1] && !!orphan.title)
-  check('and only stops it listening', !orphan.tel_uuid, String(orphan.tel_uuid))
-  const links = await json('/api/tel/links')
+  check('and only stops it listening', !orphan.ext_source, String(orphan.ext_source))
+  const links = await json('/api/integrations/links')
   check('so it is off the linked list', !links.links.some((l) => l.id === ids[1]))
 } catch (e) {
   check('the suite ran to the end', false, e.stack?.split('\n').slice(0, 2).join(' | ') || e.message)

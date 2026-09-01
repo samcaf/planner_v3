@@ -1,26 +1,28 @@
 import { Router } from 'express'
 import { db } from '../db.js'
 import { h } from './_helpers.js'
+import { secretKeys } from '../integrations/registry.js'
 
 const r = Router()
 
 /**
  * Settings that are credentials rather than preferences.
  *
- * `tel_token` is a bearer token for ANOTHER system. Everything else in this
- * table is a pomodoro length or a column name — losing one costs a preference;
- * losing this one costs whatever that token can do in Teleonomy. So it goes out
- * one-way: writing it works, reading it back gives you `''` and a companion
- * `tel_token_set` saying whether there is one, which is all the page that
- * offers to replace it actually needs to know.
+ * An integration's token is a credential for ANOTHER system. Everything else in
+ * this table is a pomodoro length or a column name — losing one costs a
+ * preference; losing a token costs whatever it can do over there. So they go
+ * out one-way: writing works, reading back gives `''` and a companion
+ * `<key>_set` saying whether there is one, which is all a page offering to
+ * replace it needs to know.
+ *
+ * Which keys those are comes from the adapter registry, so an integration that
+ * adds a secret field is redacted without this file being told about it.
  */
-const SECRET = ['tel_token']
-
 const readable = () => {
   const all = Object.fromEntries(
     db.prepare('SELECT key, value FROM settings').all().map((s) => [s.key, s.value]),
   )
-  for (const key of SECRET) {
+  for (const key of secretKeys()) {
     if (!(key in all)) continue
     all[`${key}_set`] = all[key] ? '1' : ''
     all[key] = ''

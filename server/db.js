@@ -301,28 +301,35 @@ function bootstrap(db) {
   addColumn('notebook', 'archived', 'INTEGER NOT NULL DEFAULT 0')
 
   /*
-   * A task that came from Teleonomy, and what Teleonomy last said about it.
+   * A task that mirrors something in another system, and what that system last
+   * said about it.
    *
-   * `tel_uuid` NULL is the whole of "not linked" — nothing syncs a task that
-   * does not carry one, so an import is opt-in per task and stays that way.
+   * Named for the idea rather than for the one integration that exists: a task
+   * standing in for a Jira issue, a GitHub issue or a Teleonomy work item is
+   * the same idea, and `ext_source` is which of them this row belongs to.
+   * `ext_source` NULL is the whole of "not linked" — nothing syncs a task
+   * without one, so an import is opt-in per task and stays that way.
    *
-   * `tel_status` is not decoration. The planner has no per-task `updated_at`,
+   * `ext_status` is not decoration. The planner has no per-task `updated_at`,
    * so there is no timestamp to compare; what makes a planner-side change
-   * detectable is holding on to the status the sync last WROTE and noticing
-   * that the task no longer agrees with it. It is also the echo guard: a value
-   * the sync just applied is not a change to push back.
+   * detectable is holding on to the value the sync last WROTE and noticing that
+   * the task no longer agrees with it. It is also the echo guard: a value the
+   * sync just applied is not a change to push back. `ext_notes` is the same
+   * trick for the notes.
    *
-   * Deliberately absent from `FIELDS` in routes/tasks.js — the link is made by
+   * Deliberately absent from `FIELDS` in routes/tasks.js — a link is made by
    * the link route and nowhere else, so an ordinary task PATCH cannot forge one
    * and quietly attach itself to somebody's work item.
    */
-  addColumn('tasks', 'tel_uuid', 'TEXT')
-  addColumn('tasks', 'tel_code', 'TEXT')
-  addColumn('tasks', 'tel_status', 'TEXT')
-  addColumn('tasks', 'tel_notes', 'TEXT')
-  addColumn('tasks', 'tel_seen_at', 'TEXT')
-  addColumn('projects', 'tel_uuid', 'TEXT')
-  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_tel ON tasks(tel_uuid)')
+  addColumn('tasks', 'ext_source', 'TEXT')
+  addColumn('tasks', 'ext_id', 'TEXT')
+  addColumn('tasks', 'ext_key', 'TEXT')
+  addColumn('tasks', 'ext_status', 'TEXT')
+  addColumn('tasks', 'ext_notes', 'TEXT')
+  addColumn('tasks', 'ext_seen_at', 'TEXT')
+  addColumn('projects', 'ext_source', 'TEXT')
+  addColumn('projects', 'ext_id', 'TEXT')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_ext ON tasks(ext_source, ext_id)')
 
   for (const [key, value] of Object.entries(DEFAULTS)) {
     db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, value)
