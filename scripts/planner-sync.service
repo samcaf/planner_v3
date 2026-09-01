@@ -1,0 +1,38 @@
+# The Teleonomy sync, as a user service beside the planner.
+#
+# Do not copy this by hand — `scripts/install-service.sh` writes it out with the
+# node path and repo directory filled in.
+#
+# A separate unit rather than a thread inside the planner, for one reason: the
+# planner must answer pages whether or not another system is reachable. A sync
+# that cannot reach Teleonomy should be a service in a retry loop, visible in
+# `systemctl --user status`, and not a slow request or a stuck timer inside the
+# app you are trying to read.
+#
+# It holds no credentials. It reads the connection out of the owner's planner
+# over the loopback TRUSTED port — where a request with no cookie is the owner,
+# see server/ports.js — so turning the link off in Settings turns this off too,
+# and there is no second place to revoke.
+#
+# Requires the planner to be up: it is where both the settings and the linked
+# set live. `After=` orders the start; the sweep's own retry covers a restart.
+
+[Unit]
+Description=Planner — Teleonomy sync
+After=network-online.target planner.service
+Wants=planner.service
+
+[Service]
+Type=simple
+WorkingDirectory=__ROOT__
+ExecStart=__NODE__ sync/teleonomy.mjs
+Environment=NODE_ENV=production
+Restart=on-failure
+# Longer than the planner's: everything this does is a retry already, so a crash
+# loop should back off rather than hammer two APIs.
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

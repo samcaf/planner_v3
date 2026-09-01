@@ -92,6 +92,30 @@ the page prints. Give every new switch both.
 `aiGuide.js` is the part nothing can check — it mirrors `mcp/server.js` in
 prose. Treat a change to the tool list as a change to that file too.
 
+### The Teleonomy link
+
+`server/tel/map.js` is the only place that says what a status means on the
+other side, and it mirrors rows in somebody else's database — Teleonomy's
+`mode`/`state`/`transition` tables, seeded in its `0010_seed_modes_states.sql`.
+Nothing here can detect that those rows have changed.
+
+| change | update |
+|---|---|
+| Teleonomy adds or removes a `do` status | `FROM_TEL` and `HOPS` in `server/tel/map.js` |
+| Teleonomy changes which transitions are legal | `HOPS` — and re-read whether `needs_review → done` is still the gated one |
+| what the sync will and will not do | the two `st-note` paragraphs in the **Teleonomy** settings tab, which are what a person actually reads |
+
+**The sync must never call `approve`.** `advance` refuses `needs_review → done`
+because that transition is `approval_only`, and the whole design rests on the
+sync stopping there: ticking a box in a personal planner is not a code review,
+and forging one into a team's audit ledger is not a thing to do quietly.
+`test/batch74.mjs` asserts the verb is never called; keep that assertion.
+
+**Each side is compared in its own vocabulary.** `in_progress` and `blocked` are
+both `doing` here, so asking "did they move?" in the planner's words says no
+when a task becomes blocked. `reconcile` in `server/tel/sync.js` judges their
+move by their statuses and ours by ours, on purpose.
+
 ### A new kind of `[[…]]` link
 
 `[[day:…]]`, `[[project:…]]`, `[[task:…]]`, `[[note:…]]` and `[[link:…]]` are one

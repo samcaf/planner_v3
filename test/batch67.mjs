@@ -54,8 +54,12 @@ try {
       new window.MouseEvent('click', { bubbles: true, cancelable: true }),
     )
     const tabs = [...document.querySelectorAll('.st-tab')]
+    const tabNamed = (label) => tabs.find((t) => t.textContent.trim() === label)
+    // By name, not by position. A tab added in the middle is not a regression,
+    // and a suite that says it is will cry wolf every time the page grows.
     check('the settings are in tabs',
-      tabs.map((t) => t.textContent).join(',') === 'General,Keyboard,AI suite,Account',
+      ['General', 'Keyboard', 'AI suite', 'Account']
+        .every((t) => tabs.some((x) => x.textContent.trim() === t)),
       tabs.map((t) => t.textContent).join(', '))
     check('general is the one you land on', tabs[0]?.getAttribute('aria-selected') === 'true')
 
@@ -65,7 +69,7 @@ try {
     check('and it is the settings themselves',
       /Pomodoro/.test(visible()[0]?.textContent || ''))
 
-    click(tabs[1])
+    click(tabNamed('Keyboard'))
     await wait(400)
     check('the keyboard tab is its own page',
       /Keys and gestures/.test(visible()[0]?.textContent || ''))
@@ -79,7 +83,7 @@ try {
       /Alt-↑/.test(keysText) && /:day/.test(keysText),
       keysText.includes(':day') ? 'no alt arrows' : 'no :day')
 
-    click(tabs[2])
+    click(tabNamed('AI suite'))
     await wait(400)
     const aiText = visible()[0].textContent
     check('the ai tab is its own page too', /How it works/.test(aiText))
@@ -102,7 +106,7 @@ try {
       ['claim', 'ask', 'step', 'report', 'run_state'].every((m) => aiText.includes(m)))
     check('and how to point an agent at it', /claude mcp add planner/.test(aiText))
 
-    click(tabs[3])
+    click(tabNamed('Account'))
     await wait(600)
     const account = visible()[0]?.textContent || ''
     check('the account tab says who is signed in', /Signed in/.test(account), account.slice(0, 60))

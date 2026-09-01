@@ -4,9 +4,31 @@ import { h } from './_helpers.js'
 
 const r = Router()
 
-r.get('/', h(() =>
-  Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((s) => [s.key, s.value]))
-))
+/**
+ * Settings that are credentials rather than preferences.
+ *
+ * `tel_token` is a bearer token for ANOTHER system. Everything else in this
+ * table is a pomodoro length or a column name — losing one costs a preference;
+ * losing this one costs whatever that token can do in Teleonomy. So it goes out
+ * one-way: writing it works, reading it back gives you `''` and a companion
+ * `tel_token_set` saying whether there is one, which is all the page that
+ * offers to replace it actually needs to know.
+ */
+const SECRET = ['tel_token']
+
+const readable = () => {
+  const all = Object.fromEntries(
+    db.prepare('SELECT key, value FROM settings').all().map((s) => [s.key, s.value]),
+  )
+  for (const key of SECRET) {
+    if (!(key in all)) continue
+    all[`${key}_set`] = all[key] ? '1' : ''
+    all[key] = ''
+  }
+  return all
+}
+
+r.get('/', h(() => readable()))
 
 r.patch('/', h((req) => {
   const stmt = db.prepare(`
@@ -16,7 +38,7 @@ r.patch('/', h((req) => {
   db.transaction(() => {
     for (const [key, value] of Object.entries(req.body || {})) stmt.run(key, String(value))
   })()
-  return Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((s) => [s.key, s.value]))
+  return readable()
 }))
 
 /**

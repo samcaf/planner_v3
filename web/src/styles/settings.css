@@ -219,3 +219,17 @@
   .st-tabs::-webkit-scrollbar { display: none; }
   .st-tab { flex: 0 0 auto; }
 }
+
+/* A labelled switch. The label is the target, not the 16px box inside it. */
+.st-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px 4px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.st-check:hover { background: var(--line-soft); }
+.st-check input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
