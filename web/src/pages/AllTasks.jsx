@@ -9,6 +9,7 @@ import TaskFilter, {
 import TaskRow from '../components/TaskRow.jsx'
 import { Empty, Panel, ProjectSelect, cls } from '../components/ui.jsx'
 import BacklogBoards from '../components/BacklogBoards.jsx'
+import ExternalPicker from '../components/ExternalPicker.jsx'
 import { bulkPatch } from '../components/Selection.jsx'
 import { isBacklogTask } from '../lib/backlog.js'
 import { columnLabels as labelsFor } from '../lib/columns.js'
@@ -39,6 +40,9 @@ export default function AllTasks() {
   const [showClosed, setShowClosed] = useState(false)
   const [showRoutine, setShowRoutine] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
+  // Imported work lands unscheduled, so the backlog is where you stand when you
+  // want more of it.
+  const [importing, setImporting] = useState(false)
   // By project by default: an ungrouped list of every open task in the
   // planner is the one shape of this page nobody reads.
   const [groupBy, setGroupBy] = useState('project')
@@ -314,6 +318,16 @@ export default function AllTasks() {
             {backlogView && (
               <button
                 className="btn ghost sm"
+                title="Pick work out of a connected system and put it in the backlog"
+                onClick={() => setImporting(true)}
+              >
+                <Icon name="link" size={12} /> Import
+              </button>
+            )}
+
+            {backlogView && (
+              <button
+                className="btn ghost sm"
                 title={board ? 'Show as a plain list' : 'Show in the day view\u2019s three columns'}
                 onClick={() => setBoard(!board)}
               >
@@ -461,6 +475,13 @@ export default function AllTasks() {
         <QuickMeeting
           onClose={() => setMeeting(false)}
           onCreated={() => { setMeeting(false); reload() }}
+        />
+      )}
+
+      {importing && (
+        <ExternalPicker
+          onClose={() => setImporting(false)}
+          onLinked={() => reload()}
         />
       )}
     </>

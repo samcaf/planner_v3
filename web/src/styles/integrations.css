@@ -1,0 +1,68 @@
+/* The picker: a project, then its work, then a button. */
+
+.tel-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  font-size: 13px;
+}
+
+.tel-pick .select { flex: 1; min-width: 0; }
+
+.tel-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.tel-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  font-size: 12px;
+}
+
+.tel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+/* Indented by depth, because a subtask read as a sibling of its parent is a
+   list that has quietly lost the shape of the work. */
+.tel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 5px var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tel-row:hover { background: var(--hover); }
+
+/* Already linked: shown so you can see it is accounted for, not offered so you
+   cannot import a second copy of it. */
+.tel-row.is-here { opacity: .6; cursor: default; }
+.tel-row.is-here:hover { background: none; }
+
+.tel-code {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  flex: 0 0 auto;
+}
+
+.tel-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tel-err { color: var(--red); font-size: 12.5px; }

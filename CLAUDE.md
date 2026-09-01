@@ -92,6 +92,41 @@ the page prints. Give every new switch both.
 `aiGuide.js` is the part nothing can check — it mirrors `mcp/server.js` in
 prose. Treat a change to the tool list as a change to that file too.
 
+### Connecting another task system
+
+`server/integrations/` is the whole of it. `registry.js` states the contract and
+lists the adapters; one file per system implements it; everything else — the
+picker, the settings tab, the routes, the reconcile pass, the daemon — is
+written against the contract and names no system at all.
+
+**Adding an integration is one file plus one line in the registry.** If a change
+needs more than that, the contract is wrong and should be widened rather than
+worked around. That boundary is why this repository is still a general-use
+planner with someone's private tool connected to it, instead of one with that
+tool spread through ten of its files.
+
+`server/integrations/teleonomy.js` mirrors rows in somebody else's database —
+its `mode`/`state`/`transition` tables. Nothing here can detect that those rows
+have changed.
+
+| change | update |
+|---|---|
+| that system adds or removes a status | `TO_PLANNER` and `HOPS` in its adapter |
+| it changes which transitions are legal | `HOPS` — and re-read which of them is gated |
+| an adapter gains a field | nothing: `fields` drives the settings form, and a `secret: true` one is redacted by the registry |
+
+**An adapter must never force a step the far side calls somebody's to approve.**
+Teleonomy's `advance` refuses `needs_review → done` because it is
+`approval_only`, and the design rests on stopping there: ticking a box in a
+personal planner is not a review, and writing one into a team's audit ledger is
+not a thing to do quietly. `test/batch74.mjs` asserts that verb is never called.
+
+**Each side is compared in its own vocabulary.** A system's statuses need not map
+onto the planner's one-to-one — Teleonomy's `in_progress` and `blocked` are both
+`doing` here — so asking "did they move?" in the planner's words says no when a
+task becomes blocked. `reconcile` in `server/integrations/sync.js` judges their
+move by their statuses and ours by ours, on purpose.
+
 ### A new kind of `[[…]]` link
 
 `[[day:…]]`, `[[project:…]]`, `[[task:…]]`, `[[note:…]]` and `[[link:…]]` are one

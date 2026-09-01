@@ -13,16 +13,22 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 node_bin="$(command -v node || true)"
-unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/planner.service"
+units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+unit="$units/planner.service"
+# The sync is a second unit, written the same way and started separately —
+# the planner is useful without it, so it must be startable without it too.
+sync_unit="$units/planner-sync.service"
 
 [ -n "$node_bin" ] || { echo "node is not on PATH — install it first" >&2; exit 1; }
 [ -d "$root/web/dist" ] || echo "warning: web/dist is missing — run 'npm run build' or every page will be blank" >&2
 
 mkdir -p "$(dirname "$unit")"
 sed -e "s|__ROOT__|$root|" -e "s|__NODE__|$node_bin|" "$root/scripts/planner.service" > "$unit"
+sed -e "s|__ROOT__|$root|" -e "s|__NODE__|$node_bin|" "$root/scripts/planner-sync.service" > "$sync_unit"
 systemctl --user daemon-reload
 
 echo "wrote $unit"
+echo "wrote $sync_unit"
 echo "  node: $node_bin"
 echo "  repo: $root"
 echo
@@ -30,3 +36,6 @@ echo "next:"
 echo "  systemctl --user enable --now planner"
 echo "  loginctl enable-linger \"\$USER\"      # survive logging out"
 echo "  tailscale serve --bg 8789            # the PUBLIC port, not 8787"
+echo
+echo "and, once the Teleonomy tab in Settings has a server and a token:"
+echo "  systemctl --user enable --now planner-sync"

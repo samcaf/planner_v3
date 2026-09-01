@@ -14,6 +14,7 @@ import notebook from './routes/notebook.js'
 import settings from './routes/settings.js'
 import uploads, { uploadDir, uploadHeaders } from './routes/uploads.js'
 import auth, { gate } from './routes/auth.js'
+import integrations from './routes/integrations.js'
 import { withUser } from './db.js'
 import { PUBLIC_PORT, TRUSTED_PORT } from './ports.js'
 
@@ -99,6 +100,9 @@ app.use('/api/search', search)
 app.use('/api/notebook', notebook)
 app.use('/api/settings', settings)
 app.use('/api/uploads', uploads)
+// Behind the gate and inside the per-user context, like everything else here:
+// the connections and the linked set are this person's, in this person's file.
+app.use('/api/integrations', integrations)
 
 // In production the built frontend is served from the same origin, and
 // deliberately NOT behind the gate: the login page is part of the app, so

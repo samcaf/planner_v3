@@ -30,6 +30,7 @@ const TABS = [
   ['general', 'General'],
   ['keys', 'Keyboard'],
   ['ai', 'AI suite'],
+  ['integrations', 'Integrations'],
   ['account', 'Account'],
 ]
 
@@ -79,7 +80,9 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
   // The raw dump is a debugging aid, not part of the page.
   const [showRaw, setShowRaw] = useState(false)
 
-  const tabs = phone ? TABS.filter(([id]) => id !== 'keys') : TABS
+  // The keyboard tab has nothing to say to a phone; the integrations one is
+  // server addresses and tokens, which is typing you do from a laptop.
+  const tabs = phone ? TABS.filter(([id]) => id !== 'keys' && id !== 'integrations') : TABS
   const asked = params.get('tab')
   const tab = tabs.some(([id]) => id === asked) ? asked : 'general'
 
@@ -131,6 +134,16 @@ export default function Settings({ theme, onTheme, accent, onAccent }) {
             </button>
           ))}
         </nav>
+
+        <div
+          className="st-stack"
+          role="tabpanel"
+          id="st-panel-integrations"
+          aria-labelledby="st-tab-integrations"
+          hidden={tab !== 'integrations'}
+        >
+          <Integrations s={s} save={save} />
+        </div>
 
         <div
           className="st-stack"
@@ -881,5 +894,136 @@ function SwitchTable({ title, list }) {
       ))}
       <p className="st-hint">· marks the built-in fallback.</p>
     </section>
+  )
+}
+
+/**
+ * Connections to other task systems.
+ *
+ * Generated from whatever adapters the server reports, so an integration that
+ * is added ships its own fields and hint text and this page needs no edit. A
+ * field marked secret is write-only: the API answers with `''` and a companion
+ * `<key>_set`, so this can offer to replace one and can never show it.
+ *
+ * The two rules stated below are the ones the sync actually keeps, and they are
+ * stated because a person cannot infer them from watching. See
+ * server/integrations/sync.js, where the first is enforced, and the adapter,
+ * where the second is.
+ */
+function Integrations({ s, save }) {
+  const info = useApi('/integrations')
+  const links = useApi('/integrations/links')
+
+  return (
+    <>
+      {info.data?.sources?.map((src) => (
+        <Connection key={src.name} src={src} s={s} save={save} />
+      ))}
+      {info.data?.sources?.length === 0 && (
+        <Panel title="Connections"><Empty>No integrations are built in.</Empty></Panel>
+      )}
+
+      <Panel title={<><Icon name="list" size={14} /> What is linked</>}>
+        <p className="st-note">
+          Only tasks you picked. Nothing is mirrored, so work you never imported is not
+          touched and never appears here. Bring more over from the backlog on the{' '}
+          <Link to="/tasks?view=backlog">All tasks</Link> page.
+        </p>
+        <p className="st-note">
+          The other system is the record for anything that came from it: if a status or a
+          note differs on both sides, its version wins and what was here is kept in a
+          comment on the task. And a sync only ever makes moves that system calls legal —
+          ticking a linked task done here advances it as far as it honestly can and stops,
+          rather than forcing a step that is somebody’s to approve.
+        </p>
+        {!links.data && <Empty>Loading…</Empty>}
+        {links.data?.links?.length === 0 && <Empty>Nothing linked yet.</Empty>}
+        {links.data?.links?.map((l) => (
+          <div key={l.id} className="kv st-raw-row">
+            <dt><code>{l.ext_key}</code></dt>
+            <dd className="st-raw-val">
+              {l.title}
+              <span className="chip">{l.status}</span>
+              <span className="chip">{String(l.ext_status || '').replace(/_/g, ' ')}</span>
+              <button
+                className="btn ghost sm"
+                onClick={() => api.post(`/integrations/unlink/${l.id}`).then(() => links.reload())}
+              >
+                Unlink
+              </button>
+            </dd>
+          </div>
+        ))}
+      </Panel>
+    </>
+  )
+}
+
+/** One system's fields, its switch, and a way to find out if it answers. */
+function Connection({ src, s, save }) {
+  const [probe, setProbe] = useState(null)
+  const key = (f) => `int_${src.name}_${f}`
+
+  const check = async () => {
+    setProbe({ trying: true })
+    try { setProbe(await api.get(`/integrations/${src.name}/status`)) }
+    catch (e) { setProbe({ ok: false, error: e.message }) }
+  }
+
+  return (
+    <Panel title={<><Icon name="link" size={14} /> {src.label}</>}>
+      {src.fields.map((f) => (
+        <ConnectionField key={f.key} field={f} name={key(f.key)} s={s} save={save} />
+      ))}
+
+      <Field label="Syncing">
+        <label className="st-check">
+          <input
+            type="checkbox"
+            checked={s[key('on')] === '1'}
+            onChange={(e) => save(key('on'), e.target.checked ? '1' : '0')}
+          />
+          <span>Keep linked tasks in step</span>
+        </label>
+        <span className="st-hint">Off leaves everything where it is; nothing is unlinked.</span>
+      </Field>
+
+      <div className="row">
+        <button className="btn" onClick={check}>Test the connection</button>
+        {probe?.trying && <span className="muted">asking…</span>}
+        {probe && !probe.trying && (
+          probe.ok
+            ? <span className="chip c-green">reached it{probe.actor?.label ? ` as ${probe.actor.label}` : ''}</span>
+            : <span className="chip c-red">{probe.error || 'no answer'}</span>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+function ConnectionField({ field, name, s, save }) {
+  const [value, setValue] = useState(field.secret ? '' : (s[name] || ''))
+
+  return (
+    <Field label={field.label}>
+      <input
+        className="input"
+        type={field.secret ? 'password' : 'text'}
+        placeholder={field.secret
+          ? (s[`${name}_set`] ? 'set — type to replace it' : field.placeholder || '')
+          : field.placeholder || ''}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          // A secret is only ever written, so an empty box means "leave it".
+          if (field.secret) { if (value) { save(name, value); setValue('') } }
+          else if (value !== (s[name] || '')) save(name, value)
+        }}
+      />
+      <span className="st-hint">
+        {field.hint}
+        {field.secret && ' It is write-only: the API will not hand it back, so this can replace it but never show it.'}
+      </span>
+    </Field>
   )
 }

@@ -69,9 +69,24 @@ export function notFound(message = 'not found') {
 
 /** Wrap an async/throwing handler so errors reach the express error middleware. */
 export function h(fn) {
+  const send = (out, res, next) => {
+    // A handler that returns a promise gets awaited rather than serialised.
+    // Without this a route that talks to anything over the network answers
+    // `{}` — a resolved Promise has no enumerable keys — which looks like a
+    // successful empty result rather than the mistake it is.
+    if (out && typeof out.then === 'function') {
+      out.then((v) => {
+        if (v !== undefined) { res.json(v); return }
+        if (!res.headersSent) res.status(404).json({ error: 'not found' })
+      }, next)
+      return true
+    }
+    return false
+  }
   return (req, res, next) => {
     try {
       const out = fn(req, res)
+      if (send(out, res, next)) return
       if (out !== undefined) { res.json(out); return }
       // A handler may answer through `res` itself; if it did neither, it looked
       // something up and found nothing. Without this the request hangs forever
