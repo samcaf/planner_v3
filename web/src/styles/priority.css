@@ -60,3 +60,40 @@ button.pri-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 
 }
 
 .pop:focus { outline: none; }
+
+/* ------------------------------------------- the filter as a dropdown */
+
+/*
+ * On a phone the five icons live behind one button. Inside the panel they are
+ * rows rather than a strip: there is width to spare there, a name reads faster
+ * than a shape you are still learning, and a row is an easier target than a
+ * 26px square.
+ */
+.pri-menu-b {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 172px;
+  padding: var(--space-2);
+}
+
+.pri-menu-b .pri-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--space-4);
+  text-align: left;
+}
+
+.pri-menu-name {
+  font-size: 13px;
+  text-transform: capitalize;
+  /* The button carries the priority's colour for its icon; the word should read
+     as text, not as a second copy of the same signal. */
+  color: var(--ink);
+}
+
+.pri-filter-btn.is-on .pri-menu-name { font-weight: 650; }

@@ -24,8 +24,10 @@ import { BACKLOG_QUERY, isBacklogTask } from '../lib/backlog.js'
 import { makeTaskDnd } from '../lib/taskDnd.js'
 import DayComplete from '../components/DayComplete.jsx'
 import DayStart from '../components/DayStart.jsx'
+import Popover from '../components/Popover.jsx'
 import DateField from '../components/DateField.jsx'
 import { useMobile } from '../lib/mobile.js'
+import { useSwipe } from '../lib/swipe.js'
 import { tabDate, usePageTitle } from '../lib/title.js'
 import { useVim, useVimActions } from '../lib/vim.jsx'
 import { makeVimActions } from '../lib/vimActions.js'
@@ -80,6 +82,16 @@ function DayView({ date }) {
   usePageTitle(tabDate(date))
   const navigate = useNavigate()
   const phone = useMobile()
+
+  // What the arrows used to do on a phone. Up here with the other hooks and not
+  // beside the handler it replaces: everything below this component's early
+  // returns runs only once the day has loaded, and a hook that skips the first
+  // render is React error #310.
+  useSwipe(
+    useCallback(() => navigate(`/day/${addDays(date, 1)}`), [date, navigate]),
+    useCallback(() => navigate(`/day/${addDays(date, -1)}`), [date, navigate]),
+    { enabled: phone },
+  )
   const day = useApi(`/days/${date}`, [date])
   const backlog = useApi(`/tasks?${BACKLOG_QUERY}`)
   // In-progress work is worth seeing whatever day you are looking at, so this
@@ -642,28 +654,34 @@ function DayView({ date }) {
     <SelectionProvider>
     <div className="day-shell">
       <header className="topbar">
-        <div className="daynav">
-          {/* Ctrl/Cmd-click opens the day in a new tab, the way it would on any
-              link. These are buttons because they navigate within the app, so
-              the browser does not do this for us. */}
-          <button className="btn ghost sm" onClick={(e) => step(e, -1)} aria-label="Previous day">
-            <Icon name="left" size={15} />
-          </button>
-          <button className="btn ghost sm" onClick={(e) => step(e, 1)} aria-label="Next day">
-            <Icon name="right" size={15} />
-          </button>
-        </div>
+        {/* Ctrl/Cmd-click opens the day in a new tab, the way it would on any
+            link. These are buttons because they navigate within the app, so the
+            browser does not do this for us.
+
+            Gone on a phone: a swipe does this (see useSwipe below), the date
+            field beside it jumps anywhere, and the bar has 72px of better uses
+            than two arrows. */}
+        {!phone && (
+          <div className="daynav">
+            <button className="btn ghost sm" onClick={(e) => step(e, -1)} aria-label="Previous day">
+              <Icon name="left" size={15} />
+            </button>
+            <button className="btn ghost sm" onClick={(e) => step(e, 1)} aria-label="Next day">
+              <Icon name="right" size={15} />
+            </button>
+          </div>
+        )}
         {/* Kept for the document outline and a screen reader, but not for the
             pixels: on a phone the date field beside it says the same thing in a
             third of the width, and the bar has none to spare. */}
         <h1 className={phone ? 'sr-only' : undefined}>{longDate(date)}</h1>
-        {isToday && <span className="chip c-blue">Today</span>}
+        {isToday && !phone && <span className="chip c-blue">Today</span>}
         <DateField value={date} onChange={(d) => navigate(`/day/${d}`)} />
         {!isToday && <button className="btn sm" onClick={() => navigate(`/day/${today()}`)}>Today</button>}
         <span className="spacer" />
         <PriorityFilter value={priFilter} onChange={setPriFilter} />
         <button className="btn sm" onClick={() => setMeetingFor({ section: null })}>
-          <Icon name="clock" size={13} /> New meeting
+          <Icon name="clock" size={13} /> {phone ? 'Meeting' : 'New meeting'}
         </button>
         {/* The rail reaches the notebook on a phone, and this bar cannot
             afford a second way to the same place. */}
@@ -1082,23 +1100,63 @@ function DayView({ date }) {
 }
 
 function PriorityFilter({ value, onChange }) {
+  const phone = useMobile()
   const toggle = (p) =>
     onChange(value.includes(p) ? value.filter((x) => x !== p) : [...value, p])
+
+  const rows = PRIORITIES.map((p) => (
+    <button
+      key={p}
+      className={`pri-filter-btn pri-${p} ${value.includes(p) ? 'is-on' : ''}`}
+      aria-pressed={value.includes(p)}
+      title={`Show only ${p} priority`}
+      onClick={() => toggle(p)}
+    >
+      <PriorityIcon level={p} size={15} />
+      {phone && <span className="pri-menu-name">{p}</span>}
+    </button>
+  ))
+
+  // On a phone the five icons and their label were the widest thing in the bar
+  // — 143px for a filter that is off on most days. Behind one button they cost
+  // the width of the word, and the choices are drawn large enough to hit.
+  if (phone) {
+    return (
+      <Popover
+        className="menu pri-menu"
+        label="Filter by priority"
+        trigger={(props) => (
+          <button
+            {...props}
+            className={`btn ghost sm${value.length ? ' is-on' : ''}`}
+            title="Filter by priority"
+          >
+            Priority{value.length ? ` · ${value.length}` : ''}
+            <Icon name="chevronDown" size={11} />
+          </button>
+        )}
+      >
+        {(close) => (
+          <div className="pri-menu-b">
+            {rows}
+            {value.length > 0 && (
+              <button
+                className="btn ghost sm"
+                onClick={() => { onChange([]); close() }}
+              >
+                <Icon name="x" size={12} /> Clear
+              </button>
+            )}
+          </div>
+        )}
+      </Popover>
+    )
+  }
 
   return (
     <div className="pri-filter" role="group" aria-label="Filter by priority">
       <span className="pri-filter-label">Priority</span>
-      {PRIORITIES.map((p) => (
-        <button
-          key={p}
-          className={`pri-filter-btn pri-${p} ${value.includes(p) ? 'is-on' : ''}`}
-          aria-pressed={value.includes(p)}
-          title={`Show only ${p} priority`}
-          onClick={() => toggle(p)}
-        >
-          <PriorityIcon level={p} size={15} />
-        </button>
-      ))}
+      {rows}
       {value.length > 0 && (
         <button className="btn ghost sm" onClick={() => onChange([])} title="Clear filter">
           <Icon name="x" size={12} />

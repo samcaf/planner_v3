@@ -2451,7 +2451,8 @@ kbd {
   /* The five priority icons are already colour-coded, and stacking the word
      PRIORITY under them made this the tallest thing in the bar — 41px against
      30 for everything else, so one label was setting the height of the row.
-     The icons say it on their own at this width. */
+     The icons say it on their own at this width. (The bar draws the filter as a
+     dropdown here now, so this only catches one drawn anywhere else.) */
   .topbar .pri-filter-label { display: none; }
 
   /* The day's own columns stop being columns. The breakpoints above already
