@@ -150,6 +150,19 @@
    the row that opened it. */
 .task-actions .menu { pointer-events: auto; }
 
+/*
+ * Out of the way while you are typing.
+ *
+ * The strip floats over the row's top-right corner — the trade that buys the
+ * title its full width — and that corner is where a long title's text ends up.
+ * Reading, it costs a sliver you can see past. Editing, it sits on the words.
+ *
+ * `display: none` rather than a fade: opacity would leave it there, catching
+ * nothing but still painted over the text, and an opacity below 1 makes a
+ * stacking context that traps any menu opened inside it.
+ */
+.task.is-texting .task-actions { display: none; }
+
 /* ------------------------------------------------------ note headings */
 
 /*

@@ -360,6 +360,10 @@ export default function TaskRow({
           'task', task.status, isNote ? 'is-note' : '', isMeeting ? 'is-meeting' : '',
           task.optional ? 'is-optional' : '', zone ? `drop-${zone}` : '',
           picked ? 'sel-on' : '', sel?.size ? 'sel-armed' : '',
+          // The hover strip floats over the row's top-right corner, which is
+          // exactly where a long title's text is. Fine while reading; in the
+          // way while typing.
+          texting ? 'is-texting' : '',
           dialogue ? 'is-ai' : '',
           // Only an exchange with more than one row is worth marking; a lone
           // task would carry a rule that pointed at nothing.
